@@ -8,11 +8,18 @@ mimir-distributed:
     replicas: 1
     ingress:
       enabled: true
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
       hosts:
-        - host: mimir.bwcloud.local
+        - host: mimir.saadisfy.me
           paths:
             - path: /
               pathType: Prefix
+      tls:
+        - secretName: mimir-tls
+          hosts:
+            - mimir.saadisfy.me
   mimir:
     structuredConfig:
       common:

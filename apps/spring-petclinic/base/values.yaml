@@ -16,12 +16,12 @@ resources:
 ingress:
   enabled: true
   className: nginx
-  host: spring-petclinic.bwcloud.local
+  host: spring-petclinic.saadisfy.me
   tls: false
 
-# OTel Collector + Instrumentation
+# OTel: Collector + Instrumentation liegen im otel-operator Namespace (cross-ns)
+# Annotation auf Pod: instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"
 otelCollector:
-  enabled: true
+  enabled: false
   name: otel-collector
-# Mimir namespace for metrics export (override per stage: mimir-dev, mimir-int, mimir)
 mimirNamespace: mimir

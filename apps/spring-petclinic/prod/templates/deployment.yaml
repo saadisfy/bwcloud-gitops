@@ -14,7 +14,10 @@ spec:
       labels:
         app: spring-petclinic
       annotations:
-        instrumentation.opentelemetry.io/inject-java: "true"
+        # Instrumentation CR im Namespace otel-operator (cross-namespace)
+        instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"
+        # Service-Name für Mimir/Tempo/Grafana (Filter, Labels)
+        resource.opentelemetry.io/service.name: "spring-petclinic"
     spec:
       containers:
         - name: petclinic

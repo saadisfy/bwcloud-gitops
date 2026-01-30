@@ -1,0 +1,19 @@
+# Instrumentation für Java Auto-Instrumentation im otel-operator Namespace.
+# Apps in anderen Namespaces referenzieren mit Annotation:
+#   instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: java-instrumentation
+  namespace: otel-operator
+spec:
+  exporter:
+    endpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4317
+  resource:
+    resourceAttributes:
+      deployment.environment: prod
+  propagators:
+    - tracecontext
+    - baggage
+  java:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:latest

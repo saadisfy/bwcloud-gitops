@@ -1,16 +1,22 @@
 # Argo CD prod – alle gewünschten Argo-CD-Konfigurationen (Repositories etc.)
 # Git-Repo mit Token: separat über manifests/argocd-repo-bwcloud-gitops.yaml anwenden (nicht hier, Token nicht ins Git).
 argo-cd:
+  global:
+    domain: argocd.saadisfy.me
   server:
     ingress:
       enabled: true
       ingressClassName: nginx
       hosts:
-        - argocd.bwcloud.local
+        - argocd.saadisfy.me
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
       tls:
         - secretName: argocd-tls
           hosts:
-            - argocd.bwcloud.local
+            - argocd.saadisfy.me
   configs:
     params:
       server.insecure: true

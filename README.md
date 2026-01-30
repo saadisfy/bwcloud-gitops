@@ -30,7 +30,7 @@ Values merge order: `base/values.yaml` then `<stage>/values.yaml`.
 | argocd | Wrapper (argo-cd) | prod only, self-managed |
 | grafana | Wrapper (grafana) | |
 | otel-operator | Wrapper (opentelemetry-operator) | |
-| mimir | Wrapper (mimir-distributed) | Low-resource base values |
+| mimir | Wrapper (mimir-distributed) | Low-resource base values (Beispiel: nur Mimir) |
 | spring-petclinic | Custom | Image: ghcr.io/saadisfy/spring-petclinic |
 | kargo | Wrapper (OCI kargo) | prod only |
 
@@ -73,22 +73,28 @@ Build and push to GHCR:
 docker push ghcr.io/saadisfy/spring-petclinic:latest
 ```
 
+## Deployments (nur prod)
+
+Über die ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, Spring Petclinic). Der Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`, wird aber nicht von Argo CD ausgerollt.
+
+## Observability (Grafana, Mimir, OTel) – Beispiel nur Mimir
+
+- **Grafana** (siehe `apps/grafana/base/values.yaml`): **Mimir** als Prometheus-Datasource über **lokales Netz**: `http://mimir-mimir-distributed-gateway.mimir.svc.cluster.local`.
+- **OTel Operator** (Namespace `otel-operator`) mit CRs in `apps/otel-operator/prod-cr/`:
+  - **OpenTelemetryCollector**: OTLP-Empfang (gRPC/HTTP); **Metrics** → Mimir (otlphttp, Distributor :8080/otlp); **Target Allocator** aktiv (Prometheus-Receiver + TA).
+  - **Instrumentation** Java: Auto-Instrumentation; Endpoint = Collector; Resource-Attribute `deployment.environment: prod`.
+- **Spring Petclinic**: Pod-Annotation `instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"` und `resource.opentelemetry.io/service.name: "spring-petclinic"`. Lokaler Collector deaktiviert (`otelCollector.enabled: false`).
+
 ## Erreichbarkeit (Ingress)
 
-Alle folgenden Apps sind über **Ingress** (nginx, Host `*.bwcloud.local`) erreichbar. Domain in `/etc/hosts` oder DNS eintragen, z. B.:
-
-```
-<CLUSTER_IP>  argocd.bwcloud.local grafana.bwcloud.local mimir.bwcloud.local spring-petclinic.bwcloud.local
-```
+Alle folgenden Apps sind über **Ingress** (nginx) unter **\*.saadisfy.me** erreichbar. DNS für die Subdomains auf die Cluster-IP zeigen lassen. TLS via cert-manager (ClusterIssuer letsencrypt-prod); Spring Petclinic derzeit ohne TLS (`ingress.tls: false` in base).
 
 | App                | URL (nur Pod/Ingress)                    |
 |--------------------|-------------------------------------------|
-| Argo CD            | https://argocd.bwcloud.local              |
-| Grafana            | https://grafana.bwcloud.local             |
-| Mimir              | https://mimir.bwcloud.local               |
-| Spring Petclinic   | http://spring-petclinic.bwcloud.local     |
-
-TLS für Argo CD/Grafana/Mimir über cert-manager oder vorhandenes Secret; Spring Petclinic derzeit ohne TLS (`ingress.tls: false` in base).
+| Argo CD            | https://argocd.saadisfy.me                |
+| Grafana            | https://grafana.saadisfy.me               |
+| Mimir              | https://mimir.saadisfy.me                 |
+| Spring Petclinic   | http://spring-petclinic.saadisfy.me       |
 
 ## Kargo (Promotion)
 

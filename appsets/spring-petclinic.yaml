@@ -4,13 +4,10 @@ metadata:
   name: spring-petclinic
   namespace: argocd
 spec:
+  # Nur prod deployed; dev/int Code bleibt in apps/spring-petclinic/{dev,int}
   generators:
     - list:
         elements:
-          - stage: dev
-            namespace: spring-petclinic-dev
-          - stage: int
-            namespace: spring-petclinic-int
           - stage: prod
             namespace: spring-petclinic
   template:

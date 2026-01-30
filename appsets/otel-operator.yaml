@@ -4,13 +4,10 @@ metadata:
   name: otel-operator
   namespace: argocd
 spec:
+  # Nur prod deployed; dev/int Code bleibt in apps/otel-operator/{dev,int}
   generators:
     - list:
         elements:
-          - stage: dev
-            namespace: otel-operator-dev
-          - stage: int
-            namespace: otel-operator-int
           - stage: prod
             namespace: otel-operator
   template:
@@ -18,14 +15,17 @@ spec:
       name: 'otel-operator-{{stage}}'
     spec:
       project: default
-      source:
-        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
-        targetRevision: main
-        path: 'apps/otel-operator/{{stage}}'
-        helm:
-          valueFiles:
-            - ../base/values.yaml
-            - values.yaml
+      sources:
+        - repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+          targetRevision: main
+          path: 'apps/otel-operator/{{stage}}'
+          helm:
+            valueFiles:
+              - ../base/values.yaml
+              - values.yaml
+        - repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+          targetRevision: main
+          path: 'apps/otel-operator/prod-cr'
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'

@@ -4,13 +4,10 @@ metadata:
   name: mimir
   namespace: argocd
 spec:
+  # Nur prod deployed; dev/int Code bleibt in apps/mimir/{dev,int}
   generators:
     - list:
         elements:
-          - stage: dev
-            namespace: mimir-dev
-          - stage: int
-            namespace: mimir-int
           - stage: prod
             namespace: mimir
   template:

@@ -2,15 +2,28 @@
 grafana:
   adminUser: admin
   # adminPassword set per stage or via secret
+  # Mimir als Prometheus-Datasource über lokales Netz (Service, kein Ingress)
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Mimir
+          type: prometheus
+          access: proxy
+          url: http://mimir-mimir-distributed-gateway.mimir.svc.cluster.local
+          isDefault: true
   ingress:
     enabled: true
     ingressClassName: nginx
     hosts:
-      - grafana.bwcloud.local
+      - grafana.saadisfy.me
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
     tls:
       - secretName: grafana-tls
         hosts:
-          - grafana.bwcloud.local
+          - grafana.saadisfy.me
   persistence:
     enabled: true
     size: 1Gi
