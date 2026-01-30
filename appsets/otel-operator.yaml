@@ -12,7 +12,7 @@ spec:
             namespace: otel-operator
   template:
     metadata:
-      name: 'otel-operator-{{stage}}'
+      name: otel-operator
     spec:
       project: default
       sources:

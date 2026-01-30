@@ -12,7 +12,7 @@ spec:
             namespace: grafana
   template:
     metadata:
-      name: 'grafana-{{stage}}'
+      name: grafana
     spec:
       project: default
       source:

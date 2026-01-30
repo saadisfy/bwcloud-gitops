@@ -12,7 +12,7 @@ spec:
             namespace: mimir
   template:
     metadata:
-      name: 'mimir-{{stage}}'
+      name: mimir
     spec:
       project: default
       source:

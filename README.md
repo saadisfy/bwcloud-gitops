@@ -75,7 +75,7 @@ docker push ghcr.io/saadisfy/spring-petclinic:latest
 
 ## Deployments (nur prod)
 
-Über die ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, Spring Petclinic). Der Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`, wird aber nicht von Argo CD ausgerollt.
+Über die ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, Spring Petclinic). Der Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`, wird aber nicht von Argo CD ausgerollt. Die **Argo CD Application-Namen** sind die App-Namen ohne Stage (z. B. `grafana`, `mimir`, `spring-petclinic`); in Deployment- und Ressourcennamen kommt „prod“ nicht vor.
 
 ## Observability (Grafana, Mimir, OTel) – Beispiel nur Mimir
 

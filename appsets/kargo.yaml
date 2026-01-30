@@ -12,7 +12,7 @@ spec:
             namespace: kargo
   template:
     metadata:
-      name: kargo-prod
+      name: kargo
     spec:
       project: default
       source:

@@ -42,7 +42,7 @@ bwcloud-gitops/
 
 ## Apps und Stages
 
-**Aktuell:** Über ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, Spring Petclinic). Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`.
+**Aktuell:** Über ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, Spring Petclinic). Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`. Argo CD Application-Namen ohne Stage (z. B. `grafana`, `mimir`); „prod“ erscheint weder im Application- noch im Deployment-Namen.
 
 | App | Chart-Typ | Deployed | Namespace (prod) |
 |-----|-----------|----------|------------------|

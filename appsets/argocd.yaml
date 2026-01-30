@@ -12,7 +12,7 @@ spec:
             namespace: argocd
   template:
     metadata:
-      name: argocd-prod
+      name: argocd
     spec:
       project: default
       source:

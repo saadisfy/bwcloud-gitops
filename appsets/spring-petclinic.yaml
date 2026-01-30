@@ -12,7 +12,7 @@ spec:
             namespace: spring-petclinic
   template:
     metadata:
-      name: 'spring-petclinic-{{stage}}'
+      name: spring-petclinic
     spec:
       project: default
       source:
