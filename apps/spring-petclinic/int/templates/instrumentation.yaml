@@ -1,0 +1,14 @@
+{{- if .Values.otelCollector.enabled }}
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: java-instrumentation
+spec:
+  exporter:
+    endpoint: http://{{ .Values.otelCollector.name | default "otel-collector" }}:4317
+  propagators:
+    - tracecontext
+    - baggage
+  java:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-java:latest
+{{- end }}

@@ -1,0 +1,38 @@
+# Public Helm repos for Argo CD (wrapper chart dependencies)
+# Apply: kubectl apply -f manifests/argocd-helm-repos.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-grafana-helm
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: grafana
+  url: https://grafana.github.io/helm-charts
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-open-telemetry-helm
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: open-telemetry
+  url: https://open-telemetry.github.io/opentelemetry-helm-charts
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-argo-helm
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: argo
+  url: https://argoproj.github.io/argo-helm

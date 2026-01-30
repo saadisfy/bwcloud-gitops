@@ -1,0 +1,112 @@
+# Mimir - very low resources (base)
+# Single replica per component, minimal resources, MinIO for object storage
+# Values are for the mimir-distributed subchart
+
+mimir-distributed:
+  gateway:
+    enabledNonEnterprise: true
+    replicas: 1
+    ingress:
+      enabled: true
+      hosts:
+        - host: mimir.bwcloud.local
+          paths:
+            - path: /
+              pathType: Prefix
+  mimir:
+    structuredConfig:
+      common:
+        storage:
+          backend: s3
+          s3:
+            endpoint: minio.mimir.svc:9000
+            bucket_name: mimir
+            access_key_id: minioadmin
+            secret_access_key: minioadmin
+            insecure: true
+
+  alertmanager:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+
+  compactor:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+  distributor:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+  ingester:
+    replicas: 1
+    persistentVolume:
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1Gi
+    zoneAwareReplication:
+      enabled: false
+
+  querier:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+  query_frontend:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+
+  store_gateway:
+    replicas: 1
+    persistentVolume:
+      size: 5Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+    zoneAwareReplication:
+      enabled: false
+
+  chunks-cache:
+    enabled: false
+  index-cache:
+    enabled: false
+  metadata-cache:
+    enabled: false
+  results-cache:
+    enabled: false
+
+  minio:
+    enabled: true
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi

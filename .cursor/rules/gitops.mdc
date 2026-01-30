@@ -1,0 +1,13 @@
+---
+description: Hauptregel für Argo CD und GitOps in diesem Repo
+globs: 
+alwaysApply: true
+---
+
+# GitOps / Argo CD Hauptregel
+
+- **Argo-CD-Konfiguration** (Repositories, Einstellungen) gehört in **apps/argocd/prod/values.yaml**. Nach Änderungen anwenden mit:
+  - `cd apps/argocd/prod && helm dependency build`
+  - `helm upgrade argocd . -n argocd -f ../../base/values.yaml -f values.yaml --wait`
+- **Git-Repo-Zugriff** (GitHub PAT) wird nicht in values gepflegt; Secret über **manifests/argocd-repo-bwcloud-gitops.yaml** (Datei in .gitignore, Token nicht committen).
+- App-Struktur: **apps/<app>/base/values.yaml** + **apps/<app>/<stage>/Chart.yaml** und **values.yaml** (kein chartstuff/).

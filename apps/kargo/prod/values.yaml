@@ -1,0 +1,2 @@
+# Kargo prod stage overrides
+# Set api.adminAccount.passwordHash, api.service.type, etc. as needed

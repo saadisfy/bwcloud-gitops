@@ -1,0 +1,15 @@
+# OpenTelemetry Operator - base values
+opentelemetry-operator:
+  manager:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  # Webhook certs: use cert-manager or auto-generate
+  admissionWebhooks:
+    certManager:
+      enabled: true
+    # If cert-manager not used:
+    # autoGenerateCert: true

@@ -1,0 +1,6 @@
+# Kargo - base values (prod only)
+# OCI chart: oci://ghcr.io/akuity/kargo-charts/kargo
+# Tune API, webhooks, etc. per docs: https://docs.kargo.io
+
+# api.adminAccount.passwordHash - set via secret or override in prod/values.yaml
+# api.service.type: ClusterIP (default) or NodePort for external access

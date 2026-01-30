@@ -1,0 +1,16 @@
+# Warehouse: Git-Repo + Container-Image (für Promotion via Values + Chart-Version)
+# Siehe README Abschnitt "Kargo (Promotion)".
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: bwcloud-warehouse
+  namespace: kargo
+spec:
+  subscriptions:
+    - git:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        branch: main
+    - image:
+        repoURL: ghcr.io/saadisfy/spring-petclinic
+        imageSelectionStrategy: Digest
+        constraint: latest

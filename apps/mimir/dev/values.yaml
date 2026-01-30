@@ -1,0 +1,2 @@
+# Mimir dev stage overrides
+mimir-distributed: {}

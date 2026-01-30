@@ -1,0 +1,23 @@
+---
+description: Infra- und Feature-Konfiguration immer parallel im README dokumentieren
+alwaysApply: true
+---
+
+# README: Infrastruktur- und Feature-Dokumentation
+
+Jede **Konfigurationsanweisung**, die zur Infrastruktur- oder Feature-Beschreibung gehört, muss **parallel immer im README** stehen – **ohne dass der Nutzer das explizit erwähnt**.
+
+## Was gehört dazu
+
+- **Infrastruktur**: z. B. wie Argo CD konfiguriert wird, wo Repositories/Helm-Repos definiert sind, wie Ingress/Erreichbarkeit eingerichtet ist.
+- **Features/Tools**: z. B. wie Kargo arbeitet (Promotions über Values-Datei und Chart-Version-Bumping), welche Stages es gibt, wie Promotion funktioniert.
+- **Erreichbarkeit**: Links/URLs, über die Anwendungen (Argo CD, Grafana, Mimir, Spring Petclinic usw.) erreichbar sind (nur die für den Nutzer relevanten Zugangslinks).
+
+## Regel
+
+Sobald du eine solche Konfiguration anlegst oder änderst (z. B. Ingress für eine App, Kargo-Promotion-Schritte, Argo-CD-Einstellungen):
+
+1. **README aktualisieren**: Die gleiche Information (kurz, nutzerorientiert) in den passenden README-Abschnitt schreiben – z. B. „Erreichbarkeit (Ingress)“, „Kargo (Promotion)“.
+2. **Kein expliziter Hinweis nötig**: Der Nutzer muss nicht extra sagen „schreib das ins README“ – es gehört immer dazu.
+
+Beispiel: Anweisung „Argo CD, Grafana, Mimir, Spring Petclinic über Ingress erreichbar machen; Kargo so konfigurieren, dass Promotions über Values-Datei und Chart-Version-Bumping laufen“ → im README stehen: die Links zu den Apps (nur Pod/Ingress-URLs) und eine klare Erklärung, wie Kargo arbeitet (Values + Chart-Version).

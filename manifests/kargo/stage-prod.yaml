@@ -1,0 +1,45 @@
+# Stage prod: Freight nur nach Verifikation in int; Promotion wie int (Values + optional Chart)
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: prod
+  namespace: kargo
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: bwcloud-warehouse
+      sources:
+        stages:
+          - int
+  promotionTemplate:
+    spec:
+      vars:
+        - name: gitRepo
+          value: https://github.com/saadisfy/bwcloud-gitops.git
+        - name: targetBranch
+          value: stage/${{ ctx.stage }}
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: ${{ vars.gitRepo }}
+            checkout:
+              - branch: ${{ vars.targetBranch }}
+                path: ./out
+                create: true
+        - uses: yaml-update
+          as: update-values
+          config:
+            path: ./out/apps/spring-petclinic/prod/values.yaml
+            updates:
+              - key: image.tag
+                value: ${{ imageFrom("ghcr.io/saadisfy/spring-petclinic").Tag }}
+        - uses: git-commit
+          config:
+            path: ./out
+            message: |
+              ${{ ctx.stage }}: ${{ outputs["update-values"].commitMessage }}
+        - uses: git-push
+          config:
+            path: ./out
+            branch: ${{ vars.targetBranch }}

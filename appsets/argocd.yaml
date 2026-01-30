@@ -1,0 +1,34 @@
+# ArgoCD self-managed: only prod
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - stage: prod
+            namespace: argocd
+  template:
+    metadata:
+      name: argocd-prod
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: apps/argocd/prod
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

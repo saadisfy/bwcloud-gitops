@@ -1,0 +1,22 @@
+# Grafana - base values (all stages)
+grafana:
+  adminUser: admin
+  # adminPassword set per stage or via secret
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.bwcloud.local
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.bwcloud.local
+  persistence:
+    enabled: true
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi

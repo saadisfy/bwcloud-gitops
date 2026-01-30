@@ -1,0 +1,2 @@
+# Mimir prod stage overrides
+mimir-distributed: {}

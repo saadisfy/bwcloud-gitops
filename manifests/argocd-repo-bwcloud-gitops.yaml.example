@@ -1,0 +1,18 @@
+# Git repo for bwcloud-gitops - DU BIST DRAUF: Token eintragen und anwenden
+# 1. Kopieren: cp manifests/argocd-repo-bwcloud-gitops.yaml.example manifests/argocd-repo-bwcloud-gitops.yaml
+# 2. DEIN_GITHUB_PAT durch dein GitHub Personal Access Token ersetzen (z.B. ghp_xxxx)
+# 3. Anwenden: kubectl apply -f manifests/argocd-repo-bwcloud-gitops.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-bwcloud-gitops
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: git
+  name: bwcloud-gitops
+  url: https://github.com/saadisfy/bwcloud-gitops.git
+  username: saadisfy
+  password: DEIN_GITHUB_PAT

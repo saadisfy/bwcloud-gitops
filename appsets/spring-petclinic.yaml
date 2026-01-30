@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: spring-petclinic
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - stage: dev
+            namespace: spring-petclinic-dev
+          - stage: int
+            namespace: spring-petclinic-int
+          - stage: prod
+            namespace: spring-petclinic
+  template:
+    metadata:
+      name: 'spring-petclinic-{{stage}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: 'apps/spring-petclinic/{{stage}}'
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

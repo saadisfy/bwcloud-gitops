@@ -1,0 +1,30 @@
+# Argo CD prod – alle gewünschten Argo-CD-Konfigurationen (Repositories etc.)
+# Git-Repo mit Token: separat über manifests/argocd-repo-bwcloud-gitops.yaml anwenden (nicht hier, Token nicht ins Git).
+argo-cd:
+  server:
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      hosts:
+        - argocd.bwcloud.local
+      tls:
+        - secretName: argocd-tls
+          hosts:
+            - argocd.bwcloud.local
+  configs:
+    params:
+      server.insecure: true
+    repositories:
+      # Public Helm-Repos für Wrapper-Chart-Dependencies
+      repo-grafana-helm:
+        type: helm
+        name: grafana
+        url: https://grafana.github.io/helm-charts
+      repo-open-telemetry-helm:
+        type: helm
+        name: open-telemetry
+        url: https://open-telemetry.github.io/opentelemetry-helm-charts
+      repo-argo-helm:
+        type: helm
+        name: argo
+        url: https://argoproj.github.io/argo-helm
