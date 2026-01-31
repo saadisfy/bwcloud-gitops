@@ -1,6 +1,22 @@
 # Kargo prod stage overrides (Subchart-Werte unter "kargo:")
 kargo:
   api:
+    host: kargo.saadisfy.me
+    # TLS am Ingress (api.ingress.tls) → https://kargo.saadisfy.me ist sicher (Let's Encrypt).
+    # api.tls.enabled: false = API-Pod hört nur HTTP; Ingress terminiert TLS (Standard wie Grafana/Argo CD).
+    tls:
+      enabled: false
+      terminatedUpstream: true  # API generiert HTTPS-URLs in Responses
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      tls:
+        enabled: true
+        selfSignedCert: false
+        secretName: kargo-tls  # cert-manager erstellt dieses Secret
     adminAccount:
       # Bcrypt-Hash; Initial-Passwort siehe README Abschnitt "Kargo (Promotion)"
       passwordHash: '$2y$10$JQ6/m3Q091Z0iTVnjcXwQuCcWaWxJuRs5n.mwYe2XlNVD2puckkM.'

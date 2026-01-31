@@ -26,6 +26,14 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: kargo
+      # Secret kargo-api: Chart nutzt stringData, K8s speichert als data (base64) → Argo CD meldet sonst ständig OutOfSync
+      ignoreDifferences:
+        - group: ""
+          kind: Secret
+          name: kargo-api
+          namespace: kargo
+          jqPathExpressions:
+            - .data
       syncPolicy:
         automated:
           prune: true
