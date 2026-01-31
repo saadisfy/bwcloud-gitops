@@ -92,7 +92,7 @@ docker push ghcr.io/saadisfy/spring-petclinic:latest
 ## Observability (Grafana, Mimir, OTel) – Beispiel nur Mimir
 
 - **Grafana** (siehe `apps/grafana/base/values.yaml`): **Mimir** als Prometheus-Datasource über **lokales Netz**: `http://mimir-mimir-distributed-gateway.mimir.svc.cluster.local`.
-  - **Admin-Passwort**: Wird ausschließlich über den Helm-Chart gesteuert. In **`apps/grafana/prod/values.yaml`** steht `adminPassword`; der Chart erzeugt/aktualisiert den Kubernetes-Secret daraus (GitOps, kein manuelles `kubectl apply` Secret). Passwort ändern: Wert in `apps/grafana/prod/values.yaml` anpassen, commit/push, Argo CD sync. Falls die DB bereits mit einem anderen Passwort initialisiert wurde: einmalig im Grafana-Pod `grafana cli admin reset-admin-password <Wert aus values>` ausführen.
+  - **Admin-Passwort**: Wird ausschließlich über den Helm-Chart gesteuert. In **`apps/grafana/prod/values.yaml`** steht `adminPassword`; der Chart erzeugt/aktualisiert den Kubernetes-Secret daraus (GitOps, kein manuelles `kubectl apply` Secret). **Zukünftige Änderungen (Stakater Reloader):** Grafana-Pods haben `reloader.stakater.com/auto: "true"`. Änderst du das Passwort in den Values und Argo CD synct, wird der Secret aktualisiert → **Stakater Reloader** löst einen Rolling Restart der Grafana-Deployment aus. Zusätzlich setzt ein **postStart-Lifecycle-Hook** nach jedem Pod-Start das Admin-Passwort in der DB auf den Wert aus dem Secret (`grafana cli admin reset-admin-password`). Damit bleiben Secret und DB bei Passwort-Änderungen in Sync. **Aktuelles Passwort auslesen:** `kubectl get secret grafana -n grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo`. Falls Login trotzdem fehlschlägt (bekanntes Grafana-Verhalten, [Issue #55887](https://github.com/grafana/grafana/issues/55887)): einmalig Reset im Pod oder PVC löschen (Datenverlust) und neu starten.
 - **OTel Operator** (Namespace `otel-operator`) mit CRs in `apps/otel-operator/prod-cr/`:
   - **OpenTelemetryCollector**: OTLP-Empfang (gRPC/HTTP); **Metrics** → Mimir (otlphttp, Distributor :8080/otlp); **Target Allocator** aktiv (Prometheus-Receiver + TA).
   - **Instrumentation** Java: Auto-Instrumentation; Endpoint = Collector; Resource-Attribute `deployment.environment: prod`.
@@ -111,7 +111,9 @@ Alle folgenden Apps sind über **Ingress** (nginx) unter **\*.saadisfy.me** erre
 
 ## Kargo (Promotion)
 
-Kargo ist unter `apps/kargo/prod/` deployed. **Promotions** laufen über **Values-Datei** und optional **Chart-Version-Bumping**:
+Kargo ist unter `apps/kargo/prod/` deployed. **Erst-Deployment:** Die Kargo-Chart-Pflichtfelder `api.adminAccount.passwordHash` und `api.adminAccount.tokenSigningKey` haben keine Defaults und müssen in `apps/kargo/prod/values.yaml` (oder per Secret) gesetzt werden. Generierung siehe Kommentare in `apps/kargo/base/values.yaml`. Nach Chart-Versionsänderung: `cd apps/kargo/prod && helm dependency build`.
+
+**Promotions** laufen über **Values-Datei** und optional **Chart-Version-Bumping**:
 
 - **Warehouse** (`manifests/kargo/warehouse.yaml`): abonniert das Git-Repo (bwcloud-gitops) und das Container-Image (spring-petclinic). Optional können Helm-Chart-Repos ergänzt werden.
 - **Stages** (`manifests/kargo/stage-*.yaml`): `dev` nimmt Freight direkt aus dem Warehouse; `int` und `prod` nur nach Verifikation in der jeweiligen Upstream-Stage.

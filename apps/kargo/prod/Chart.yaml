@@ -3,7 +3,7 @@ name: kargo-wrapper
 description: Wrapper for Kargo Helm chart (OCI)
 version: 0.1.0
 dependencies:
-  # Kargo is published to OCI; ArgoCD must support OCI Helm (v2.6+)
+  # Kargo OCI chart; dependency is vendored (charts/) for Argo CD
   - name: kargo
-    version: "0.1.0"
+    version: "1.8.4"
     repository: oci://ghcr.io/akuity/kargo-charts

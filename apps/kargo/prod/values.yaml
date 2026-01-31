@@ -1,2 +1,3 @@
 # Kargo prod stage overrides
-# Set api.adminAccount.passwordHash, api.service.type, etc. as needed
+# Pflicht: api.adminAccount.passwordHash und api.adminAccount.tokenSigningKey setzen
+# (siehe apps/kargo/base/values.yaml für Generierung)
