@@ -7,6 +7,9 @@ metadata:
   name: java-instrumentation
   namespace: otel-operator
 spec:
+  env:
+    - name: OTEL_LOGS_EXPORTER
+      value: "none"
   exporter:
     endpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4318
   resource:
