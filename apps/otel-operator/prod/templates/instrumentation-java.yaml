@@ -8,7 +8,7 @@ metadata:
   namespace: otel-operator
 spec:
   exporter:
-    endpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4317
+    endpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4318
   resource:
     resourceAttributes:
       deployment.environment: prod
