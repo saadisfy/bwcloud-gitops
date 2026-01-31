@@ -34,3 +34,7 @@ argo-cd:
         type: helm
         name: argo
         url: https://argoproj.github.io/argo-helm
+      repo-stakater-helm:
+        type: helm
+        name: stakater
+        url: https://stakater.github.io/stakater-charts

@@ -1,6 +1,8 @@
 # OpenTelemetry Operator - base values
 opentelemetry-operator:
   manager:
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
     resources:
       requests:
         cpu: 50m

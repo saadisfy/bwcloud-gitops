@@ -2,6 +2,8 @@
 grafana:
   adminUser: admin
   # adminPassword: set in <stage>/values.yaml so Helm chart creates/updates the Secret (GitOps)
+  podAnnotations:
+    reloader.stakater.com/auto: "true"
   # Mimir als Prometheus-Datasource über lokales Netz (Service, kein Ingress)
   datasources:
     datasources.yaml:

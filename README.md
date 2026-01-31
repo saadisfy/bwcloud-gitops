@@ -30,6 +30,7 @@ Values merge order: `base/values.yaml` then `<stage>/values.yaml`.
 |-----|------------|--------|
 | argocd | Wrapper (argo-cd) | prod only, self-managed |
 | grafana | Wrapper (grafana) | |
+| reloader | Wrapper (stakater/reloader) | Auto-reload on Config/Secret changes |
 | otel-operator | Wrapper (opentelemetry-operator) | |
 | mimir | Wrapper (mimir-distributed) | Low-resource base values (Beispiel: nur Mimir) |
 | spring-petclinic | Custom | Image: ghcr.io/saadisfy/spring-petclinic |

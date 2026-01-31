@@ -36,3 +36,15 @@ stringData:
   type: helm
   name: argo
   url: https://argoproj.github.io/argo-helm
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: repo-stakater-helm
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: stakater
+  url: https://stakater.github.io/stakater-charts

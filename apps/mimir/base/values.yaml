@@ -3,6 +3,9 @@
 # Values are for the mimir-distributed subchart
 
 mimir-distributed:
+  global:
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
   gateway:
     enabledNonEnterprise: true
     replicas: 1

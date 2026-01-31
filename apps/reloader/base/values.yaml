@@ -1,0 +1,5 @@
+# Reloader - base values
+reloader:
+  watchGlobally: true
+  ignoreSecrets: false
+  ignoreConfigMaps: false

@@ -25,6 +25,7 @@ bwcloud-gitops/
 ├── apps/                   # App-spezifische Helm-Charts und Values
 │   ├── argocd/             # nur prod
 │   ├── grafana/            # dev, int, prod
+│   ├── reloader/           # base + prod (stakater/reloader)
 │   ├── kargo/              # nur prod (OCI-Chart)
 │   ├── mimir/              # dev, int, prod
 │   ├── otel-operator/      # dev, int, prod + prod-cr/ (Collector + Instrumentation CRs)
@@ -48,6 +49,7 @@ bwcloud-gitops/
 |-----|-----------|----------|------------------|
 | argocd | Wrapper (argo-cd) | prod | argocd |
 | grafana | Wrapper (grafana) | prod | grafana |
+| reloader | Wrapper (stakater/reloader) | prod | reloader |
 | otel-operator | Wrapper (opentelemetry-operator) + CRs | prod | otel-operator |
 | mimir | Wrapper (mimir-distributed) | prod | mimir |
 | spring-petclinic | Custom | prod | spring-petclinic |
