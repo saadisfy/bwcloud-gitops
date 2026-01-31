@@ -1,3 +1,7 @@
-# Kargo prod stage overrides
-# Pflicht: api.adminAccount.passwordHash und api.adminAccount.tokenSigningKey setzen
-# (siehe apps/kargo/base/values.yaml für Generierung)
+# Kargo prod stage overrides (Subchart-Werte unter "kargo:")
+kargo:
+  api:
+    adminAccount:
+      # Bcrypt-Hash; Initial-Passwort siehe README Abschnitt "Kargo (Promotion)"
+      passwordHash: '$2y$10$JQ6/m3Q091Z0iTVnjcXwQuCcWaWxJuRs5n.mwYe2XlNVD2puckkM.'
+      tokenSigningKey: 'REPLACE_KARGO_TOKEN_SIGNING_KEY'

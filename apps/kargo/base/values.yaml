@@ -2,7 +2,6 @@
 # OCI chart: oci://ghcr.io/akuity/kargo-charts/kargo (dependency vendored in prod/charts/)
 # Tune API, webhooks, etc. per docs: https://docs.kargo.io
 
-# Pflichtfelder (keine Defaults): in prod/values.yaml oder per Secret setzen:
-#   api.adminAccount.passwordHash  – z. B. htpasswd -bnBC 10 "" "$(openssl rand -base64 24)" | tr -d ':\n'
-#   api.adminAccount.tokenSigningKey – z. B. openssl rand -base64 32
+# Pflichtfelder (keine Defaults): in prod/values.yaml unter kargo.api.adminAccount setzen:
+#   passwordHash, tokenSigningKey (Generierung siehe Kargo-Docs / README)
 # api.service.type: ClusterIP (default) or NodePort for external access

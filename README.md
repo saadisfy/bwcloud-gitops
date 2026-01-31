@@ -113,7 +113,7 @@ Alle folgenden Apps sind über **Ingress** (nginx) unter **\*.saadisfy.me** erre
 
 ## Kargo (Promotion)
 
-Kargo ist unter `apps/kargo/prod/` deployed. **Erst-Deployment:** Die Kargo-Chart-Pflichtfelder `api.adminAccount.passwordHash` und `api.adminAccount.tokenSigningKey` haben keine Defaults und müssen in `apps/kargo/prod/values.yaml` (oder per Secret) gesetzt werden. Generierung siehe Kommentare in `apps/kargo/base/values.yaml`. Nach Chart-Versionsänderung: `cd apps/kargo/prod && helm dependency build`.
+Kargo ist unter `apps/kargo/prod/` deployed. **Erst-Deployment:** `passwordHash` und `tokenSigningKey` sind in `apps/kargo/prod/values.yaml` gesetzt. **Initial-Admin-Passwort** (für Kargo-API-Login): `AkqRwOFnDkK8AM6xVy23riNQMoZXIHkc` – nach erstem Login in Kargo ändern. Nach Chart-Versionsänderung: `cd apps/kargo/prod && helm dependency build`.
 
 **Promotions** laufen über **Values-Datei** und optional **Chart-Version-Bumping**:
 
