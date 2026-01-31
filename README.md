@@ -130,4 +130,10 @@ Anwenden der Kargo-CRs (nach Kargo-Installation):
 kubectl apply -f manifests/kargo/ -n kargo
 ```
 
+**Fehler `spec.selector: field is immutable`** (z. B. bei `kargo-webhooks-server`): Nach Chart-Upgrade kann das Selector-Feld nicht geändert werden. Deployment löschen, Argo CD legt es neu an:
+
+```bash
+kubectl delete deployment kargo-webhooks-server -n kargo
+```
+
 Argo CD Applications für Promotion freigeben: Annotation `kargo.akuity.io/authorized-stage: <project>:<stage>` (siehe [Kargo Docs](https://docs.kargo.io)).
