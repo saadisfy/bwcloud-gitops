@@ -29,8 +29,8 @@ bwcloud-gitops/
 │   ├── mimir/              # dev, int, prod
 │   ├── otel-operator/      # dev, int, prod + prod-cr/ (Collector + Instrumentation CRs)
 │   └── spring-petclinic/   # dev, int, prod (Custom-Chart + Templates)
-├── appsets/                # Argo CD ApplicationSets (ein YAML pro App)
-├── manifests/              # Argo-CD-Repo-Secret (Beispiel), Kargo-CRs
+├── appsets/                # ApplicationSets (werden von Root-Application gesynct)
+├── manifests/              # Root-Application (root-application.yaml), Repo-Secret (Beispiel), Kargo-CRs
 ├── initial-plan.md         # Kurzreferenz Setup
 ├── README.md               # Nutzer-Doku
 └── STATUS.md               # Dieser Stand
@@ -144,6 +144,7 @@ Argo CD Applications für Kargo-Promotion: Annotation `kargo.akuity.io/authorize
 | Grafana Base (Ingress, Datasource Mimir) | `apps/grafana/base/values.yaml` |
 | Mimir Base (Gateway, Ingress, TLS) | `apps/mimir/base/values.yaml` |
 | Spring Petclinic Ingress (Host) | `apps/spring-petclinic/base/values.yaml` (ingress.host) |
+| Root-Application (synct appsets/) | `manifests/root-application.yaml` |
 | ApplicationSets | `appsets/*.yaml` |
 | Kargo Warehouse/Stages | `manifests/kargo/*.yaml` |
 | Repo-Secret (Beispiel) | `manifests/argocd-repo-bwcloud-gitops.yaml.example` |

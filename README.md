@@ -5,7 +5,8 @@ GitOps repository for Argo CD. Repo: [github.com/saadisfy/bwcloud-gitops](https:
 ## Structure
 
 - **`initial-plan.md`** – Short reference of the setup (stages, namespaces, apps).
-- **`appsets/`** – ApplicationSet manifests (one per app).
+- **`appsets/`** – ApplicationSet manifests (one per app); werden von der **Root-Application** verwaltet.
+- **`manifests/root-application.yaml`** – Root-Application: eine Argo-CD-Application, unter der alle ApplicationSets hängen (synct `appsets/`).
 - **`apps/<app>/`**
   - `base/values.yaml` – Shared values for all stages.
   - `<stage>/` – `dev`, `int`, `prod`:
@@ -47,10 +48,20 @@ helm upgrade argocd . -n argocd -f ../../base/values.yaml -f values.yaml --wait
 - **Helm-Repos** (grafana, open-telemetry, argo) sind in `configs.repositories` in dieser Datei definiert.
 - **Git-Repo** (bwcloud-gitops) mit Token wird weiterhin separat über `manifests/argocd-repo-bwcloud-gitops.yaml` angelegt (Token nicht ins Git).
 
+## Root-Application (alle ApplicationSets)
+
+Eine **Root-Application** (`manifests/root-application.yaml`) synct das Verzeichnis `appsets/` und erzeugt/aktualisiert damit alle ApplicationSets. Einmal anwenden:
+
+```bash
+kubectl apply -f manifests/root-application.yaml
+```
+
+Danach erscheint in Argo CD die Application **root**; unter ihren Ressourcen hängen alle ApplicationSets (grafana, mimir, otel-operator, spring-petclinic, argocd, kargo). Änderungen an `appsets/*.yaml` werden über die Root-App gesynct.
+
 ## Before first sync (done)
 
 - Argo CD is installed (Day 0) und wird per Helm aus `apps/argocd/prod/values.yaml` verwaltet.
-- ApplicationSets are applied; Applications are created (they show "Unknown" until the repo is connected).
+- Root-Application anwenden (siehe oben); ApplicationSets werden von der Root verwaltet; die generierten Applications erscheinen nach Repo-Anbindung.
 
 ## Dein Schritt: GitHub-Repo-Zugriff
 

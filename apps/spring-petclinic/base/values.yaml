@@ -1,0 +1,54 @@
+# Spring Petclinic - base values
+# GHCR image: https://github.com/saadisfy/bwcloud-gitops
+image:
+  repository: ghcr.io/saadisfy/spring-petclinic
+  tag: latest
+
+replicas: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: spring-petclinic.saadisfy.me
+  tls: false
+
+# OTel: Collector + Instrumentation liegen im otel-operator Namespace (cross-ns)
+# Annotation auf Pod: instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"
+otelCollector:
+  enabled: false
+  name: otel-collector
+mimirNamespace: mimir
+# Spring Petclinic - base values
+# GHCR image: https://github.com/saadisfy/bwcloud-gitops
+image:
+  repository: ghcr.io/saadisfy/spring-petclinic
+  tag: latest
+
+replicas: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: spring-petclinic.saadisfy.me
+  tls: false
+
+# OTel: Collector + Instrumentation liegen im otel-operator Namespace (cross-ns)
+# Annotation auf Pod: instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"
+otelCollector:
+  enabled: false
+  name: otel-collector
+mimirNamespace: mimir
