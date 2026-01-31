@@ -15,7 +15,7 @@ spec:
           http: {}
     exporters:
       otlphttp:
-        endpoint: http://mimir-mimir-distributed-distributor.mimir.svc.cluster.local:8080/otlp
+        endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
         tls:
           insecure: true
     service:

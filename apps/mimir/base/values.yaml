@@ -3,6 +3,7 @@
 # Values are for the mimir-distributed subchart
 
 mimir-distributed:
+  fullnameOverride: mimir
   global:
     podAnnotations:
       reloader.stakater.com/auto: "true"

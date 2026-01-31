@@ -20,7 +20,7 @@ grafana:
         - name: Mimir
           type: prometheus
           access: proxy
-          url: http://mimir-mimir-distributed-gateway.mimir.svc.cluster.local
+          url: http://mimir-gateway.mimir.svc.cluster.local
           isDefault: true
   ingress:
     enabled: true
