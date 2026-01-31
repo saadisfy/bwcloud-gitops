@@ -1,2 +1,4 @@
 # Grafana prod stage overrides
-grafana: {}
+# Admin credentials: Helm chart creates/updates Secret from these values (no manual secret apply).
+grafana:
+  adminPassword: "REPLACE_GRAFANA_ADMIN_PASSWORD"

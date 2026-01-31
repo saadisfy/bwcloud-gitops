@@ -1,7 +1,7 @@
 # Grafana - base values (all stages)
 grafana:
   adminUser: admin
-  # adminPassword set per stage or via secret
+  # adminPassword: set in <stage>/values.yaml so Helm chart creates/updates the Secret (GitOps)
   # Mimir als Prometheus-Datasource über lokales Netz (Service, kein Ingress)
   datasources:
     datasources.yaml:

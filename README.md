@@ -91,6 +91,7 @@ docker push ghcr.io/saadisfy/spring-petclinic:latest
 ## Observability (Grafana, Mimir, OTel) – Beispiel nur Mimir
 
 - **Grafana** (siehe `apps/grafana/base/values.yaml`): **Mimir** als Prometheus-Datasource über **lokales Netz**: `http://mimir-mimir-distributed-gateway.mimir.svc.cluster.local`.
+  - **Admin-Passwort**: Wird ausschließlich über den Helm-Chart gesteuert. In **`apps/grafana/prod/values.yaml`** steht `adminPassword`; der Chart erzeugt/aktualisiert den Kubernetes-Secret daraus (GitOps, kein manuelles `kubectl apply` Secret). Passwort ändern: Wert in `apps/grafana/prod/values.yaml` anpassen, commit/push, Argo CD sync. Falls die DB bereits mit einem anderen Passwort initialisiert wurde: einmalig im Grafana-Pod `grafana cli admin reset-admin-password <Wert aus values>` ausführen.
 - **OTel Operator** (Namespace `otel-operator`) mit CRs in `apps/otel-operator/prod-cr/`:
   - **OpenTelemetryCollector**: OTLP-Empfang (gRPC/HTTP); **Metrics** → Mimir (otlphttp, Distributor :8080/otlp); **Target Allocator** aktiv (Prometheus-Receiver + TA).
   - **Instrumentation** Java: Auto-Instrumentation; Endpoint = Collector; Resource-Attribute `deployment.environment: prod`.
