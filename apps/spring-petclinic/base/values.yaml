@@ -1,7 +1,7 @@
 # Spring Petclinic - base values
-# Public image (Docker Hub). Für GHCR: image in prod/values überschreiben + imagePullSecrets setzen.
+# Public image (Docker Hub arey/springboot-petclinic, port 8080). Für GHCR: image in prod/values überschreiben + imagePullSecrets setzen.
 image:
-  repository: docker.io/springcommunity/spring-petclinic
+  repository: docker.io/arey/springboot-petclinic
   tag: latest
 # imagePullSecrets: []   # z.B. [ { name: ghcr } ] wenn privates Image
 
