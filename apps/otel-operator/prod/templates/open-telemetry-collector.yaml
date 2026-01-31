@@ -16,6 +16,8 @@ spec:
     exporters:
       otlphttp:
         endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
+        headers:
+          X-Scope-OrgID: "1"
         tls:
           insecure: true
     service:
