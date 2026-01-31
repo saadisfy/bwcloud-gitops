@@ -37,6 +37,15 @@ grafana:
   persistence:
     enabled: true
     size: 1Gi
+  deploymentStrategy:
+    type: Recreate
+  initChownData:
+    enabled: false
+  securityContext:
+    fsGroup: 472
+  containerSecurityContext:
+    runAsUser: 472
+    runAsGroup: 472
   resources:
     requests:
       cpu: 50m
