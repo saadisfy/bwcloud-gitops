@@ -7,21 +7,12 @@ metadata:
   namespace: otel-operator
 spec:
   mode: deployment
-  targetAllocator:
-    enabled: true
   config:
     receivers:
       otlp:
         protocols:
           grpc: {}
           http: {}
-      prometheus:
-        config:
-          scrape_configs: []
-        target_allocator:
-          endpoint: http://otel-collector-targetallocator.otel-operator.svc.cluster.local:8080
-          interval: 30s
-          collector_id: ${POD_NAME}
     exporters:
       otlphttp:
         endpoint: http://mimir-mimir-distributed-distributor.mimir.svc.cluster.local:8080/otlp
@@ -30,5 +21,5 @@ spec:
     service:
       pipelines:
         metrics:
-          receivers: [otlp, prometheus]
+          receivers: [otlp]
           exporters: [otlphttp]
