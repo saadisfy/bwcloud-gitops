@@ -1,4 +1,0 @@
-apiVersion: v2
-name: spring-petclinic
-description: Spring Petclinic app with OTel auto-instrumentation
-version: 0.1.0
