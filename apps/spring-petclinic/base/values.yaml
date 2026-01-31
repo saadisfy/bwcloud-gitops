@@ -27,3 +27,9 @@ otelCollector:
   enabled: false
   name: otel-collector
 mimirNamespace: mimir
+
+loadGenerator:
+  enabled: true
+  schedule: "*/5 * * * *"
+  url: "http://spring-petclinic:8080/"
+  requests: 5

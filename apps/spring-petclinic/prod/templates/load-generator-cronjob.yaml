@@ -1,0 +1,38 @@
+{{- if .Values.loadGenerator.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: spring-petclinic-load
+  labels:
+    app: spring-petclinic
+spec:
+  schedule: "{{ .Values.loadGenerator.schedule }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: spring-petclinic
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: curl
+              image: curlimages/curl:8.11.0
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: TARGET_URL
+                  value: "{{ .Values.loadGenerator.url }}"
+                - name: REQUESTS
+                  value: "{{ .Values.loadGenerator.requests }}"
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  for i in $(seq 1 "${REQUESTS}"); do
+                    curl -fsS --max-time 5 "${TARGET_URL}" >/dev/null || true
+                  done
+{{- end }}
