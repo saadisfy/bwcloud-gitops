@@ -33,7 +33,7 @@ Values merge order: `base/values.yaml` then `<stage>/values.yaml`.
 | reloader | Wrapper (stakater/reloader) | Auto-reload on Config/Secret changes |
 | otel-operator | Wrapper (opentelemetry-operator) | |
 | mimir | Wrapper (mimir-distributed) | Low-resource base values (Beispiel: nur Mimir) |
-| spring-petclinic | Custom | Image: ghcr.io/saadisfy/spring-petclinic |
+| spring-petclinic | Custom | Default-Image: docker.io/arey/springboot-petclinic; für GHCR: image in values überschreiben + imagePullSecrets |
 | kargo | Wrapper (OCI kargo) | prod only |
 
 ## Argo CD Konfiguration (Hauptregel)
@@ -77,7 +77,9 @@ Danach erscheint in Argo CD die Application **root**; unter ihren Ressourcen hä
 
 ## Spring Petclinic image
 
-Build and push to GHCR:
+**Standard:** Es wird das öffentliche Image `docker.io/arey/springboot-petclinic:latest` verwendet (Deployment funktioniert ohne eigene Registry).
+
+**Eigenes Image (GHCR):** In `apps/spring-petclinic/base/values.yaml` oder `prod/values.yaml` `image.repository` und `image.tag` überschreiben sowie `imagePullSecrets` setzen (z. B. `[ { name: ghcr } ]`). Build und Push:
 
 ```bash
 # In spring-petclinic repo
