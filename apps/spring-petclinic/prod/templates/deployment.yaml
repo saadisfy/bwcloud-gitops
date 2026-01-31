@@ -19,6 +19,10 @@ spec:
         # Service-Name für Mimir/Tempo/Grafana (Filter, Labels)
         resource.opentelemetry.io/service.name: "spring-petclinic"
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: petclinic
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
