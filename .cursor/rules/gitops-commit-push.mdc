@@ -1,0 +1,13 @@
+---
+description: Always commit and push after changes (GitOps)
+alwaysApply: true
+---
+
+# GitOps: Always Commit and Push
+
+- For any repo changes you make, always:
+  1. `git add` relevant files
+  2. `git commit` with a clear message
+  3. `git push`
+
+- Do not leave uncommitted changes after completing a task.
