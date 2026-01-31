@@ -15,17 +15,14 @@ spec:
       name: otel-operator
     spec:
       project: default
-      sources:
-        - repoURL: https://github.com/saadisfy/bwcloud-gitops.git
-          targetRevision: main
-          path: 'apps/otel-operator/{{stage}}'
-          helm:
-            valueFiles:
-              - ../base/values.yaml
-              - values.yaml
-        - repoURL: https://github.com/saadisfy/bwcloud-gitops.git
-          targetRevision: main
-          path: 'apps/otel-operator/prod-cr'
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: 'apps/otel-operator/{{stage}}'
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'

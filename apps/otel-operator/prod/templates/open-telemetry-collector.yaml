@@ -1,4 +1,5 @@
 # OpenTelemetryCollector: OTLP-Empfang, Metrics → Mimir (otlphttp), Target Allocator (Beispiel: nur Mimir)
+# v1beta1: spec.config must be an object, not a string
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
@@ -8,7 +9,7 @@ spec:
   mode: deployment
   targetAllocator:
     enabled: true
-  config: |
+  config:
     receivers:
       otlp:
         protocols:
