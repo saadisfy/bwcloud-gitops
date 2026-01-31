@@ -3,7 +3,15 @@ grafana:
   adminUser: admin
   # adminPassword: set in <stage>/values.yaml so Helm chart creates/updates the Secret (GitOps)
   podAnnotations:
-    reloader.stakater.com/auto: "true"
+    reloader.stakater.com/auto: "true"  # Stakater Reloader: Rolling Restart bei Secret-Änderung
+  # Nach jedem Start (inkl. nach Reloader-Neustart bei Passwort-Änderung) DB-Passwort an Secret angleichen
+  lifecycleHooks:
+    postStart:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - 'sleep 25 && grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD" || true'
   # Mimir als Prometheus-Datasource über lokales Netz (Service, kein Ingress)
   datasources:
     datasources.yaml:
