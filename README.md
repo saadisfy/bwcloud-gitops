@@ -98,7 +98,7 @@ docker push ghcr.io/saadisfy/spring-petclinic:latest
 - **OTel Operator** (Namespace `otel-operator`) mit CRs in `apps/otel-operator/prod-cr/`:
   - **OpenTelemetryCollector**: OTLP-Empfang (gRPC/HTTP); **Metrics** → Mimir (otlphttp, Distributor :8080/otlp); **Target Allocator** aktiv (Prometheus-Receiver + TA).
   - **Instrumentation** Java: Auto-Instrumentation; Endpoint = Collector; Resource-Attribute `deployment.environment: prod`.
-- **Spring Petclinic**: OTel-Injection optional über `otelInstrumentation.enabled` (default: false, damit die App stabil läuft). Bei `true`: Pod-Annotation `instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"`. Lokaler Collector deaktiviert (`otelCollector.enabled: false`).
+- **Spring Petclinic**: OTel-Injection über `otelInstrumentation.enabled` (default: true). Pod-Annotation `instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"`; Endpoint HTTP :4318 (Instrumentation CR). Lokaler Collector deaktiviert (`otelCollector.enabled: false`).
 
 ## Erreichbarkeit (Ingress)
 
