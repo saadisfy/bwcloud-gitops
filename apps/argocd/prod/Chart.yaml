@@ -4,5 +4,5 @@ description: Wrapper for Argo CD Helm chart (self-managed)
 version: 0.1.0
 dependencies:
   - name: argo-cd
-    version: "7.7.10"
+    version: "9.3.7"
     repository: https://argoproj.github.io/argo-helm

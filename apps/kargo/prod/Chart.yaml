@@ -5,5 +5,5 @@ version: 0.1.0
 dependencies:
   # Kargo OCI chart; dependency is vendored (charts/) for Argo CD
   - name: kargo
-    version: "1.8.4"
+    version: "1.9.1"
     repository: oci://ghcr.io/akuity/kargo-charts
