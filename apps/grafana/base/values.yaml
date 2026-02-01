@@ -22,6 +22,10 @@ grafana:
           access: proxy
           url: http://mimir-gateway.mimir.svc.cluster.local/prometheus
           isDefault: true
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "1"
   ingress:
     enabled: true
     ingressClassName: nginx
