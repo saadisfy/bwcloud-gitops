@@ -12,6 +12,10 @@ spec:
       value: "none"
     - name: OTEL_TRACES_EXPORTER
       value: "none"
+    - name: OTEL_METRICS_EXPORTER
+      value: "otlp"
+    - name: OTEL_INSTRUMENTATION_RUNTIME_METRICS_ENABLED
+      value: "true"
   exporter:
     endpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4318
   resource:
