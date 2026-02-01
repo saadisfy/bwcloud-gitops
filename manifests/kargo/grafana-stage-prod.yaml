@@ -30,8 +30,8 @@ spec:
           config:
             path: ./out/apps/grafana/prod/values.yaml
             updates:
-              - key: grafana.image.tag
-                value: ${{ chartFrom("https://grafana.github.io/helm-charts").AppVersion }}
+              - key: kargo.promotedChartVersion
+                value: ${{ chartFrom("https://grafana.github.io/helm-charts").Version }}
         - uses: helm-update-chart
           as: update-chart
           config:
