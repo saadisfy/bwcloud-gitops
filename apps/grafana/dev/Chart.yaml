@@ -1,0 +1,8 @@
+apiVersion: v2
+name: grafana-wrapper
+description: Wrapper for Grafana Helm chart
+version: 0.1.0
+dependencies:
+  - name: grafana
+    version: "10.5.15"
+    repository: https://grafana.github.io/helm-charts

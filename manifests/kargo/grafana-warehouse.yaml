@@ -1,0 +1,13 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: grafana-warehouse
+  namespace: grafana
+spec:
+  subscriptions:
+    - git:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        branch: main
+    - chart:
+        repoURL: https://grafana.github.io/helm-charts
+        name: grafana

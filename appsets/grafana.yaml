@@ -4,15 +4,19 @@ metadata:
   name: grafana
   namespace: argocd
 spec:
-  # Nur prod deployed; dev/int Code bleibt in apps/grafana/{dev,int}
+  # Dev + prod deployed
   generators:
     - list:
         elements:
+          - stage: dev
+            name: grafana-dev
+            namespace: grafana-dev
           - stage: prod
+            name: grafana
             namespace: grafana
   template:
     metadata:
-      name: grafana
+      name: '{{name}}'
     spec:
       project: default
       source:

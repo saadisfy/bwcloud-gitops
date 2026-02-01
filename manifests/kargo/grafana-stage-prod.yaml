@@ -1,0 +1,51 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: grafana-prod
+  namespace: grafana
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: grafana-warehouse
+      sources:
+        stages:
+          - grafana-dev
+  promotionTemplate:
+    spec:
+      vars:
+        - name: gitRepo
+          value: https://github.com/saadisfy/bwcloud-gitops.git
+        - name: targetBranch
+          value: main
+      steps:
+        - uses: git-clone
+          config:
+            repoURL: ${{ vars.gitRepo }}
+            checkout:
+              - branch: ${{ vars.targetBranch }}
+                path: ./out
+        - uses: yaml-update
+          as: update-values
+          config:
+            path: ./out/apps/grafana/prod/values.yaml
+            updates:
+              - key: grafana.image.tag
+                value: ${{ chartFrom("https://grafana.github.io/helm-charts").AppVersion }}
+        - uses: helm-update-chart
+          as: update-chart
+          config:
+            path: ./out/apps/grafana/prod
+            charts:
+              - repository: https://grafana.github.io/helm-charts
+                name: grafana
+                version: ${{ chartFrom("https://grafana.github.io/helm-charts").Version }}
+        - uses: git-commit
+          config:
+            path: ./out
+            message: |
+              grafana prod: ${{ outputs["update-values"].commitMessage }}
+        - uses: git-push
+          config:
+            path: ./out
+            branch: ${{ vars.targetBranch }}
