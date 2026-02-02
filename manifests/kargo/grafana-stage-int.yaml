@@ -1,7 +1,7 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
-  name: grafana-prod
+  name: grafana-int
   namespace: grafana
 spec:
   requestedFreight:
@@ -10,7 +10,7 @@ spec:
         name: grafana-warehouse
       sources:
         stages:
-          - grafana-int
+          - grafana-dev
   promotionTemplate:
     spec:
       vars:
@@ -25,22 +25,21 @@ spec:
             checkout:
               - branch: ${{ vars.targetBranch }}
                 path: ./out
-        # Copy Chart.yaml from int to prod
         - uses: copy
           as: copy-chart
           config:
-            inPath: ./out/apps/grafana/int/Chart.yaml
-            outPath: ./out/apps/grafana/prod/Chart.yaml
+            inPath: ./out/apps/grafana/dev/Chart.yaml
+            outPath: ./out/apps/grafana/int/Chart.yaml
         - uses: copy
           as: copy-templates
           config:
-            inPath: ./out/apps/grafana/int/templates
-            outPath: ./out/apps/grafana/prod/templates
+            inPath: ./out/apps/grafana/dev/templates
+            outPath: ./out/apps/grafana/int/templates
         - uses: git-commit
           config:
             path: ./out
             message: |
-              chore(grafana): promote int → prod
+              chore(grafana): promote dev → int
         - uses: git-push
           config:
             path: ./out

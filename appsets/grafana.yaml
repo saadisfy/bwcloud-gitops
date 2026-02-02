@@ -11,6 +11,9 @@ spec:
           - stage: dev
             name: grafana-dev
             namespace: grafana-dev
+          - stage: int
+            name: grafana-int
+            namespace: grafana-int
           - stage: prod
             name: grafana
             namespace: grafana
