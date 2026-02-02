@@ -118,8 +118,8 @@ Kargo ist unter `apps/kargo/prod/` deployed. **Erst-Deployment:** `passwordHash`
 
 **Promotions** laufen über **Values-Datei** und optional **Chart-Version-Bumping**:
 
-- **Warehouse** (`apps/kargo-projects/core/warehouse.yaml`): abonniert das Git-Repo (bwcloud-gitops) und das Container-Image (spring-petclinic). Optional können Helm-Chart-Repos ergänzt werden.
-- **Stages** (`apps/kargo-projects/core/stage-*.yaml`): `dev` nimmt Freight direkt aus dem Warehouse; `int` und `prod` nur nach Verifikation in der jeweiligen Upstream-Stage.
+- **Warehouse** (`apps/kargo-projects/spring-petclinic/warehouse.yaml`): abonniert das Git-Repo (bwcloud-gitops) und das Container-Image (spring-petclinic). Optional können Helm-Chart-Repos ergänzt werden.
+- **Stages** (`apps/kargo-projects/spring-petclinic/stage-*.yaml`): `dev` nimmt Freight direkt aus dem Warehouse; `int` und `prod` nur nach Verifikation in der jeweiligen Upstream-Stage.
 - **Promotion-Template** (in Stage `int`/`prod`): Beim Promoten wird das **Ziel-Stage-Branch** (z. B. `stage/int`) ausgecheckt, dann:
   1. **Values-Update**: `yaml-update` schreibt z. B. `image.tag` in `apps/spring-petclinic/<stage>/values.yaml` aus dem aktuellen Freight (z. B. `${{ imageFrom("ghcr.io/saadisfy/spring-petclinic").Tag }}`).
   2. **Chart-Version-Bump** (optional): Mit einer chart-Subscription im Warehouse kann ein Schritt `helm-update-chart` die Dependency-Version in `apps/<app>/<stage>/Chart.yaml` aus dem Freight setzen.

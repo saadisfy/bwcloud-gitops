@@ -33,7 +33,7 @@ bwcloud-gitops/
 ├── appsets/                # ApplicationSets (werden von Root-Application gesynct)
 ├── 0day-deployment-manifests/  # Root-Application, Repo-Secret (Beispiel)
 ├── apps/kargo/             # Kargo Helm-Chart (prod)
-├── apps/kargo-projects/    # Kargo-CRs (Projects/Stages/Warehouse)
+├── apps/kargo-projects/    # Kargo-CRs pro App (Projects/Stages/Warehouse)
 ├── initial-plan.md         # Kurzreferenz Setup
 ├── README.md               # Nutzer-Doku
 └── STATUS.md               # Dieser Stand
@@ -115,8 +115,8 @@ Danach kann Argo CD das Repo clonen und die Applications syncen.
 
 ## Kargo (Promotion)
 
-- **Warehouse:** `apps/kargo-projects/core/warehouse.yaml` – Subscriptions: Git (bwcloud-gitops), Image (ghcr.io/saadisfy/spring-petclinic).
-- **Stages:** `apps/kargo-projects/core/stage-dev.yaml`, `stage-int.yaml`, `stage-prod.yaml`
+- **Warehouse:** `apps/kargo-projects/spring-petclinic/warehouse.yaml` – Subscriptions: Git (bwcloud-gitops), Image (ghcr.io/saadisfy/spring-petclinic).
+- **Stages:** `apps/kargo-projects/spring-petclinic/stage-dev.yaml`, `stage-int.yaml`, `stage-prod.yaml`
   - dev: Freight direkt aus Warehouse
   - int/prod: Freight nach Verifikation in Upstream-Stage
 - **Promotion:** Values-Update (`yaml-update`) in `apps/spring-petclinic/<stage>/values.yaml`, optional Chart-Version-Bump (`helm-update-chart`), dann Git-Commit/Push.
