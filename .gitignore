@@ -1,2 +1,2 @@
 # GitHub PAT – nicht committen
-manifests/argocd-repo-bwcloud-gitops.yaml
+apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml

@@ -6,7 +6,7 @@ GitOps repository for Argo CD. Repo: [github.com/saadisfy/bwcloud-gitops](https:
 
 - **`initial-plan.md`** – Short reference of the setup (stages, namespaces, apps).
 - **`appsets/`** – ApplicationSet manifests (one per app); werden von der **Root-Application** verwaltet.
-- **`manifests/root-application.yaml`** – Root-Application: eine Argo-CD-Application, unter der alle ApplicationSets hängen (synct `appsets/`).
+- **`apps/argocd/manifests/root-application.yaml`** – Root-Application: eine Argo-CD-Application, unter der alle ApplicationSets hängen (synct `appsets/`).
 - **`apps/<app>/`**
   - `base/values.yaml` – Shared values for all stages.
   - `<stage>/` – `dev`, `int`, `prod`:
@@ -47,14 +47,14 @@ helm upgrade argocd . -n argocd -f ../../base/values.yaml -f values.yaml --wait
 ```
 
 - **Helm-Repos** (grafana, open-telemetry, argo) sind in `configs.repositories` in dieser Datei definiert.
-- **Git-Repo** (bwcloud-gitops) mit Token wird weiterhin separat über `manifests/argocd-repo-bwcloud-gitops.yaml` angelegt (Token nicht ins Git).
+- **Git-Repo** (bwcloud-gitops) mit Token wird weiterhin separat über `apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml` angelegt (Token nicht ins Git).
 
 ## Root-Application (alle ApplicationSets)
 
-Eine **Root-Application** (`manifests/root-application.yaml`) synct das Verzeichnis `appsets/` und erzeugt/aktualisiert damit alle ApplicationSets. Einmal anwenden:
+Eine **Root-Application** (`apps/argocd/manifests/root-application.yaml`) synct das Verzeichnis `appsets/` und erzeugt/aktualisiert damit alle ApplicationSets. Einmal anwenden:
 
 ```bash
-kubectl apply -f manifests/root-application.yaml
+kubectl apply -f apps/argocd/manifests/root-application.yaml
 ```
 
 Danach erscheint in Argo CD die Application **root**; unter ihren Ressourcen hängen alle ApplicationSets (grafana, mimir, otel-operator, spring-petclinic, argocd, kargo). Änderungen an `appsets/*.yaml` werden über die Root-App gesynct.
@@ -68,9 +68,9 @@ Danach erscheint in Argo CD die Application **root**; unter ihren Ressourcen hä
 
 1. **Secret anlegen** (mit deinem GitHub PAT):
    ```bash
-   cp manifests/argocd-repo-bwcloud-gitops.yaml.example manifests/argocd-repo-bwcloud-gitops.yaml
+   cp apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml.example apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml
    # DEIN_GITHUB_PAT in der Datei durch dein Token ersetzen (ghp_...)
-   kubectl apply -f manifests/argocd-repo-bwcloud-gitops.yaml
+   kubectl apply -f apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml
    ```
 
 2. Danach verbindet Argo CD das Repo und die Applications können syncen.
@@ -118,8 +118,8 @@ Kargo ist unter `apps/kargo/prod/` deployed. **Erst-Deployment:** `passwordHash`
 
 **Promotions** laufen über **Values-Datei** und optional **Chart-Version-Bumping**:
 
-- **Warehouse** (`manifests/kargo/warehouse.yaml`): abonniert das Git-Repo (bwcloud-gitops) und das Container-Image (spring-petclinic). Optional können Helm-Chart-Repos ergänzt werden.
-- **Stages** (`manifests/kargo/stage-*.yaml`): `dev` nimmt Freight direkt aus dem Warehouse; `int` und `prod` nur nach Verifikation in der jeweiligen Upstream-Stage.
+- **Warehouse** (`apps/kargo/crs/warehouse.yaml`): abonniert das Git-Repo (bwcloud-gitops) und das Container-Image (spring-petclinic). Optional können Helm-Chart-Repos ergänzt werden.
+- **Stages** (`apps/kargo/crs/stage-*.yaml`): `dev` nimmt Freight direkt aus dem Warehouse; `int` und `prod` nur nach Verifikation in der jeweiligen Upstream-Stage.
 - **Promotion-Template** (in Stage `int`/`prod`): Beim Promoten wird das **Ziel-Stage-Branch** (z. B. `stage/int`) ausgecheckt, dann:
   1. **Values-Update**: `yaml-update` schreibt z. B. `image.tag` in `apps/spring-petclinic/<stage>/values.yaml` aus dem aktuellen Freight (z. B. `${{ imageFrom("ghcr.io/saadisfy/spring-petclinic").Tag }}`).
   2. **Chart-Version-Bump** (optional): Mit einer chart-Subscription im Warehouse kann ein Schritt `helm-update-chart` die Dependency-Version in `apps/<app>/<stage>/Chart.yaml` aus dem Freight setzen.
@@ -128,7 +128,7 @@ Kargo ist unter `apps/kargo/prod/` deployed. **Erst-Deployment:** `passwordHash`
 Anwenden der Kargo-CRs (nach Kargo-Installation):
 
 ```bash
-kubectl apply -f manifests/kargo/ -n kargo
+kubectl apply -f apps/kargo/crs/ -n kargo
 ```
 
 **Fehler `spec.selector: field is immutable`** (z. B. bei `kargo-webhooks-server`): Nach Chart-Upgrade kann das Selector-Feld nicht geändert werden. Deployment löschen, Argo CD legt es neu an:
