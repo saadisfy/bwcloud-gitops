@@ -25,26 +25,24 @@ spec:
             checkout:
               - branch: ${{ vars.targetBranch }}
                 path: ./out
-        - uses: yaml-update
-          as: update-values
+        # Copy Chart.yaml from dev to prod
+        - uses: copy
+          as: copy-chart
           config:
-            path: ./out/apps/grafana/prod/values.yaml
-            updates:
-              - key: kargo.promotedChartVersion
-                value: ${{ chartFrom("https://grafana.github.io/helm-charts").Version }}
-        - uses: helm-update-chart
-          as: update-chart
+            inPath: ./out/apps/grafana/dev/Chart.yaml
+            outPath: ./out/apps/grafana/prod/Chart.yaml
+        # Copy values.yaml from dev to prod
+        - uses: copy
+          as: copy-values
           config:
-            path: ./out/apps/grafana/prod
-            charts:
-              - repository: https://grafana.github.io/helm-charts
-                name: grafana
-                version: ${{ chartFrom("https://grafana.github.io/helm-charts").Version }}
+            inPath: ./out/apps/grafana/dev/values.yaml
+            outPath: ./out/apps/grafana/prod/values.yaml
+        # Copy templates folder if exists (using git-tree-clear + copy pattern)
         - uses: git-commit
           config:
             path: ./out
             message: |
-              grafana prod: ${{ outputs["update-values"].commitMessage }}
+              chore(grafana): promote dev → prod (Chart v${{ chartFrom("https://github.com/saadisfy/bwcloud-gitops.git", "apps/grafana/dev").Version }})
         - uses: git-push
           config:
             path: ./out

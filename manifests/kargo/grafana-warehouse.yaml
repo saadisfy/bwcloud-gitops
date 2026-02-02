@@ -4,10 +4,10 @@ metadata:
   name: grafana-warehouse
   namespace: grafana
 spec:
+  freightCreationPolicy: WhenChartVersionChanges
   subscriptions:
-    - git:
-        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
-        branch: main
+    # Watches apps/grafana/dev/Chart.yaml for wrapper version changes
     - chart:
-        repoURL: https://grafana.github.io/helm-charts
-        name: grafana
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        name: apps/grafana/dev
+        discoveryLimit: 10
