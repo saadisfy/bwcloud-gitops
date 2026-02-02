@@ -1,4 +1,0 @@
-apiVersion: v2
-name: kargo-crs
-description: Kargo CRs managed by Argo CD
-version: 0.1.0
