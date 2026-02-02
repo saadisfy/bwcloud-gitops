@@ -2,6 +2,7 @@
 grafana:
   nameOverride: grafana
   fullnameOverride: grafana
+  adminPassword: "REPLACE_GRAFANA_ADMIN_PASSWORD"
   ingress:
     hosts:
       - grafana.saadisfy.me
