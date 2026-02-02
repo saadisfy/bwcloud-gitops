@@ -11,6 +11,8 @@ spec:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         branch: main
         includePaths:
-          - apps/grafana/dev/**
+          - apps/grafana/dev/Chart.yaml
+          - apps/grafana/dev/values.yaml
+          - apps/grafana/dev/templates/**
         commitSelectionStrategy: NewestFromBranch
-        discoveryLimit: 10
+        discoveryLimit: 20

@@ -45,4 +45,4 @@ spec:
         - uses: git-push
           config:
             path: ./out
-            branch: ${{ vars.targetBranch }}
+            targetBranch: ${{ vars.targetBranch }}
