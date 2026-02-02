@@ -1,4 +1,11 @@
-# Grafana prod stage overrides
-# Admin credentials: Helm chart creates/updates Secret from these values (no manual secret apply).
+# Grafana dev stage overrides
 grafana:
-  adminPassword: "REPLACE_GRAFANA_ADMIN_PASSWORD"
+  nameOverride: grafana-dev
+  fullnameOverride: grafana-dev
+  ingress:
+    hosts:
+      - grafana-dev.saadisfy.me
+    tls:
+      - secretName: grafana-dev-tls
+        hosts:
+          - grafana-dev.saadisfy.me
