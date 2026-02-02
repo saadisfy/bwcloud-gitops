@@ -18,7 +18,7 @@ spec:
         - name: gitRepo
           value: https://github.com/saadisfy/bwcloud-gitops.git
         - name: targetBranch
-          value: stage/${{ ctx.stage }}
+          value: main
       steps:
         - uses: git-clone
           config:
@@ -26,7 +26,6 @@ spec:
             checkout:
               - branch: ${{ vars.targetBranch }}
                 path: ./out
-                create: true
         - uses: yaml-update
           as: update-values
           config:
@@ -34,14 +33,6 @@ spec:
             updates:
               - key: image.tag
                 value: ${{ imageFrom("ghcr.io/saadisfy/spring-petclinic").Tag }}
-        # Chart-Version-Bump: Warehouse um chart-Subscription ergänzen, dann Schritt:
-        # - uses: helm-update-chart
-        #   config:
-        #     path: ./out/apps/grafana/int
-        #     charts:
-        #       - repository: https://grafana.github.io/helm-charts
-        #         name: grafana
-        #         version: ${{ chartFrom("https://grafana.github.io/helm-charts").Version }}
         - uses: git-commit
           config:
             path: ./out
@@ -50,4 +41,4 @@ spec:
         - uses: git-push
           config:
             path: ./out
-            branch: ${{ vars.targetBranch }}
+            targetBranch: ${{ vars.targetBranch }}
