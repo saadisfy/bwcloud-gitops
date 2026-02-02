@@ -12,7 +12,7 @@ Stand: Repo-Struktur, Apps, Ingress und Konfiguration wie aktuell im Repository.
 | **Argo CD** | Self-managed aus `apps/argocd/prod/`; Ingress: https://argocd.saadisfy.me |
 | **Stages** | dev, int, prod (Namespace: `<app>`, `<app>-dev`, `<app>-int`) |
 | **Ingress** | nginx, Hosts `*.saadisfy.me`, TLS via cert-manager (ClusterIssuer `letsencrypt-prod`) |
-| **Kargo** | CRs in `apps/kargo/crs/`; Promotion über Values + optional Chart-Version |
+| **Kargo** | CRs in `apps/kargo/crs/templates/`; Promotion über Values + optional Chart-Version |
 
 ---
 
@@ -32,7 +32,7 @@ bwcloud-gitops/
 │   └── spring-petclinic/   # dev, int, prod (Custom-Chart + Templates)
 ├── appsets/                # ApplicationSets (werden von Root-Application gesynct)
 ├── apps/argocd/manifests/  # Root-Application, Repo-Secret (Beispiel)
-├── apps/kargo/crs/         # Kargo-CRs
+├── apps/kargo/crs/         # Kargo-CRs (Helm chart + templates/)
 ├── initial-plan.md         # Kurzreferenz Setup
 ├── README.md               # Nutzer-Doku
 └── STATUS.md               # Dieser Stand
@@ -114,8 +114,8 @@ Danach kann Argo CD das Repo clonen und die Applications syncen.
 
 ## Kargo (Promotion)
 
-- **Warehouse:** `apps/kargo/crs/warehouse.yaml` – Subscriptions: Git (bwcloud-gitops), Image (ghcr.io/saadisfy/spring-petclinic).
-- **Stages:** `apps/kargo/crs/stage-dev.yaml`, `stage-int.yaml`, `stage-prod.yaml`
+- **Warehouse:** `apps/kargo/crs/templates/warehouse.yaml` – Subscriptions: Git (bwcloud-gitops), Image (ghcr.io/saadisfy/spring-petclinic).
+- **Stages:** `apps/kargo/crs/templates/stage-dev.yaml`, `stage-int.yaml`, `stage-prod.yaml`
   - dev: Freight direkt aus Warehouse
   - int/prod: Freight nach Verifikation in Upstream-Stage
 - **Promotion:** Values-Update (`yaml-update`) in `apps/spring-petclinic/<stage>/values.yaml`, optional Chart-Version-Bump (`helm-update-chart`), dann Git-Commit/Push.
@@ -123,7 +123,7 @@ Danach kann Argo CD das Repo clonen und die Applications syncen.
 Anwenden (nach Kargo-Installation):
 
 ```bash
-kubectl apply -f apps/kargo/crs/ -n kargo
+Deployment der Kargo‑CRs erfolgt via Argo CD (ApplicationSet `kargo-crs`, Chart `apps/kargo/crs`).
 ```
 
 Argo CD Applications für Kargo-Promotion: Annotation `kargo.akuity.io/authorized-stage: <project>:<stage>`.
@@ -149,7 +149,7 @@ Argo CD Applications für Kargo-Promotion: Annotation `kargo.akuity.io/authorize
 | Spring Petclinic Ingress (Host) | `apps/spring-petclinic/base/values.yaml` (ingress.host) |
 | Root-Application (synct appsets/) | `apps/argocd/manifests/root-application.yaml` |
 | ApplicationSets | `appsets/*.yaml` |
-| Kargo Warehouse/Stages | `apps/kargo/crs/*.yaml` |
+| Kargo Warehouse/Stages | `apps/kargo/crs/templates/*.yaml` |
 | Repo-Secret (Beispiel) | `apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml.example` |
 | Repo-Secret (lokal, gitignored) | `apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml` |
 
