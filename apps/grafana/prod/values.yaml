@@ -1,11 +1,11 @@
 # Grafana dev stage overrides
 grafana:
-  nameOverride: grafana-dev
-  fullnameOverride: grafana-dev
+  nameOverride: grafana
+  fullnameOverride: grafana
   ingress:
     hosts:
-      - grafana-dev.saadisfy.me
+      - grafana.saadisfy.me
     tls:
-      - secretName: grafana-dev-tls
+      - secretName: grafana-tls
         hosts:
-          - grafana-dev.saadisfy.me
+          - grafana.saadisfy.me
