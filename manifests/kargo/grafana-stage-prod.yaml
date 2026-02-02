@@ -37,12 +37,11 @@ spec:
           config:
             inPath: ./out/apps/grafana/dev/values.yaml
             outPath: ./out/apps/grafana/prod/values.yaml
-        # Copy templates folder if exists (using git-tree-clear + copy pattern)
         - uses: git-commit
           config:
             path: ./out
             message: |
-              chore(grafana): promote dev → prod (Chart v${{ chartFrom("https://github.com/saadisfy/bwcloud-gitops.git", "apps/grafana/dev").Version }})
+              chore(grafana): promote dev → prod
         - uses: git-push
           config:
             path: ./out

@@ -4,10 +4,13 @@ metadata:
   name: grafana-warehouse
   namespace: grafana
 spec:
-  freightCreationPolicy: WhenChartVersionChanges
+  freightCreationPolicy: Automatic
   subscriptions:
-    # Watches apps/grafana/dev/Chart.yaml for wrapper version changes
-    - chart:
+    # Watch git repo for changes in apps/grafana/dev
+    - git:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
-        name: apps/grafana/dev
+        branch: main
+        includePaths:
+          - apps/grafana/dev/**
+        commitSelectionStrategy: NewestFromBranch
         discoveryLimit: 10
