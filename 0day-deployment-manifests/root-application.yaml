@@ -1,5 +1,5 @@
 # Root Application: managed alle ApplicationSets unter appsets/
-# Einmal anwenden: kubectl apply -f apps/argocd/manifests/root-application.yaml
+# Einmal anwenden: kubectl apply -f 0day-deployment-manifests/root-application.yaml
 # Danach synct die Root-App die appsets/ und erzeugt/aktualisiert alle ApplicationSets.
 apiVersion: argoproj.io/v1alpha1
 kind: Application

@@ -21,7 +21,7 @@ Stand: Repo-Struktur, Apps, Ingress und Konfiguration wie aktuell im Repository.
 ```
 bwcloud-gitops/
 ├── .cursor/rules/          # Cursor-Regeln (gitops, readme-infra)
-├── .gitignore              # u.a. apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml
+├── .gitignore              # u.a. 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
 ├── apps/                   # App-spezifische Helm-Charts und Values
 │   ├── argocd/             # nur prod
 │   ├── grafana/            # dev, int, prod
@@ -31,7 +31,7 @@ bwcloud-gitops/
 │   ├── otel-operator/      # dev, int, prod + prod-cr/ (Collector + Instrumentation CRs)
 │   └── spring-petclinic/   # dev, int, prod (Custom-Chart + Templates)
 ├── appsets/                # ApplicationSets (werden von Root-Application gesynct)
-├── apps/argocd/manifests/  # Root-Application, Repo-Secret (Beispiel)
+├── 0day-deployment-manifests/  # Root-Application, Repo-Secret (Beispiel)
 ├── apps/kargo/prod/        # Kargo Helm-Chart + CRs in templates/
 ├── initial-plan.md         # Kurzreferenz Setup
 ├── README.md               # Nutzer-Doku
@@ -90,7 +90,7 @@ Alle URLs unter **\*.saadisfy.me**. DNS für diese Hosts auf die Ingress-/Cluste
 - **Zentrale Konfiguration:** `apps/argocd/prod/values.yaml`
   - Ingress: argocd.saadisfy.me, TLS, cert-manager-Annotations
   - Helm-Repos: grafana, open-telemetry, argo (in `configs.repositories`)
-  - Git-Repo-Credentials **nicht** in Values; Secret separat: `apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml` (Datei in `.gitignore`, Token nicht committen)
+  - Git-Repo-Credentials **nicht** in Values; Secret separat: `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` (Datei in `.gitignore`, Token nicht committen)
 
 **Argo CD nach Values-Änderung anwenden:**
 
@@ -104,9 +104,9 @@ helm upgrade argocd . -n argocd -f ../base/values.yaml -f values.yaml --wait
 
 ## Git-Repo-Zugriff (Argo CD)
 
-1. `cp apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml.example apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml`
+1. `cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml`
 2. In der Kopie: `password: DEIN_GITHUB_PAT` durch echten GitHub-PAT ersetzen (mit z. B. **Contents: Read and Write**).
-3. `kubectl apply -f apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml`
+3. `kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml`
 
 Danach kann Argo CD das Repo clonen und die Applications syncen.
 
@@ -134,7 +134,7 @@ Argo CD Applications für Kargo-Promotion: Annotation `kargo.akuity.io/authorize
 
 | Datei | Inhalt |
 |-------|--------|
-| `.cursor/rules/gitops.mdc` | Argo-CD-Konfig in `apps/argocd/prod/values.yaml`; Helm-Upgrade-Befehl; Git-Secret über `apps/argocd/manifests/` |
+| `.cursor/rules/gitops.mdc` | Argo-CD-Konfig in `apps/argocd/prod/values.yaml`; Helm-Upgrade-Befehl; Git-Secret über `0day-deployment-manifests/` |
 | `.cursor/rules/readme-infra.mdc` | Infra-/Feature-Konfiguration immer parallel im README dokumentieren |
 
 ---
@@ -147,11 +147,11 @@ Argo CD Applications für Kargo-Promotion: Annotation `kargo.akuity.io/authorize
 | Grafana Base (Ingress, Datasource Mimir) | `apps/grafana/base/values.yaml` |
 | Mimir Base (Gateway, Ingress, TLS) | `apps/mimir/base/values.yaml` |
 | Spring Petclinic Ingress (Host) | `apps/spring-petclinic/base/values.yaml` (ingress.host) |
-| Root-Application (synct appsets/) | `apps/argocd/manifests/root-application.yaml` |
+| Root-Application (synct appsets/) | `0day-deployment-manifests/root-application.yaml` |
 | ApplicationSets | `appsets/*.yaml` |
 | Kargo Warehouse/Stages | `apps/kargo/prod/templates/*.yaml` |
-| Repo-Secret (Beispiel) | `apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml.example` |
-| Repo-Secret (lokal, gitignored) | `apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml` |
+| Repo-Secret (Beispiel) | `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example` |
+| Repo-Secret (lokal, gitignored) | `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` |
 
 ---
 

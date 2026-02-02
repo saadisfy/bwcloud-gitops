@@ -6,7 +6,7 @@ GitOps repository for Argo CD. Repo: [github.com/saadisfy/bwcloud-gitops](https:
 
 - **`initial-plan.md`** – Short reference of the setup (stages, namespaces, apps).
 - **`appsets/`** – ApplicationSet manifests (one per app); werden von der **Root-Application** verwaltet.
-- **`apps/argocd/manifests/root-application.yaml`** – Root-Application: eine Argo-CD-Application, unter der alle ApplicationSets hängen (synct `appsets/`).
+- **`0day-deployment-manifests/root-application.yaml`** – Root-Application: eine Argo-CD-Application, unter der alle ApplicationSets hängen (synct `appsets/`).
 - **`apps/<app>/`**
   - `base/values.yaml` – Shared values for all stages.
   - `<stage>/` – `dev`, `int`, `prod`:
@@ -47,14 +47,14 @@ helm upgrade argocd . -n argocd -f ../../base/values.yaml -f values.yaml --wait
 ```
 
 - **Helm-Repos** (grafana, open-telemetry, argo) sind in `configs.repositories` in dieser Datei definiert.
-- **Git-Repo** (bwcloud-gitops) mit Token wird weiterhin separat über `apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml` angelegt (Token nicht ins Git).
+- **Git-Repo** (bwcloud-gitops) mit Token wird weiterhin separat über `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` angelegt (Token nicht ins Git).
 
 ## Root-Application (alle ApplicationSets)
 
-Eine **Root-Application** (`apps/argocd/manifests/root-application.yaml`) synct das Verzeichnis `appsets/` und erzeugt/aktualisiert damit alle ApplicationSets. Einmal anwenden:
+Eine **Root-Application** (`0day-deployment-manifests/root-application.yaml`) synct das Verzeichnis `appsets/` und erzeugt/aktualisiert damit alle ApplicationSets. Einmal anwenden:
 
 ```bash
-kubectl apply -f apps/argocd/manifests/root-application.yaml
+kubectl apply -f 0day-deployment-manifests/root-application.yaml
 ```
 
 Danach erscheint in Argo CD die Application **root**; unter ihren Ressourcen hängen alle ApplicationSets (grafana, mimir, otel-operator, spring-petclinic, argocd, kargo). Änderungen an `appsets/*.yaml` werden über die Root-App gesynct.
@@ -68,9 +68,9 @@ Danach erscheint in Argo CD die Application **root**; unter ihren Ressourcen hä
 
 1. **Secret anlegen** (mit deinem GitHub PAT):
    ```bash
-   cp apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml.example apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml
+   cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
    # DEIN_GITHUB_PAT in der Datei durch dein Token ersetzen (ghp_...)
-   kubectl apply -f apps/argocd/manifests/argocd-repo-bwcloud-gitops.yaml
+   kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
    ```
 
 2. Danach verbindet Argo CD das Repo und die Applications können syncen.
