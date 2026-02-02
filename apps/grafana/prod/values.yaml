@@ -1,12 +1,12 @@
 # Grafana dev stage overrides
 grafana:
-  nameOverride: grafana
-  fullnameOverride: grafana
+  nameOverride: grafana-dev
+  fullnameOverride: grafana-dev
   adminPassword: "REPLACE_GRAFANA_ADMIN_PASSWORD"
   ingress:
     hosts:
-      - grafana.saadisfy.me
+      - grafana-dev.saadisfy.me
     tls:
-      - secretName: grafana-tls
+      - secretName: grafana-dev-tls
         hosts:
-          - grafana.saadisfy.me
+          - grafana-dev.saadisfy.me
