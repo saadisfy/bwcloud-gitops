@@ -1,5 +1,5 @@
-apiVersion: storage.gcp.upbound.io/v1beta1
-kind: Bucket
+apiVersion: storage.gcp.crossplane.io/v1beta1
+kind: GCPBucket
 metadata:
   name: mimir-gcs-bucket
   labels:
