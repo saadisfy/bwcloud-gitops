@@ -27,15 +27,10 @@ mimir-distributed:
             - mimir.saadisfy.me
   mimir:
     structuredConfig:
-      common:
-        storage:
-          backend: s3
-          s3:
-            endpoint: minio.mimir.svc:9000
-            bucket_name: mimir
-            access_key_id: minioadmin
-            secret_access_key: minioadmin
-            insecure: true
+      blocks_storage:
+        backend: gcs
+        gcs:
+          bucket_name: mimir-gcs-bucket
 
   alertmanager:
     replicas: 1
@@ -117,7 +112,7 @@ mimir-distributed:
     enabled: false
 
   minio:
-    enabled: true
+    enabled: false
     resources:
       requests:
         cpu: 50m
