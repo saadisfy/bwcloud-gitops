@@ -1,0 +1,25 @@
+apiVersion: storage.gcp.upbound.io/v1beta1
+kind: Bucket
+metadata:
+  name: mimir-gcs-bucket
+  labels:
+    app: mimir
+spec:
+  # Keep bucket if this CR is deleted
+  deletionPolicy: Orphan
+  providerConfigRef:
+    # Crossplane ProviderConfig name for GCP credentials
+    name: gcp-default
+  forProvider:
+    # Adjust to your preferred region
+    location: europe-west3
+    storageClass: STANDARD
+    uniformBucketLevelAccess: true
+    publicAccessPrevention: enforced
+    versioning:
+      enabled: true
+    lifecycleRule:
+      - action:
+          type: Delete
+        condition:
+          age: 365
