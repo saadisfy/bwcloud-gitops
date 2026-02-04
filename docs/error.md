@@ -20,6 +20,10 @@
   - What it was: Admin password secret was inconsistent.
   - How it was solved: Regenerated and set admin password in `apps/grafana/prod/values.yaml`.
 
+- i am struggling with Grafana password drifting after redeploy (secret vs DB mismatch)
+  - What it was: Grafana stores admin password in SQLite; changing the secret or pod env does not update the DB. Login kept failing despite correct secret.
+  - How it was solved: Pinned `grafana.adminPassword` in stage values, ensured postStart resets password to env, and in worst case deleted the PVC to re‑init DB from the secret.
+
 - i am struggling with Grafana rollout stuck / volume permission errors
   - What it was: `chown` failed on PVC and rolling update kept old pod.
   - How it was solved: Set deployment strategy to `Recreate`, disabled `initChownData`, and set proper security context.
@@ -130,6 +134,22 @@
 - i am struggling with Kargo API panic (ADMIN_ACCOUNT_TOKEN_SIGNING_KEY missing value)
   - What it was: Kargo API requires env vars from api.adminAccount.passwordHash and tokenSigningKey; values were either missing or not passed to the subchart (wrapper chart expects values under the key kargo:).
   - How it was solved: Set kargo.api.adminAccount.passwordHash and kargo.api.adminAccount.tokenSigningKey in apps/kargo/prod/values.yaml (under kargo: for the wrapper subchart); generated bcrypt hash and signing key; documented initial admin password in README.
+
+- i am struggling with Kargo promotion error "type v1alpha1.Chart has no field AppVersion"
+  - What it was: Promotion template used `chartFrom(...).AppVersion`, which is not supported (only `Version` is available).
+  - How it was solved: Removed AppVersion usage and relied on chart version or other inputs; promotion no longer referenced AppVersion.
+
+- i am struggling with Kargo promotion not working via kubectl (no promotion steps)
+  - What it was: Creating a Promotion via kubectl did not expand steps from the Stage template (webhook limitation).
+  - How it was solved: Used `kargo promote` CLI (or UI) to create the Promotion so steps are populated correctly.
+
+- i am struggling with Kargo promotion git-push config error (branch not allowed)
+  - What it was: `git-push` step used `branch` instead of `targetBranch`.
+  - How it was solved: Switched to `targetBranch` in Kargo promotion steps.
+
+- i am struggling with Kargo Warehouse not discovering commits
+  - What it was: `includePaths` filter was too narrow and Warehouse returned "No commits discovered".
+  - How it was solved: Adjusted `includePaths` to match actual files and refreshed the Warehouse.
 
 - i am struggling with Kargo webhooks-server patch failing (spec.selector field is immutable)
   - What it was: Deployment spec.selector is immutable in Kubernetes; after a Kargo chart upgrade the new manifest had a different selector, so the patch failed.
