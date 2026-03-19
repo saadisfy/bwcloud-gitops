@@ -162,6 +162,14 @@ grafanaOperatorCRs:
             settings:
               addresses: defaultContact@saadisfy.com
               singleEmail: true
+    - name: cp-contactpoint-2
+      spec:
+        name: contactpoint-2
+        receivers:
+          - type: email
+            settings:
+              addresses: crossplane@saadisfy.com
+              singleEmail: true
   notificationPolicies:
     - name: default-notification-policy
       spec:
@@ -175,3 +183,9 @@ grafanaOperatorCRs:
           group_wait: 30s
           group_interval: 5m
           repeat_interval: 4h
+          routes:
+            - receiver: contactpoint-2
+              object_matchers:
+                - - service
+                  - =~
+                  - crossplane|argocd
