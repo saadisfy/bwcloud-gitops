@@ -100,6 +100,17 @@ docker push ghcr.io/saadisfy/spring-petclinic:latest
   - **Instrumentation** Java: Auto-Instrumentation; Endpoint = Collector; Resource-Attribute `deployment.environment: prod`.
 - **Spring Petclinic**: OTel-Injection über `otelInstrumentation.enabled` (default: true). Pod-Annotation `instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"`; Endpoint HTTP :4318 (Instrumentation CR). Lokaler Collector deaktiviert (`otelCollector.enabled: false`).
 
+### Grafana Operator CR-GitOps (dev)
+
+In `apps/grafana/dev/` ist zusaetzlich zum Grafana-Chart der **Grafana Operator** als Helm-Dependency eingebunden (`grafana-operator` aus `https://grafana.github.io/helm-charts`). Das Deployment erzeugt CRs aus `values.yaml`:
+
+- `Grafana` (external mode): verbindet den Operator mit einer existierenden Grafana-URL (`grafanaOperatorCRs.instance.external.url`), ohne dass der Operator selbst eine Grafana-Deployment verwaltet.
+- `GrafanaDashboard`: Dashboards koennen per URL/JSON als CR definiert und automatisch importiert werden (`grafanaOperatorCRs.dashboards`).
+- Alerting ist als **Minimal-Values** umgesetzt: in `apps/grafana/dev/values.yaml` reichen `grafanaOperatorCRs.alerting.enabled`, `email` (und optional `datasourceUid`). Die detaillierte CR-Logik fuer `GrafanaAlertRuleGroup`, `GrafanaContactPoint` und `GrafanaNotificationPolicy` liegt im Template `apps/grafana/dev/templates/grafana-operator-crs.yaml`.
+- Optional bleiben Advanced-Listen fuer volle Custom-CRs verfuegbar: `grafanaOperatorCRs.alertRuleGroups|contactPoints|notificationPolicies`.
+
+Secret-Referenzen fuer den external Grafana-Zugang (admin-user/admin-password) kommen aus dem bereits vorhandenen Grafana-Secret (`grafana-dev`), sodass keine zusaetzlichen Zugangsdaten separat gepflegt werden muessen.
+
 ## Erreichbarkeit (Ingress)
 
 Alle folgenden Apps sind über **Ingress** (nginx) unter **\*.saadisfy.me** erreichbar. DNS für die Subdomains auf die Cluster-IP zeigen lassen. TLS via cert-manager (ClusterIssuer letsencrypt-prod); Spring Petclinic derzeit ohne TLS (`ingress.tls: false` in base).
@@ -134,3 +145,12 @@ kubectl delete deployment kargo-webhooks-server -n kargo
 ```
 
 Argo CD Applications für Promotion freigeben: Annotation `kargo.akuity.io/authorized-stage: <project>:<stage>` (siehe [Kargo Docs](https://docs.kargo.io)).
+
+## Generated Values (Basepromoter)
+
+Idee fuer generated Values (Grafana): Ein GitLab-Job erzeugt aus dev/int/prod
+gemeinsame Keys als `base_values.yaml` und schreibt die Diffs in separate
+dev/int/prod Value-Files. Diese werden in **einem separaten Repo oder Branch**
+committed, damit Argo CD nicht direkt deployt. Kargo subscribed auf die
+generated Files und promoted sie in den Deploy-Branch. Details:
+`docs/basepromoter.md`.

@@ -1,2 +1,4 @@
 # GitHub PAT – nicht committen
 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
+
+*.lock

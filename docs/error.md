@@ -1,5 +1,7 @@
 ## Typical Errors and Fixes
 
+**Sections:** [argocd](#section-argocd) · [grafana](#section-grafana) · [mimir](#section-mimir) · [otel-operator](#section-otel-operator) · [spring-petclinic](#section-spring-petclinic) · [kargo](#section-kargo) · [argocd and mimir](#section-argocd-and-mimir) · [grafana and mimir](#section-grafana-and-mimir) · [otel-operator and mimir](#section-otel-operator-and-mimir)
+
 ### section: argocd
 
 - i am struggling with Argo CD apps not updating / "ComparisonError" and "SyncError"
@@ -81,8 +83,8 @@
   - How it was solved: Upgraded the chart, recreated CRDs, and converted `spec.config` to YAML object form.
 
 - i am struggling with OTLP exporter endpoint port warning (4317 vs 4318)
-  - What it was: Java auto-instrumentation used OTLP HTTP but pointed to the gRPC port.
-  - How it was solved: Changed exporter endpoint to `:4318` (OTLP HTTP).
+  - What it was: Java auto-instrumentation used OTLP HTTP but pointed to the gRPC port (4317). OTLP HTTP uses port 4318.
+  - How it was solved: In the Instrumentation CR (`apps/otel-operator/prod/templates/instrumentation-java.yaml`) set exporter endpoint to `http://...:4318`. Apps like Spring Petclinic that use this Instrumentation then get the correct `OTEL_EXPORTER_OTLP_ENDPOINT`; see section: spring-petclinic for app-side enable/disable.
 
 - i am struggling with 404s when exporting logs/traces
   - What it was: Collector only had metrics pipeline; logs/traces exporters hit missing endpoints.
@@ -107,21 +109,21 @@
   - What it was: **ImagePullBackOff** – the image `ghcr.io/saadisfy/spring-petclinic:latest` was not pullable (private or missing). Argo CD showed the app as Degraded; the deployment had 0/1 READY. Also `apps/spring-petclinic/base/values.yaml` had a duplicated block (same content twice).
   - How it was solved: Switched to a public image `docker.io/arey/springboot-petclinic:latest` in base/values.yaml; removed the duplicate block in base/values.yaml; added optional `imagePullSecrets` support in the deployment template for private GHCR later. When `springcommunity/spring-petclinic:latest` was tried it did not exist on Docker Hub, so pinned to `arey/springboot-petclinic`. Committed, pushed, synced Argo CD; deployment became 1/1 READY.
 
-- i am struggling with Spring Petclinic still not working (CrashLoopBackOff after image fix)
-  - What I asked: "something is still not working for petclinic"
-  - What it was: Pod was in **CrashLoopBackOff**; container started then crashed repeatedly. OTel Java auto-instrumentation was injected (init container + JAVA_TOOL_OPTIONS); logs showed OTLP port warning (4317 vs 4318 for http/protobuf). Likely causes: Java agent + old Spring Boot image or insufficient memory (256Mi request / 512Mi limit).
-  - How it was solved: Added `otelInstrumentation.enabled` (default `false`) and made the OTel annotations conditional in the deployment template; set `enabled: false` so the app runs without the Java agent. Increased memory to 512Mi request and 768Mi limit. After sync and new pod, deployment became 1/1 READY and Healthy.
-
 - i am struggling with Spring Petclinic CrashLoopBackOff (Exit 137)
   - What it was: Memory limit too low causing OOM kills.
   - How it was solved: Increased memory limit to `1Gi`.
 
+- i am struggling with Spring Petclinic still not working (CrashLoopBackOff after image fix)
+  - What I asked: "something is still not working for petclinic"
+  - What it was: Pod was in **CrashLoopBackOff**; container started then crashed repeatedly. OTel Java auto-instrumentation was injected (init container + JAVA_TOOL_OPTIONS); logs showed OTLP port warning (4317 vs 4318 for http/protobuf). Likely causes: Java agent + old Spring Boot image or insufficient memory (256Mi request / 512Mi limit).
+  - How it was solved: Added `otelInstrumentation.enabled` (default `false`) and made the OTel annotations conditional in the deployment template; set `enabled: false` so the app runs without the Java agent. Increased memory to 512Mi request and 768Mi limit. After sync and new pod, deployment became 1/1 READY and Healthy. Port fix lives in otel-operator Instrumentation CR (see section: otel-operator).
+
 - i am struggling with wanting OTel injection back in Spring Petclinic, correct port, and app restart
   - What I asked: "ich möchte otel injection aber drinnen haben, das ist der ganze sinn der anwendung. fix den port problem und enable das instrumentation und lass starte anwendung neu"
-  - What it was: OTel injection had been disabled for stability; user wanted it enabled again. The Instrumentation CR in the cluster already used endpoint with port **4318** (OTLP HTTP); the earlier crash was addressed by the port being correct and the higher memory. No code change was needed for the port – only re-enabling injection.
+  - What it was: OTel injection had been disabled for stability; user wanted it enabled again. The Instrumentation CR in otel-operator already used endpoint with port **4318** (OTLP HTTP); no code change was needed for the port – only re-enabling injection (see section: otel-operator for 4317 vs 4318).
   - How it was solved: Set `otelInstrumentation.enabled: true` in `apps/spring-petclinic/base/values.yaml`; committed and pushed; ran `argocd app sync spring-petclinic` and `kubectl rollout restart deployment/spring-petclinic -n spring-petclinic`. New pod came up with `OTEL_EXPORTER_OTLP_ENDPOINT` pointing to `:4318`; app stayed 1/1 Running and Healthy. README updated to state OTel is enabled and endpoint is :4318.
 
-- i am struggling with load generation for metrics
+- i am struggling with load generation for metrics (Spring Petclinic)
   - What it was: No traffic to app, no visible metrics.
   - How it was solved: Added a CronJob to hit the service every 5 minutes.
 

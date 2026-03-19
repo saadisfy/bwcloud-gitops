@@ -10,3 +10,431 @@ grafana:
       - secretName: grafana-dev-tls
         hosts:
           - grafana-dev.saadisfy.me
+
+grafana-operator:
+  enabled: true
+  fullnameOverride: grafana-operator-dev
+
+grafanaOperatorCRs:
+  enabled: true
+  instanceSelector:
+    dashboards: grafana-dev
+  instance:
+    name: grafana-dev-external
+    labels:
+      dashboards: grafana-dev
+    external:
+      tenantNamespace: grafana-dev
+      url: https://grafana-dev.saadisfy.me
+      adminUser:
+        name: grafana-dev
+        key: admin-user
+      adminPassword:
+        name: grafana-dev
+        key: admin-password
+
+  dashboards:
+    - name: grafana-k8s-views
+      spec:
+        folder: Kubernetes
+        resyncPeriod: 5m
+        # Download dashboard JSON from URL on each resync.
+        url: https://grafana.com/api/dashboards/15757/revisions/37/download
+
+  # Simplified alerting input:
+  # - expression/refId A/B are generated in template logic
+  # - only business parameters per alert are needed (title/expr/threshold/states/labels/...)
+  alerting:
+    folders:
+      - name: cluster-health
+        title: Cluster Health
+        groups:
+          - name: pod-health
+            title: Pod Health
+            interval: 1m
+            rules:
+              - uid: cluster-health-pods-stuck-pending
+                title: Pod stuck in Pending
+                for: 10m
+                noDataState: NoData
+                execErrState: Error
+                evalOperator: gt
+                threshold: 0
+                expr: kube_pod_status_phase{phase="Pending"}
+                labels:
+                  severity: warning
+                  service: kubernetes
+                  component: scheduling
+                  domain: customer
+                  clusterTier: non-customer
+                annotations:
+                  summary: Pod {{ $labels.pod }} in {{ $labels.namespace }} stuck Pending
+                  description: Pod {{ $labels.pod }} haengt seit > 10 Min in Pending. Moegliche Ursachen sind fehlende Ressourcen, Taints oder ungebundene PVCs.
+              - uid: cluster-health-crashloopbackoff
+                title: CrashLoopBackOff
+                for: 15m
+                noDataState: NoData
+                execErrState: Error
+                evalOperator: gt
+                threshold: 0
+                relativeTimeRangeFrom: 900
+                expr: kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"}
+                labels:
+                  severity: warning
+                  service: kubernetes
+                  component: pod
+                  domain: customer
+                  clusterTier: non-customer
+                annotations:
+                  summary: Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} is CrashLooping
+                  description: Container {{ $labels.container }} im Pod {{ $labels.pod }} (Namespace {{ $labels.namespace }}) ist seit > 15 Min in CrashLoopBackOff.
+              - uid: cluster-health-oomkilled
+                title: OOMKilled
+                for: 0s
+                noDataState: NoData
+                execErrState: Error
+                evalOperator: gt
+                threshold: 0
+                expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}
+                labels:
+                  severity: warning
+                  service: kubernetes
+                  component: pod
+                  domain: customer
+                  clusterTier: non-customer
+                annotations:
+                  summary: Container {{ $labels.container }} in {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled
+                  description: Container {{ $labels.container }} im Pod {{ $labels.pod }} wurde wegen Out-of-Memory gekillt. Memory-Limits erhoehen oder Memory-Leak fixen.
+      - name: gitops
+        title: GitOps
+        groups:
+          - name: argocd
+            title: Argo CD
+            interval: 1m
+            rules:
+              - uid: gitops-repo-server-down
+                title: Argo CD Repo-Server down
+                for: 5m
+                noDataState: Alerting
+                execErrState: Error
+                evalOperator: lt
+                threshold: 1
+                expr: up{job=~".*argocd-repo-server.*"}
+                labels:
+                  severity: critical
+                  service: argocd
+                  component: repo-server
+                  domain: gitops
+                annotations:
+                  summary: Argo CD Repo-Server is down
+                  description: Argo CD Repo-Server ist nicht erreichbar. Kein Git-Zugriff moeglich, keine Syncs.
+      - name: infrastructure
+        title: Infrastructure
+        groups:
+          - name: crossplane
+            title: Crossplane
+            interval: 5m
+            rules:
+              - uid: infrastructure-crossplane-deletion-stuck
+                title: Crossplane deletion stuck
+                for: 0s
+                noDataState: NoData
+                execErrState: Error
+                evalOperator: gt
+                threshold: 1800
+                relativeTimeRangeFrom: 0
+                relativeTimeRangeTo: 0
+                expr: time() - crossplane_managed_resource_deletion_timestamp
+                labels:
+                  severity: warning
+                  service: crossplane
+                  component: managed-resource
+                  domain: gitops
+                annotations:
+                  summary: Managed Resource deletion stuck > 30m
+                  description: Eine Crossplane Managed Resource haengt beim Loeschen. Finalizer und Provider-Logs pruefen.
+  # No fallback path for folders/rule groups.
+  # Define alerting rules only under grafanaOperatorCRs.alerting.folders.
+  contactPoints:
+    # NOTE: Replace placeholder addresses with real mailboxes.
+    - name: cp-platform-fallback
+      spec:
+        name: platform-fallback
+        receivers:
+          - type: email
+            settings:
+              addresses: defaultContact@saadisfy.com
+              singleEmail: true
+    - name: cp-devexperience-s
+      spec:
+        name: devexperience-s
+        receivers:
+          - type: email
+            settings:
+              addresses: s@saadisfy.com
+              singleEmail: true
+    - name: cp-devexperience-distribution
+      spec:
+        name: devexperience-distribution
+        receivers:
+          - type: email
+            settings:
+              addresses: devexperience@saadisfy.com
+              singleEmail: true
+    - name: cp-devexperience-teams-mail
+      spec:
+        name: devexperience-teams-mail
+        receivers:
+          - type: email
+            settings:
+              addresses: devexperience-teams@saadisfy.com
+              singleEmail: true
+    - name: cp-gitops-gg
+      spec:
+        name: gitops-gg
+        receivers:
+          - type: email
+            settings:
+              addresses: gg@saadisfy.com
+              singleEmail: true
+    - name: cp-gitops-distribution
+      spec:
+        name: gitops-distribution
+        receivers:
+          - type: email
+            settings:
+              addresses: gitops@saadisfy.com
+              singleEmail: true
+    - name: cp-gitops-teams-mail
+      spec:
+        name: gitops-teams-mail
+        receivers:
+          - type: email
+            settings:
+              addresses: gitops-teams@saadisfy.com
+              singleEmail: true
+    - name: cp-crossplane-l
+      spec:
+        name: crossplane-l
+        receivers:
+          - type: email
+            settings:
+              addresses: l@saadisfy.com
+              singleEmail: true
+    - name: cp-infra-distribution
+      spec:
+        name: infra-distribution
+        receivers:
+          - type: email
+            settings:
+              addresses: infra@saadisfy.com
+              singleEmail: true
+    - name: cp-infra-teams-mail
+      spec:
+        name: infra-teams-mail
+        receivers:
+          - type: email
+            settings:
+              addresses: infra-teams@saadisfy.com
+              singleEmail: true
+    - name: cp-kyverno-distribution
+      spec:
+        name: kyverno-distribution
+        receivers:
+          - type: email
+            settings:
+              addresses: kyverno@saadisfy.com
+              singleEmail: true
+    - name: cp-customer-m
+      spec:
+        name: customer-m
+        receivers:
+          - type: email
+            settings:
+              addresses: m@saadisfy.com
+              singleEmail: true
+    - name: cp-customer-distribution
+      spec:
+        name: customer-distribution
+        receivers:
+          - type: email
+            settings:
+              addresses: customer@saadisfy.com
+              singleEmail: true
+    - name: cp-customer-teams-mail
+      spec:
+        name: customer-teams-mail
+        receivers:
+          - type: email
+            settings:
+              addresses: customer-teams@saadisfy.com
+              singleEmail: true
+    - name: cp-non-customer-b
+      spec:
+        name: non-customer-b
+        receivers:
+          - type: email
+            settings:
+              addresses: b@saadisfy.com
+              singleEmail: true
+    - name: cp-platform-distribution
+      spec:
+        name: platform-distribution
+        receivers:
+          - type: email
+            settings:
+              addresses: platform@saadisfy.com
+              singleEmail: true
+    - name: cp-platform-teams-mail
+      spec:
+        name: platform-teams-mail
+        receivers:
+          - type: email
+            settings:
+              addresses: platform-teams@saadisfy.com
+              singleEmail: true
+    - name: cp-critical-escalation
+      spec:
+        name: critical-escalation
+        receivers:
+          - type: email
+            settings:
+              addresses: incident-leads@saadisfy.com
+              singleEmail: true
+  notificationPolicies:
+    - name: default-notification-policy
+      spec:
+        route:
+          receiver: platform-fallback
+          group_by:
+            - grafana_folder
+            - alertname
+            - severity
+            - service
+          group_wait: 30s
+          group_interval: 5m
+          repeat_interval: 4h
+          routes:
+            # Severity-first tuning (Best-Practice start values)
+            - receiver: critical-escalation
+              object_matchers:
+                - - severity
+                  - =
+                  - critical
+              group_wait: 30s
+              group_interval: 5m
+              repeat_interval: 30m
+
+            # DevExperience -> S + distribution + Teams-mail
+            - receiver: devexperience-s
+              object_matchers:
+                - - domain
+                  - =
+                  - devexperience
+            - receiver: devexperience-distribution
+              object_matchers:
+                - - domain
+                  - =
+                  - devexperience
+            - receiver: devexperience-teams-mail
+              object_matchers:
+                - - domain
+                  - =
+                  - devexperience
+
+            # GitOps (Argo/Kargo) -> GG + distribution + Teams-mail
+            - receiver: gitops-gg
+              object_matchers:
+                - - service
+                  - =~
+                  - argocd|kargo
+            - receiver: gitops-distribution
+              object_matchers:
+                - - service
+                  - =~
+                  - argocd|kargo
+            - receiver: gitops-teams-mail
+              object_matchers:
+                - - service
+                  - =~
+                  - argocd|kargo
+
+            # Crossplane -> L + infra distribution + Teams-mail
+            - receiver: crossplane-l
+              object_matchers:
+                - - service
+                  - =
+                  - crossplane
+            - receiver: infra-distribution
+              object_matchers:
+                - - service
+                  - =
+                  - crossplane
+            - receiver: infra-teams-mail
+              object_matchers:
+                - - service
+                  - =
+                  - crossplane
+
+            # Kyverno -> distribution + Teams-mail
+            - receiver: kyverno-distribution
+              object_matchers:
+                - - service
+                  - =
+                  - kyverno
+            - receiver: infra-teams-mail
+              object_matchers:
+                - - service
+                  - =
+                  - kyverno
+
+            # Customer domain split by cluster tier
+            - receiver: customer-m
+              object_matchers:
+                - - domain
+                  - =
+                  - customer
+                - - clusterTier
+                  - =
+                  - customer
+            - receiver: customer-distribution
+              object_matchers:
+                - - domain
+                  - =
+                  - customer
+                - - clusterTier
+                  - =
+                  - customer
+            - receiver: customer-teams-mail
+              object_matchers:
+                - - domain
+                  - =
+                  - customer
+                - - clusterTier
+                  - =
+                  - customer
+
+            - receiver: non-customer-b
+              object_matchers:
+                - - domain
+                  - =
+                  - customer
+                - - clusterTier
+                  - =
+                  - non-customer
+            - receiver: platform-distribution
+              object_matchers:
+                - - domain
+                  - =
+                  - customer
+                - - clusterTier
+                  - =
+                  - non-customer
+            - receiver: platform-teams-mail
+              object_matchers:
+                - - domain
+                  - =
+                  - customer
+                - - clusterTier
+                  - =
+                  - non-customer
