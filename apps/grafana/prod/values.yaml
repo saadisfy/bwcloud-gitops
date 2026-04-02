@@ -10,3 +10,9 @@ grafana:
       - secretName: grafana-tls
         hosts:
           - grafana.saadisfy.me
+
+# Operator CRs are not configured for prod yet.
+# Keep this key defined so templates that check .Values.grafanaOperatorCRs.enabled
+# do not fail with nil-pointer errors during Argo CD rendering.
+grafanaOperatorCRs:
+  enabled: false
