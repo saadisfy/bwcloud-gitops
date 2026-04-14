@@ -28,7 +28,7 @@ mimir-distributed:
   mimir:
     structuredConfig:
       alertmanager:
-        data_dir: /data/alertmanager-data
+        data_dir: /tmp/alertmanager-data
       blocks_storage:
         backend: filesystem
         filesystem:
@@ -36,15 +36,15 @@ mimir-distributed:
       alertmanager_storage:
         backend: local
         local:
-          path: /data/alertmanager
+          path: /data
       compactor:
         data_dir: /data/compactor
       ruler:
-        rule_path: /data/ruler-rules
+        rule_path: /tmp/ruler-rules
       ruler_storage:
         backend: local
         local:
-          directory: /data/ruler
+          directory: /data
 
   alertmanager:
     replicas: 1
