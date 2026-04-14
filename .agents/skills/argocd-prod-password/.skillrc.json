@@ -1,0 +1,16 @@
+{
+  "name": "argocd-prod-password",
+  "version": "1.0.1",
+  "description": "Liest das aktuelle Argo CD Prod Admin-Passwort direkt aus dem bekannten Secret.",
+  "author": "Saad",
+  "tags": ["argocd", "kubernetes", "password", "prod"],
+  "triggers": [
+    "argocd password",
+    "argocd prod password",
+    "neues argocd passwort",
+    "was ist das neue argocd password",
+    "argocd admin passwort"
+  ],
+  "enabled": true,
+  "priority": 10
+}

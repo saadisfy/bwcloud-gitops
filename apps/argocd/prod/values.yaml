@@ -21,7 +21,8 @@ argo-cd:
     params:
       server.insecure: true
     secret:
-      argocdServerAdminPassword: "$2y$10$D8YbA9xJuRO4lS28tlQzveOSba8geepGibbYZ4Q988Y128I47kUHe"
+      # Argo CD (Go bcrypt) erwartet i.d.R. $2a/$2b. Mit $2y kann es zu unerwünschter Rotation kommen.
+      argocdServerAdminPassword: "$2a$10$D8YbA9xJuRO4lS28tlQzveOSba8geepGibbYZ4Q988Y128I47kUHe"
       argocdServerAdminPasswordMtime: "2026-02-02T19:15:30Z"
     repositories:
       # Public Helm-Repos für Wrapper-Chart-Dependencies
