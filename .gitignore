@@ -2,3 +2,8 @@
 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
 
 *.lock
+
+# Local MCP server dependencies
+tools/mcp-argocd-k8s/node_modules/
+
+*.tgz
