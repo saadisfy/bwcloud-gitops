@@ -9,39 +9,4 @@ spec:
         kind: Warehouse
         name: grafana-warehouse
       sources:
-        stages:
-          - grafana-int
-  promotionTemplate:
-    spec:
-      vars:
-        - name: gitRepo
-          value: https://github.com/saadisfy/bwcloud-gitops.git
-        - name: targetBranch
-          value: main
-      steps:
-        - uses: git-clone
-          config:
-            repoURL: ${{ vars.gitRepo }}
-            checkout:
-              - branch: ${{ vars.targetBranch }}
-                path: ./out
-        # Copy Chart.yaml from int to prod
-        - uses: copy
-          as: copy-chart
-          config:
-            inPath: ./out/apps/grafana/int/Chart.yaml
-            outPath: ./out/apps/grafana/prod/Chart.yaml
-        - uses: copy
-          as: copy-templates
-          config:
-            inPath: ./out/apps/grafana/int/templates
-            outPath: ./out/apps/grafana/prod/templates
-        - uses: git-commit
-          config:
-            path: ./out
-            message: |
-              chore(grafana): promote int → prod
-        - uses: git-push
-          config:
-            path: ./out
-            targetBranch: ${{ vars.targetBranch }}
+        direct: true

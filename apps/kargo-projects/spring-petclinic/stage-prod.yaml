@@ -10,8 +10,7 @@ spec:
         kind: Warehouse
         name: bwcloud-warehouse
       sources:
-        stages:
-          - int
+        direct: true
   promotionTemplate:
     spec:
       vars:

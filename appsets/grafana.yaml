@@ -4,16 +4,10 @@ metadata:
   name: grafana
   namespace: argocd
 spec:
-  # Dev + prod deployed
+  # Nur prod deployed
   generators:
     - list:
         elements:
-          - stage: dev
-            name: grafana-dev
-            namespace: grafana-dev
-          - stage: int
-            name: grafana-int
-            namespace: grafana-int
           - stage: prod
             name: grafana
             namespace: grafana

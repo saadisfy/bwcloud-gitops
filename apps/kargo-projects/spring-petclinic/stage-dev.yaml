@@ -1,13 +1,3 @@
-# Stage dev: Freight direkt aus Warehouse
-apiVersion: kargo.akuity.io/v1alpha1
-kind: Stage
-metadata:
-  name: dev
-  namespace: kargo
-spec:
-  requestedFreight:
-    - origin:
-        kind: Warehouse
-        name: bwcloud-warehouse
-      sources:
-        direct: true
+apiVersion: v1
+kind: List
+items: []

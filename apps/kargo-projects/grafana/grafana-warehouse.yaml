@@ -6,13 +6,13 @@ metadata:
 spec:
   freightCreationPolicy: Automatic
   subscriptions:
-    # Watch git repo for changes in apps/grafana/dev
+    # Watch git repo for changes in apps/grafana/prod
     - git:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         branch: main
         includePaths:
-          - apps/grafana/dev/Chart.yaml
-          - apps/grafana/dev/values.yaml
-          - apps/grafana/dev/templates/**
+          - apps/grafana/prod/Chart.yaml
+          - apps/grafana/prod/values.yaml
+          - apps/grafana/prod/templates/**
         commitSelectionStrategy: NewestFromBranch
         discoveryLimit: 20

@@ -20,6 +20,7 @@ spec:
         path: apps/kargo-projects
         directory:
           recurse: true
+          exclude: '{**/*stage-dev.yaml,**/*stage-int.yaml}'
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
