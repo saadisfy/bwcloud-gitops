@@ -1,3 +1,4 @@
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1/ServiceMonitor" }}
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -25,3 +26,4 @@ spec:
         - action: keep
           sourceLabels: [__name__]
           regex: ^(cortex_)?ingester_(memory|active)_series$
+{{- end }}

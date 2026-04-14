@@ -28,12 +28,22 @@ mimir-distributed:
   mimir:
     structuredConfig:
       blocks_storage:
-        backend: gcs
-        gcs:
-          bucket_name: mimir-gcs-bucket
+        backend: filesystem
+        filesystem:
+          dir: /data/blocks
+      alertmanager_storage:
+        backend: local
+        local:
+          path: /data/alertmanager
+      ruler_storage:
+        backend: local
+        local:
+          directory: /data/ruler
 
   alertmanager:
     replicas: 1
+    persistentVolume:
+      enabled: false
     resources:
       requests:
         cpu: 50m
@@ -42,6 +52,8 @@ mimir-distributed:
         memory: 256Mi
 
   compactor:
+    persistentVolume:
+      enabled: false
     resources:
       requests:
         cpu: 50m
@@ -61,7 +73,7 @@ mimir-distributed:
   ingester:
     replicas: 1
     persistentVolume:
-      size: 5Gi
+      enabled: false
     resources:
       requests:
         cpu: 100m
@@ -92,7 +104,7 @@ mimir-distributed:
   store_gateway:
     replicas: 1
     persistentVolume:
-      size: 5Gi
+      enabled: false
     resources:
       requests:
         cpu: 50m
