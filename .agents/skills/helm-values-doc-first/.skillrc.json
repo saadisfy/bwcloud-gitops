@@ -1,0 +1,17 @@
+{
+  "name": "helm-values-doc-first",
+  "version": "1.0.0",
+  "description": "Nutze zuerst ArtifactHub- und Produkt-Dokumentation für Helm Values Changes (inkl. Mimir Special Handling).",
+  "author": "Saad",
+  "tags": ["helm", "values", "artifacthub", "mimir", "docs-first"],
+  "triggers": [
+    "helm chart value changes",
+    "value changes",
+    "mimir values",
+    "mimir-distributed values",
+    "welche values haben sich geändert",
+    "helm values diff"
+  ],
+  "enabled": true,
+  "priority": 12
+}
