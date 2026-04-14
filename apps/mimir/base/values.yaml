@@ -39,6 +39,10 @@ mimir-distributed:
           path: /data
       compactor:
         data_dir: /data/compactor
+      ingest_storage:
+        enabled: false
+      ingester:
+        push_grpc_method_enabled: true
       ruler:
         rule_path: /tmp/ruler-rules
       ruler_storage:
@@ -135,3 +139,6 @@ mimir-distributed:
       requests:
         cpu: 50m
         memory: 128Mi
+
+  kafka:
+    enabled: false
