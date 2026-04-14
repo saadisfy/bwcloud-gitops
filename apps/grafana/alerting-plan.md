@@ -202,9 +202,9 @@ Da nur E-Mail genutzt wird, erfolgt Eskalation ueber **Empfaenger-Erweiterung** 
 | # | Alert | Query A (Code) | Expression B (Threshold) | Folder / Group | for | noData | execErr | Sev. |
 |---|---|---|---|---|---|---|---|---|
 | 4.1 | Provider down | `up{job=~".*crossplane-provider.*"}` | A IS BELOW 1 | Infrastructure / Crossplane | 5m | Alerting | Error | critical |
-| 4.2 | Managed Resource stuck | `crossplane_managed_resource_ready{status="False"}` | A IS ABOVE 0 | Infrastructure / Crossplane | 15m | NoData | Error | warning |
-| 4.3 | Claim not bound | `crossplane_claim_ready{status="False"}` | A IS ABOVE 0 | Infrastructure / Crossplane | 10m | NoData | Error | warning |
-| 4.4 | Deletion stuck | `time() - crossplane_managed_resource_deletion_timestamp` | A IS ABOVE 1800 | Infrastructure / Crossplane | 0s | NoData | Error | warning |
+| 4.2 | Managed Resource not Ready | `count(crossplane_managed_resource_exists unless crossplane_managed_resource_ready)` | A IS ABOVE 0 | Infrastructure / Crossplane | 15m | NoData | Error | warning |
+| 4.3 | Managed Resource not Synced | `count(crossplane_managed_resource_exists unless crossplane_managed_resource_synced)` | A IS ABOVE 0 | Infrastructure / Crossplane | 15m | NoData | Error | warning |
+| 4.4 | Managed Resource deletion latency p95 high | `histogram_quantile(0.95, sum by (le) (rate(crossplane_managed_resource_deletion_seconds_bucket[10m]))) and (sum(rate(crossplane_managed_resource_deletion_seconds_count[10m])) > 0)` | A IS ABOVE 120 | Infrastructure / Crossplane | 15m | NoData | Error | warning |
 
 ### Policy Engine (Kyverno)
 
@@ -788,7 +788,7 @@ Custom-Resource-Metriken. Metriken variieren je nach Provider-Version.
 
 - **Rule name:** Crossplane Managed Resource stuck
 - **Datasource:** Mimir
-- **Query A (Code):** `crossplane_managed_resource_ready{status="False"}`
+- **Query A (Code):** `count(crossplane_managed_resource_exists unless crossplane_managed_resource_ready)`
 - **Expression B:** Threshold | Input: A | **IS ABOVE 0**
 - **Alert condition:** B
 - **Folder:** Infrastructure
@@ -802,41 +802,20 @@ Custom-Resource-Metriken. Metriken variieren je nach Provider-Version.
   - `service` = `crossplane`
   - `component` = `managed-resource`
 - **Annotations:**
-  - summary: `Managed Resource in {{ $labels.namespace }} not ready for > 15m`
-  - description: `Cloud-Ressource haengt seit > 15 Min beim Erstellen/Updaten. Provider-Logs und Cloud-API-Limits pruefen.`
+  - summary: `Mindestens eine Managed Resource ist > 15m nicht Ready`
+  - description: `Eine oder mehrere Ressourcen sind in exists vorhanden, aber nicht in ready. Provider-Logs und Cloud-API-Limits pruefen.`
 
-### 4.3 Claim not Bound
+### 4.3 Managed Resource not Synced
 
-- **Rule name:** Crossplane Claim not bound
+- **Rule name:** Crossplane Managed Resource not synced
 - **Datasource:** Mimir
-- **Query A (Code):** `crossplane_claim_ready{status="False"}`
+- **Query A (Code):** `count(crossplane_managed_resource_exists unless crossplane_managed_resource_synced)`
 - **Expression B:** Threshold | Input: A | **IS ABOVE 0**
 - **Alert condition:** B
 - **Folder:** Infrastructure
 - **Evaluation group:** Crossplane
 - **Evaluation interval:** 1m
-- **for:** 10m
-- **noDataState:** NoData
-- **execErrState:** Error
-- **Labels:**
-  - `severity` = `warning`
-  - `service` = `crossplane`
-  - `component` = `claim`
-- **Annotations:**
-  - summary: `Crossplane Claim in {{ $labels.namespace }} not bound`
-  - description: `Developer-facing Claim ist seit > 10 Min nicht gebunden. Composition oder Provider-Config pruefen.`
-
-### 4.4 Managed Resource Deletion stuck
-
-- **Rule name:** Crossplane deletion stuck
-- **Datasource:** Mimir
-- **Query A (Code):** `time() - crossplane_managed_resource_deletion_timestamp`
-- **Expression B:** Threshold | Input: A | **IS ABOVE 1800**
-- **Alert condition:** B
-- **Folder:** Infrastructure
-- **Evaluation group:** Crossplane
-- **Evaluation interval:** 5m
-- **for:** 0s
+- **for:** 15m
 - **noDataState:** NoData
 - **execErrState:** Error
 - **Labels:**
@@ -844,8 +823,29 @@ Custom-Resource-Metriken. Metriken variieren je nach Provider-Version.
   - `service` = `crossplane`
   - `component` = `managed-resource`
 - **Annotations:**
-  - summary: `Managed Resource deletion stuck > 30m`
-  - description: `Eine Crossplane Managed Resource haengt beim Loeschen. Orphaned Cloud-Ressourcen = Kostenrisiko. Finalizer und Provider-Logs pruefen.`
+  - summary: `Mindestens eine Managed Resource ist > 15m nicht Synced`
+  - description: `Eine oder mehrere Ressourcen sind in exists vorhanden, aber nicht in synced. Provider-Logs und API-Reachability pruefen.`
+
+### 4.4 Managed Resource deletion latency p95 high
+
+- **Rule name:** Crossplane managed resource deletion latency p95 high
+- **Datasource:** Mimir
+- **Query A (Code):** `histogram_quantile(0.95, sum by (le) (rate(crossplane_managed_resource_deletion_seconds_bucket[10m]))) and (sum(rate(crossplane_managed_resource_deletion_seconds_count[10m])) > 0)`
+- **Expression B:** Threshold | Input: A | **IS ABOVE 120**
+- **Alert condition:** B
+- **Folder:** Infrastructure
+- **Evaluation group:** Crossplane
+- **Evaluation interval:** 5m
+- **for:** 15m
+- **noDataState:** NoData
+- **execErrState:** Error
+- **Labels:**
+  - `severity` = `warning`
+  - `service` = `crossplane`
+  - `component` = `managed-resource`
+- **Annotations:**
+  - summary: `Managed Resource deletion latency p95 > 120s`
+  - description: `p95 der Loeschdauer liegt seit > 15 Min ueber 120s. Alert wird nur ausgewertet, wenn auch Loeschungen stattfinden.`
 
 ---
 

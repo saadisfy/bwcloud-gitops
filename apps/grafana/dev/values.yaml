@@ -135,24 +135,24 @@ grafanaOperatorCRs:
             title: Crossplane
             interval: 5m
             rules:
-              - uid: infrastructure-crossplane-deletion-stuck
-                title: Crossplane deletion stuck
-                for: 0s
+              - uid: infrastructure-crossplane-drift-high
+                title: Crossplane resource drift high
+                for: 10m
                 noDataState: NoData
                 execErrState: Error
                 evalOperator: gt
                 threshold: 1800
                 relativeTimeRangeFrom: 0
                 relativeTimeRangeTo: 0
-                expr: time() - crossplane_managed_resource_deletion_timestamp
+                expr: crossplane_managed_resource_drift_seconds
                 labels:
                   severity: warning
                   service: crossplane
                   component: managed-resource
                   domain: gitops
                 annotations:
-                  summary: Managed Resource deletion stuck > 30m
-                  description: Eine Crossplane Managed Resource haengt beim Loeschen. Finalizer und Provider-Logs pruefen.
+                  summary: Managed Resource drift > 30m
+                  description: Eine Crossplane Managed Resource driftet seit > 30 Min vom Desired State. Composition/Provider-Logs und Upstream-Änderungen prüfen.
   contactPoints:
     - name: cp-default-contact
       spec:

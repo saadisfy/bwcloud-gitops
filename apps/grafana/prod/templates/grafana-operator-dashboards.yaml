@@ -1,6 +1,7 @@
-{{- if .Values.grafanaOperatorCRs.enabled }}
-{{- $selector := .Values.grafanaOperatorCRs.instanceSelector }}
-{{- range $dashboard := .Values.grafanaOperatorCRs.dashboards }}
+{{- $grafanaOperatorCRs := .Values.grafanaOperatorCRs | default dict }}
+{{- if ($grafanaOperatorCRs.enabled | default false) }}
+{{- $selector := $grafanaOperatorCRs.instanceSelector }}
+{{- range $dashboard := ($grafanaOperatorCRs.dashboards | default (list)) }}
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:

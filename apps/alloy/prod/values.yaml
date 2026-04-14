@@ -1,0 +1,11 @@
+# Alloy prod overrides
+# TODO(Observability): Switch endpoint to an in-cluster OTEL Collector Gateway
+# service (for example otel-gateway.otel.svc.cluster.local:4318) in a follow-up task.
+
+alloy:
+  alloyExample:
+    clusterName: prod-bwcloud
+    mimir:
+      endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
+      orgID: "1"
+      insecure: true

@@ -1,0 +1,197 @@
+// Q: Why logfmt + info?
+// A: Readable operational logs with moderate verbosity.
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// Q: Why use otelcol.receiver.prometheus?
+// A: Scrapes Prometheus targets but feeds into OTel pipeline components,
+//    keeping exporter path vendor-neutral.
+otelcol.receiver.prometheus "kubernetes" {
+  config = <<-EOT
+        global:
+          scrape_interval: 30s
+          scrape_timeout: 10s
+
+        scrape_configs:
+          - job_name: kube-state-metrics
+            kubernetes_sd_configs:
+              - role: endpoints
+                namespaces:
+                  #    in this example deployment.
+                  names: ["default"]
+            relabel_configs:
+              # Q: Why keep only kube-state-metrics service?
+              # A: Prevents scraping unrelated endpoints discovered in same ns.
+              - source_labels: [__meta_kubernetes_service_name]
+                action: keep
+                regex: kube-state-metrics
+              # Q: Why allow multiple port-name variants?
+              # A: Improves chart compatibility across small naming
+              #    differences (http/http-metrics/metrics).
+              - source_labels: [__meta_kubernetes_endpoint_port_name]
+                action: keep
+                regex: http|http-metrics|metrics
+              # Q: Why map to namespace/pod labels?
+              # A: Keep both compatibility sets: Prometheus-style labels for
+              #    community dashboards and k8s_* labels for vendor-neutral
+              #    attribute-style usage.
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: k8s_namespace_name
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: k8s_pod_name
+              # Q: Why add cluster label?
+              # A: Add both cluster and k8s_cluster_name for dual-label
+              #    compatibility.
+              - target_label: cluster
+                replacement: prod-bwcloud
+              - target_label: k8s_cluster_name
+                replacement: prod-bwcloud
+            metric_relabel_configs:
+              # Q: Why drop uid/annotation labels?
+              # A: Reduces high-cardinality dimensions and time series growth.
+              - action: labeldrop
+                regex: pod_uid|uid|annotation_.*
+
+          # Q: Why dedicated node-exporter job?
+          # A: Collects node-level host metrics exposed by node-exporter.
+          - job_name: node-exporter
+            kubernetes_sd_configs:
+              - role: endpoints
+                namespaces:
+                  names: ["default"]
+            relabel_configs:
+              # Q: Why keep only node-exporter service + metrics port?
+              # A: Avoids accidental endpoint ingestion and keeps target set
+              #    deterministic.
+              - source_labels: [__meta_kubernetes_service_name]
+                action: keep
+                regex: node-exporter
+              - source_labels: [__meta_kubernetes_endpoint_port_name]
+                action: keep
+                regex: metrics
+              # Q: Why normalize to namespace/pod/node labels?
+              # A: Preserve Prometheus labels and also add k8s_* mirror labels
+              #    so both query styles are possible.
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: k8s_namespace_name
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: k8s_pod_name
+              - source_labels: [__meta_kubernetes_pod_node_name]
+                target_label: node
+              - source_labels: [__meta_kubernetes_pod_node_name]
+                target_label: k8s_node_name
+              - target_label: cluster
+                replacement: prod-bwcloud
+              - target_label: k8s_cluster_name
+                replacement: prod-bwcloud
+            metric_relabel_configs:
+              # Q: Why drop container/image IDs here too?
+              # A: Prevents cardinality spikes from highly volatile labels.
+              - action: labeldrop
+                regex: pod_uid|uid|container_id|image_id|annotation_.*
+
+          # Q: Why scrape kubelet through API server proxy?
+          # A: Works reliably from pod network and uses service-account auth.
+          - job_name: kubelet
+            scheme: https
+            kubernetes_sd_configs:
+              - role: node
+            # Q: Why bearer token + CA file?
+            # A: Uses in-cluster credentials for authenticated Kubernetes API
+            #    access.
+            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+            tls_config:
+              # Q: Why insecure_skip_verify true?
+              # A: Simplifies bootstrap; tighten with proper trust chain in
+              #    hardened environments.
+              insecure_skip_verify: true
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            relabel_configs:
+              # Q: Why force address to kubernetes.default.svc:443?
+              # A: Requests go through API server, not directly to node IPs.
+              - target_label: __address__
+                replacement: kubernetes.default.svc:443
+              # Q: Why rewrite metrics path with node name?
+              # A: API server node proxy path requires /nodes/<name>/proxy/...
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: __metrics_path__
+                regex: (.+)
+                replacement: /api/v1/nodes/$1/proxy/metrics
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: node
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: k8s_node_name
+              - target_label: cluster
+                replacement: prod-bwcloud
+              - target_label: k8s_cluster_name
+                replacement: prod-bwcloud
+
+          # Q: Why separate cadvisor job?
+          # A: cAdvisor endpoint gives container/runtime utilization metrics.
+          - job_name: cadvisor
+            scheme: https
+            kubernetes_sd_configs:
+              - role: node
+            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+            tls_config:
+              insecure_skip_verify: true
+              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            relabel_configs:
+              - target_label: __address__
+                replacement: kubernetes.default.svc:443
+              # Q: Why cadvisor-specific proxy path?
+              # A: kubelet exposes cadvisor metrics on /metrics/cadvisor.
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: __metrics_path__
+                regex: (.+)
+                replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: node
+              - source_labels: [__meta_kubernetes_node_name]
+                target_label: k8s_node_name
+              - target_label: cluster
+                replacement: prod-bwcloud
+              - target_label: k8s_cluster_name
+                replacement: prod-bwcloud
+  EOT
+
+  output {
+    // Q: Why send receiver output to batch processor first?
+    // A: Batching improves export efficiency and smooths transient load.
+    metrics = [otelcol.processor.batch.default.input]
+  }
+}
+
+// Keep one canonical key set (`namespace`, `pod`, `node`) to avoid
+// duplicate dimensions with both Prometheus-style and OTel-style labels.
+// TODO(Observability): When Gateway is introduced, move label governance
+// and multi-backend routing to the gateway pipeline.
+otelcol.processor.batch "default" {
+  output {
+    // Q: Why OTLPHTTP exporter target instead of backend-specific one?
+    // A: Keeps the egress path OTel-native and easier to repoint later.
+    metrics = [otelcol.exporter.otlphttp.mimir.input]
+  }
+}
+
+otelcol.exporter.otlphttp "mimir" {
+  client {
+    // Q: Why endpoint/header/tls from values?
+    // A: Environment-specific backend settings remain externalized.
+    endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
+    headers  = { "X-Scope-OrgID" = "1" }
+    tls {
+      insecure = true
+    }
+  }
+}

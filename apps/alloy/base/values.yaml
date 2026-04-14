@@ -1,0 +1,113 @@
+# Alloy observability example (prod-first):
+# - Alloy as DaemonSet on every node
+# - Scrape kube-state-metrics, node-exporter, kubelet and cadvisor
+# - Forward metrics to Mimir using OTEL exporter path (otelcol.exporter.otlphttp)
+# - Label strategy: dual-label export, but k8s_* is primary for NEW dashboards/
+#   alerts/queries; Prometheus-compatible labels are retained for legacy/imported
+#   dashboards to keep fast community reuse.
+#
+# TODO(Observability): Introduce a central OTEL Collector Gateway in a follow-up
+# task and change Alloy agents to export OTLP to that gateway service.
+
+alloy:
+  # Q: Why set a fullname override?
+  # A: Ensures predictable resource names (e.g., Service/ConfigMap), which keeps
+  #    discovery and operations stable across releases.
+  fullnameOverride: alloy
+
+  # Q: Why keep custom settings under alloyExample?
+  # A: This is a wrapper-local config block used to template River config values
+  #    (cluster name, scrape timings, Mimir endpoint) in one place.
+  alloyExample:
+    # Q: Why set clusterName?
+    # A: Adds a stable cluster label so metrics stay distinguishable in multi-
+    #    cluster queries and dashboards.
+    clusterName: prod-cluster
+    # Q: Why scrape every 30s?
+    # A: Good balance between freshness and load for infra metrics.
+    scrapeInterval: 30s
+    # Q: Why timeout 10s?
+    # A: Timeout stays below interval to avoid overlapping scrapes and to fail
+    #    fast on slow/unhealthy targets.
+    scrapeTimeout: 10s
+    # Optional: restrict cAdvisor metrics to specific namespaces per cluster.
+    # Empty = keep all namespaces.
+    # Example: mimir|loki|tempo|grafana|alloy
+    cadvisorNamespaceAllowlistRegex: ""
+    mimir:
+      # Q: Why use OTLP endpoint?
+      # A: We forward metrics through OTel exporter semantics (vendor-neutral
+      #    path) instead of a backend-specific write protocol.
+      endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
+      # Q: Why orgID as string?
+      # A: Mimir tenant header expects a string value for X-Scope-OrgID.
+      orgID: "1"
+      # Q: Why insecure=true?
+      # A: Simplifies in-cluster bootstrap. In hardened prod, switch to proper
+      #    TLS verification and certificates.
+      insecure: true
+
+  controller:
+    # Q: Why daemonset mode?
+    # A: Runs one Alloy per node for node-local scraping and simple rollout,
+    #    matching the current strategy (gateway later).
+    type: daemonset
+
+  rbac:
+    # Q: Why create RBAC?
+    # A: Needed for Kubernetes discovery and kubelet/cadvisor access via API.
+    create: true
+
+  service:
+    # Q: Why keep service enabled?
+    # A: Exposes Alloy HTTP endpoint for health/debug/operations if needed.
+    enabled: true
+
+  alloy:
+    extraArgs:
+      # Q: What does this do?
+      # A: Disables Alloy's anonymous usage reporting. It does NOT disable
+      #    scraped Prometheus metrics from kube-state-metrics/node-exporter.
+      - --disable-reporting
+    mounts:
+      # Q: Why disable /var/log and docker container mounts?
+      # A: This example is metrics-only. Host log mounts are unnecessary unless
+      #    we add log collection pipelines.
+      varlog: false
+      dockercontainers: false
+    resources:
+      # Q: Why these requests/limits?
+      # A: Conservative defaults for stable scheduling and memory protection.
+      requests:
+        cpu: 100m
+        memory: 192Mi
+      limits:
+        memory: 512Mi
+
+    configMap:
+      # Q: Why external ConfigMap instead of inline content in values?
+      # A: Keeps the River config in a dedicated template file where wrapper-level
+      #    values can be used directly and maintained more cleanly.
+      create: false
+      name: alloy-config
+      key: config.alloy
+
+kube-state-metrics:
+  # Q: Why fullname override?
+  # A: Provides stable service name used by scrape relabel keep rule.
+  fullnameOverride: kube-state-metrics
+  prometheus:
+    monitor:
+      # Q: Why disable monitor here?
+      # A: Alloy already scrapes directly; this avoids duplicate scrape setups.
+      enabled: false
+
+prometheus-node-exporter:
+  # Q: Why fullname override?
+  # A: Keeps service name deterministic for the node-exporter keep filter.
+  fullnameOverride: node-exporter
+  prometheus:
+    monitor:
+      # Q: Why disable monitor here?
+      # A: Prevents parallel scrape paths when Alloy is the single scraper.
+      enabled: false

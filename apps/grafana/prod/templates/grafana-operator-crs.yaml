@@ -1,10 +1,11 @@
-{{- if .Values.grafanaOperatorCRs.enabled }}
-{{- $selector := .Values.grafanaOperatorCRs.instanceSelector }}
-{{- $alerting := .Values.grafanaOperatorCRs.alerting | default dict }}
+{{- $grafanaOperatorCRs := .Values.grafanaOperatorCRs | default dict }}
+{{- if ($grafanaOperatorCRs.enabled | default false) }}
+{{- $selector := $grafanaOperatorCRs.instanceSelector }}
+{{- $alerting := $grafanaOperatorCRs.alerting | default dict }}
 {{- $alertingFolders := $alerting.folders | default (list) }}
 {{- $datasourceUid := "mimir" }}
-{{- $customContactPoints := .Values.grafanaOperatorCRs.contactPoints | default (list) }}
-{{- $customNotificationPolicies := .Values.grafanaOperatorCRs.notificationPolicies | default (list) }}
+{{- $customContactPoints := $grafanaOperatorCRs.contactPoints | default (list) }}
+{{- $customNotificationPolicies := $grafanaOperatorCRs.notificationPolicies | default (list) }}
 {{- if eq (len $alertingFolders) 0 }}
 {{- fail "grafanaOperatorCRs.alerting.folders is required (fallback removed)" }}
 {{- end }}

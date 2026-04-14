@@ -1,11 +1,12 @@
-{{- if .Values.grafanaOperatorCRs.enabled }}
+{{- $grafanaOperatorCRs := .Values.grafanaOperatorCRs | default dict }}
+{{- if ($grafanaOperatorCRs.enabled | default false) }}
 apiVersion: grafana.integreatly.org/v1beta1
 kind: Grafana
 metadata:
-  name: {{ .Values.grafanaOperatorCRs.instance.name }}
+  name: {{ $grafanaOperatorCRs.instance.name }}
   labels:
-{{- toYaml .Values.grafanaOperatorCRs.instance.labels | nindent 4 }}
+{{- toYaml $grafanaOperatorCRs.instance.labels | nindent 4 }}
 spec:
   external:
-{{- toYaml .Values.grafanaOperatorCRs.instance.external | nindent 4 }}
+{{- toYaml $grafanaOperatorCRs.instance.external | nindent 4 }}
 {{- end }}
