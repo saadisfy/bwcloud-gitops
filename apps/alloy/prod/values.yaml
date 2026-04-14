@@ -3,6 +3,8 @@
 # service (for example otel-gateway.otel.svc.cluster.local:4318) in a follow-up task.
 
 alloy:
+  controller:
+    type: daemonset
   alloyExample:
     clusterName: prod-bwcloud
     mimir:
