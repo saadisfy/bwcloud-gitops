@@ -48,7 +48,7 @@ mimir-distributed:
       ruler_storage:
         backend: local
         local:
-          directory: /data
+          directory: /tmp/ruler-storage
 
   alertmanager:
     replicas: 1
@@ -123,6 +123,9 @@ mimir-distributed:
         memory: 512Mi
     zoneAwareReplication:
       enabled: false
+
+  ruler:
+    enabled: false
 
   chunks-cache:
     enabled: false
