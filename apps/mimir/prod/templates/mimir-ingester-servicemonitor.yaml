@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mimir-ingester-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mimir
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ingester
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mimir
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: ingester
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      metricRelabelings:
+        # Keep only the requested ingester series metrics.
+        # Support both plain and cortex_-prefixed names.
+        - action: keep
+          sourceLabels: [__name__]
+          regex: ^(cortex_)?ingester_(memory|active)_series$
