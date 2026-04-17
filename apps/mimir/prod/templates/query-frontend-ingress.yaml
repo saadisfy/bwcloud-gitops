@@ -1,0 +1,39 @@
+{{- if .Values.queryFrontendIngress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mimir-query-frontend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mimir
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: query-frontend
+  annotations:
+{{- range $k, $v := .Values.queryFrontendIngress.annotations }}
+    {{ $k }}: {{ $v | quote }}
+{{- end }}
+spec:
+  ingressClassName: {{ .Values.queryFrontendIngress.ingressClassName }}
+  rules:
+    - host: {{ .Values.queryFrontendIngress.host }}
+      http:
+        paths:
+          - path: /prometheus
+            pathType: Prefix
+            backend:
+              service:
+                name: mimir-query-frontend
+                port:
+                  number: 8080
+          - path: /api/v1/status/buildinfo
+            pathType: Prefix
+            backend:
+              service:
+                name: mimir-query-frontend
+                port:
+                  number: 8080
+  tls:
+    - secretName: {{ .Values.queryFrontendIngress.tlsSecretName }}
+      hosts:
+        - {{ .Values.queryFrontendIngress.host }}
+{{- end }}

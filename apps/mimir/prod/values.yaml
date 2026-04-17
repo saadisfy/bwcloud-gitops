@@ -1,2 +1,11 @@
 # Mimir prod stage overrides
 mimir-distributed: {}
+
+queryFrontendIngress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  host: mimir-query.saadisfy.me
+  tlsSecretName: mimir-query-tls

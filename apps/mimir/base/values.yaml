@@ -43,6 +43,8 @@ mimir-distributed:
         enabled: false
       ingester:
         push_grpc_method_enabled: true
+        ring:
+          replication_factor: 1
       ruler:
         rule_path: /tmp/ruler-rules
       ruler_storage:
@@ -95,6 +97,8 @@ mimir-distributed:
 
   querier:
     replicas: 1
+    extraArgs:
+      querier.cardinality-analysis-enabled: "true"
     resources:
       requests:
         cpu: 100m
@@ -110,6 +114,9 @@ mimir-distributed:
         memory: 128Mi
       limits:
         memory: 256Mi
+
+  query_scheduler:
+    enabled: false
 
   store_gateway:
     replicas: 1
