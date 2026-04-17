@@ -8,74 +8,194 @@ metadata:
     app.kubernetes.io/part-of: alloy-wrapper
 data:
   config.alloy: |-
-    // Mimir component metrics pipeline:
-    // - Discover endpoints in namespace "mimir"
-    // - Scrape their http-metrics port
-    // - Remote-write to Mimir (Prometheus API)
+    // =================================================================
+    // Alloy config – modular via River `declare` blocks.
+    //
+    // Layout:
+    //   - declare "mimir_component_scrape" : scrapes Mimir microservices
+    //   - declare "alloy_self_scrape"      : scrapes Alloy's own metrics
+    //   - prometheus.remote_write "mimir"  : single sink for all modules
+    //   - <module> "default" { ... }       : instantiation / wiring
+    // =================================================================
+
     logging {
       level  = "info"
       format = "logfmt"
     }
 
-    discovery.kubernetes "mimir_endpoints" {
-      role = "endpoints"
+    // ---------------------------------------------------------------
+    // Module: mimir_component_scrape
+    // Discovers http-metrics endpoints of Mimir microservices in the
+    // given namespace and forwards samples to `forward_to`.
+    // ---------------------------------------------------------------
+    declare "mimir_component_scrape" {
+      argument "forward_to" {
+        comment = "List of prometheus receivers to forward samples to."
+      }
+      argument "cluster" {
+        optional = true
+        default  = "prod-bwcloud"
+      }
+      argument "namespace" {
+        optional = true
+        default  = "mimir"
+      }
+      argument "scrape_interval" {
+        optional = true
+        default  = "30s"
+      }
+      argument "scrape_timeout" {
+        optional = true
+        default  = "10s"
+      }
 
-      namespaces {
-        names = ["mimir"]
+      discovery.kubernetes "endpoints" {
+        role = "endpoints"
+        namespaces {
+          names = [argument.namespace.value]
+        }
+      }
+
+      discovery.relabel "components" {
+        targets = discovery.kubernetes.endpoints.targets
+
+        // Keep only Mimir component services
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          regex         = "mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?"
+          action        = "keep"
+        }
+        // Keep http-metrics (gateway also exposes legacy-http-metrics)
+        rule {
+          source_labels = ["__meta_kubernetes_endpoint_port_name"]
+          regex         = "http-metrics|legacy-http-metrics"
+          action        = "keep"
+        }
+        // Stable labels
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          target_label  = "service"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
+          target_label  = "component"
+        }
+        rule {
+          target_label = "cluster"
+          replacement  = argument.cluster.value
+        }
+        rule {
+          target_label = "job"
+          replacement  = "mimir"
+        }
+      }
+
+      prometheus.scrape "components" {
+        targets         = discovery.relabel.components.output
+        forward_to      = argument.forward_to.value
+        scrape_interval = argument.scrape_interval.value
+        scrape_timeout  = argument.scrape_timeout.value
       }
     }
 
-    discovery.relabel "mimir_components" {
-      targets = discovery.kubernetes.mimir_endpoints.targets
-
-      // Keep only Mimir component services
-      rule {
-        source_labels = ["__meta_kubernetes_service_name"]
-        regex         = "mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?"
-        action        = "keep"
+    // ---------------------------------------------------------------
+    // Module: alloy_self_scrape
+    // Scrapes Alloy's own http-metrics endpoint (default port 12345)
+    // from all Alloy pods via the `alloy` Service.
+    // ---------------------------------------------------------------
+    declare "alloy_self_scrape" {
+      argument "forward_to" {
+        comment = "List of prometheus receivers to forward samples to."
+      }
+      argument "cluster" {
+        optional = true
+        default  = "prod-bwcloud"
+      }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
+      argument "service_name" {
+        optional = true
+        default  = "alloy"
+      }
+      argument "scrape_interval" {
+        optional = true
+        default  = "30s"
+      }
+      argument "scrape_timeout" {
+        optional = true
+        default  = "10s"
       }
 
-      // Keep only the http-metrics port
-      rule {
-        source_labels = ["__meta_kubernetes_endpoint_port_name"]
-        regex         = "http-metrics|legacy-http-metrics"
-        action        = "keep"
+      discovery.kubernetes "endpoints" {
+        role = "endpoints"
+        namespaces {
+          names = [argument.namespace.value]
+        }
       }
 
-      // Stable labels
-      rule {
-        source_labels = ["__meta_kubernetes_namespace"]
-        target_label  = "namespace"
+      discovery.relabel "self" {
+        targets = discovery.kubernetes.endpoints.targets
+
+        // Keep only the Alloy Service
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          regex         = argument.service_name.value
+          action        = "keep"
+        }
+        // Alloy exposes its own metrics on http-metrics
+        rule {
+          source_labels = ["__meta_kubernetes_endpoint_port_name"]
+          regex         = "http-metrics"
+          action        = "keep"
+        }
+        // Stable labels
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          target_label  = "service"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          target_label = "cluster"
+          replacement  = argument.cluster.value
+        }
+        rule {
+          target_label = "job"
+          replacement  = "alloy"
+        }
       }
-      rule {
-        source_labels = ["__meta_kubernetes_service_name"]
-        target_label  = "service"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_name"]
-        target_label  = "pod"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
-        target_label  = "component"
-      }
-      rule {
-        target_label = "cluster"
-        replacement  = "prod-bwcloud"
-      }
-      rule {
-        target_label = "job"
-        replacement  = "mimir"
+
+      prometheus.scrape "self" {
+        targets         = discovery.relabel.self.output
+        forward_to      = argument.forward_to.value
+        scrape_interval = argument.scrape_interval.value
+        scrape_timeout  = argument.scrape_timeout.value
       }
     }
 
-    prometheus.scrape "mimir_components" {
-      targets         = discovery.relabel.mimir_components.output
-      forward_to      = [prometheus.remote_write.mimir.receiver]
-      scrape_interval = "30s"
-      scrape_timeout  = "10s"
-    }
-
+    // ---------------------------------------------------------------
+    // Sink – single remote_write to Mimir distributor (tenant "1").
+    // ---------------------------------------------------------------
     prometheus.remote_write "mimir" {
       endpoint {
         url = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
@@ -84,4 +204,15 @@ data:
           "X-Scope-OrgID" = "1",
         }
       }
+    }
+
+    // ---------------------------------------------------------------
+    // Instantiation – wire modules to the sink.
+    // ---------------------------------------------------------------
+    mimir_component_scrape "default" {
+      forward_to = [prometheus.remote_write.mimir.receiver]
+    }
+
+    alloy_self_scrape "default" {
+      forward_to = [prometheus.remote_write.mimir.receiver]
     }
