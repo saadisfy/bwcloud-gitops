@@ -8,10 +8,62 @@ metadata:
     app.kubernetes.io/part-of: alloy-wrapper
 data:
   config.alloy: |-
-    // Temporary no-op config:
-    // - Alloy runs as DaemonSet but does not scrape or export anything.
-    // - Keep only logging so pods stay healthy and observable.
+    // Minimal metrics pipeline:
+    // - Scrape Mimir component metrics in namespace "mimir"
+    // - Export to Mimir via OTLP
     logging {
       level  = "info"
       format = "logfmt"
+    }
+
+    otelcol.receiver.prometheus "mimir" {
+      config = <<-EOT
+        global:
+          scrape_interval: 30s
+          scrape_timeout: 10s
+
+        scrape_configs:
+          - job_name: mimir-components
+            kubernetes_sd_configs:
+              - role: endpoints
+                namespaces:
+                  names: ["mimir"]
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_service_name]
+                action: keep
+                regex: mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?
+              - source_labels: [__meta_kubernetes_endpoint_port_name]
+                action: keep
+                regex: http-metrics|legacy-http-metrics
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_service_name]
+                target_label: service
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+              - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
+                target_label: component
+              - target_label: cluster
+                replacement: prod-bwcloud
+      EOT
+
+      output {
+        metrics = [otelcol.processor.batch.mimir.input]
+      }
+    }
+
+    otelcol.processor.batch "mimir" {
+      output {
+        metrics = [otelcol.exporter.otlphttp.mimir.input]
+      }
+    }
+
+    otelcol.exporter.otlphttp "mimir" {
+      client {
+        endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
+        headers  = { "X-Scope-OrgID" = "1" }
+        tls {
+          insecure = true
+        }
+      }
     }
