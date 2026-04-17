@@ -8,62 +8,80 @@ metadata:
     app.kubernetes.io/part-of: alloy-wrapper
 data:
   config.alloy: |-
-    // Minimal metrics pipeline:
-    // - Scrape Mimir component metrics in namespace "mimir"
-    // - Export to Mimir via OTLP
+    // Mimir component metrics pipeline:
+    // - Discover endpoints in namespace "mimir"
+    // - Scrape their http-metrics port
+    // - Remote-write to Mimir (Prometheus API)
     logging {
       level  = "info"
       format = "logfmt"
     }
 
-    otelcol.receiver.prometheus "mimir" {
-      config = <<-EOT
-        global:
-          scrape_interval: 30s
-          scrape_timeout: 10s
+    discovery.kubernetes "mimir_endpoints" {
+      role = "endpoints"
 
-        scrape_configs:
-          - job_name: mimir-components
-            kubernetes_sd_configs:
-              - role: endpoints
-                namespaces:
-                  names: ["mimir"]
-            relabel_configs:
-              - source_labels: [__meta_kubernetes_service_name]
-                action: keep
-                regex: mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?
-              - source_labels: [__meta_kubernetes_endpoint_port_name]
-                action: keep
-                regex: http-metrics|legacy-http-metrics
-              - source_labels: [__meta_kubernetes_namespace]
-                target_label: namespace
-              - source_labels: [__meta_kubernetes_service_name]
-                target_label: service
-              - source_labels: [__meta_kubernetes_pod_name]
-                target_label: pod
-              - source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component]
-                target_label: component
-              - target_label: cluster
-                replacement: prod-bwcloud
-      EOT
-
-      output {
-        metrics = [otelcol.processor.batch.mimir.input]
+      namespaces {
+        names = ["mimir"]
       }
     }
 
-    otelcol.processor.batch "mimir" {
-      output {
-        metrics = [otelcol.exporter.otlphttp.mimir.input]
+    discovery.relabel "mimir_components" {
+      targets = discovery.kubernetes.mimir_endpoints.targets
+
+      // Keep only Mimir component services
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        regex         = "mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?"
+        action        = "keep"
+      }
+
+      // Keep only the http-metrics port
+      rule {
+        source_labels = ["__meta_kubernetes_endpoint_port_name"]
+        regex         = "http-metrics|legacy-http-metrics"
+        action        = "keep"
+      }
+
+      // Stable labels
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        target_label  = "service"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
+        target_label  = "component"
+      }
+      rule {
+        target_label = "cluster"
+        replacement  = "prod-bwcloud"
+      }
+      rule {
+        target_label = "job"
+        replacement  = "mimir"
       }
     }
 
-    otelcol.exporter.otlphttp "mimir" {
-      client {
-        endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
-        headers  = { "X-Scope-OrgID" = "1" }
-        tls {
-          insecure = true
+    prometheus.scrape "mimir_components" {
+      targets         = discovery.relabel.mimir_components.output
+      forward_to      = [prometheus.remote_write.mimir.receiver]
+      scrape_interval = "30s"
+      scrape_timeout  = "10s"
+    }
+
+    prometheus.remote_write "mimir" {
+      endpoint {
+        url = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
+
+        headers = {
+          "X-Scope-OrgID" = "1",
         }
       }
     }
