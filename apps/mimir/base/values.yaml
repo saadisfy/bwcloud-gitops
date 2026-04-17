@@ -115,9 +115,6 @@ mimir-distributed:
       limits:
         memory: 256Mi
 
-  query_scheduler:
-    enabled: false
-
   store_gateway:
     replicas: 1
     persistentVolume:
