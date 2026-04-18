@@ -37,6 +37,12 @@ argo-cd:
               clientSecret: $argocd-github-oauth:clientSecret
               # Kein orgs:-Filter -> jeder GitHub-User darf sich anmelden.
               # Berechtigungen werden ausschließlich über RBAC unten gesteuert.
+              # GitHub-Login statt E-Mail als User-ID verwenden. Sonst schlägt
+              # der Login fehl, wenn der User keine verifizierte/öffentliche
+              # primäre E-Mail hat ("github: user has no verified, primary email").
+              # Die RBAC-Regel `g, saadisfy, role:admin` matched dann direkt auf
+              # den GitHub-Username.
+              useLoginAsID: true
       # UI-/CLI-Session-Lebensdauer: 30 Tage, damit ein Pod-Roll (Self-Sync von
       # Argo CD) oder das Default-24h-TTL einen nicht ständig ausloggt.
       users.session.duration: 720h
