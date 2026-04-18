@@ -37,6 +37,9 @@ argo-cd:
               clientSecret: $argocd-github-oauth:clientSecret
               # Kein orgs:-Filter -> jeder GitHub-User darf sich anmelden.
               # Berechtigungen werden ausschließlich über RBAC unten gesteuert.
+      # UI-/CLI-Session-Lebensdauer: 30 Tage, damit ein Pod-Roll (Self-Sync von
+      # Argo CD) oder das Default-24h-TTL einen nicht ständig ausloggt.
+      users.session.duration: 720h
     params:
       server.insecure: true
     rbac:
@@ -55,8 +58,9 @@ argo-cd:
         g, saadisfy, role:admin
     secret:
       # Argo CD (Go bcrypt) erwartet i.d.R. $2a/$2b. Mit $2y kann es zu unerwünschter Rotation kommen.
-      argocdServerAdminPassword: "$2a$10$D8YbA9xJuRO4lS28tlQzveOSba8geepGibbYZ4Q988Y128I47kUHe"
-      argocdServerAdminPasswordMtime: "2026-02-02T19:15:30Z"
+      # Plaintext-Passwort liegt im Passwort-Manager; hier nur der bcrypt-Hash.
+      argocdServerAdminPassword: "$2a$10$P3NxFPXA4063yhcR1alN/eyVmkv/QZ7T4tTCvM4aBmPETdM1p92Fq"
+      argocdServerAdminPasswordMtime: "2026-04-18T21:30:00Z"
     repositories:
       # Public Helm-Repos für Wrapper-Chart-Dependencies
       repo-grafana-helm:
