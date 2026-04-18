@@ -18,8 +18,41 @@ argo-cd:
           hosts:
             - argocd.saadisfy.me
   configs:
+    cm:
+      # Dedizierter API-Account für MCP-Nutzung (kein UI-Login).
+      accounts.mcp: apiKey
+      accounts.mcp.enabled: "true"
+      # GitHub SSO via built-in Dex. Client ID/Secret werden aus dem
+      # Secret `argocd-github-oauth` (Namespace argocd, Label
+      # app.kubernetes.io/part-of=argocd) per `$<secret>:<key>` interpoliert.
+      # Secret stammt aus 0day-deployment-manifests/sso-secrets.yaml (gitignored).
+      url: https://argocd.saadisfy.me
+      dex.config: |
+        connectors:
+          - type: github
+            id: github
+            name: GitHub
+            config:
+              clientID: $argocd-github-oauth:clientID
+              clientSecret: $argocd-github-oauth:clientSecret
+              # Kein orgs:-Filter -> jeder GitHub-User darf sich anmelden.
+              # Berechtigungen werden ausschließlich über RBAC unten gesteuert.
     params:
       server.insecure: true
+    rbac:
+      # Default-Rolle für alle authentifizierten Nutzer (inkl. SSO):
+      # readonly = nur `get` auf alle Ressourcen, kein sync/refresh/override/etc.
+      policy.default: role:readonly
+      # Nur mein eigener GitHub-Login bekommt Admin. Alle anderen GitHub-User
+      # bleiben bei policy.default = role:readonly (absolutes Minimum).
+      # Die mcp-Rolle bleibt für den lokalen API-Account erhalten.
+      scopes: "[preferred_username, email, groups]"
+      policy.csv: |
+        p, role:mcp, applications, get, */*, allow
+        p, role:mcp, applications, sync, */*, allow
+        p, role:mcp, projects, get, *, allow
+        g, mcp, role:mcp
+        g, saadisfy, role:admin
     secret:
       # Argo CD (Go bcrypt) erwartet i.d.R. $2a/$2b. Mit $2y kann es zu unerwünschter Rotation kommen.
       argocdServerAdminPassword: "$2a$10$D8YbA9xJuRO4lS28tlQzveOSba8geepGibbYZ4Q988Y128I47kUHe"

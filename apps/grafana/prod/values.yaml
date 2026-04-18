@@ -11,6 +11,35 @@ grafana:
         hosts:
           - grafana.saadisfy.me
 
+  # GitHub OAuth client ID + secret are injected as env vars from the manually
+  # applied Secret 0day-deployment-manifests/sso-secrets.yaml (gitignored).
+  # Reloader (podAnnotations in base/values.yaml) restarts the pod on change.
+  envFromSecret: grafana-github-oauth
+
+  grafana.ini:
+    server:
+      root_url: https://grafana.saadisfy.me
+    # Local admin login stays enabled as a fallback (do not set disable_login_form).
+    auth:
+      # No anonymous access; only signed-in users see anything.
+      disable_login_form: false
+    auth.github:
+      enabled: true
+      name: GitHub
+      allow_sign_up: true
+      # Only my own GitHub login becomes Admin; everyone else gets Viewer (read-only).
+      # JMESPath is evaluated against the GitHub user info JSON returned by the
+      # OAuth API; `login` is the GitHub username.
+      role_attribute_path: "login == 'saadisfy' && 'Admin' || 'Viewer'"
+      role_attribute_strict: true
+      skip_org_role_sync: false
+      scopes: user:email,read:org
+      auth_url: https://github.com/login/oauth/authorize
+      token_url: https://github.com/login/oauth/access_token
+      api_url: https://api.github.com/user
+      client_id: $__env{GF_AUTH_GITHUB_CLIENT_ID}
+      client_secret: $__env{GF_AUTH_GITHUB_CLIENT_SECRET}
+
 # Operator CRs are not configured for prod yet.
 # Keep this key defined so templates that check .Values.grafanaOperatorCRs.enabled
 # do not fail with nil-pointer errors during Argo CD rendering.
