@@ -4,7 +4,7 @@ apiVersion: kargo.akuity.io/v1alpha1
 kind: Warehouse
 metadata:
   name: bwcloud-warehouse
-  namespace: kargo
+  namespace: spring-petclinic
 spec:
   subscriptions:
     - git:
