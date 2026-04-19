@@ -3,6 +3,17 @@
 argo-cd:
   global:
     domain: argocd.saadisfy.me
+  # Der redis-secret-init Helm-Hook Job generiert beim Erst-Install den
+  # `argocd-redis` Secret. Bei jedem Self-Sync danach läuft er erneut als
+  # PreSync-Hook, hat `ttlSecondsAfterFinished: 60` und wird prompt vom
+  # Job-Controller gelöscht. Wenn der `application-controller` selbst während
+  # des Syncs neu rollt (was beim Self-Sync passiert), verpasst er das
+  # Completion-Event und hängt danach ewig auf
+  # "waiting for completion of hook batch/Job/argocd-redis-secret-init".
+  # Der Secret existiert seit Erst-Install (2026-01-30), muss also nie wieder
+  # regeneriert werden → Job komplett deaktivieren.
+  redisSecretInit:
+    enabled: false
   server:
     ingress:
       enabled: true
