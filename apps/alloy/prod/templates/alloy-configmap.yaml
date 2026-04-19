@@ -12,10 +12,22 @@ data:
     // Alloy config – modular via River `declare` blocks.
     //
     // Layout:
-    //   - declare "mimir_component_scrape" : scrapes Mimir microservices
-    //   - declare "alloy_self_scrape"      : scrapes Alloy's own metrics
-    //   - prometheus.remote_write "mimir"  : single sink for all modules
-    //   - <module> "default" { ... }       : instantiation / wiring
+    //   - declare "k8s_target_enrich"       : ONE place for k8s -> label
+    //                                         enrichment (Prometheus +
+    //                                         OpenTelemetry conventions).
+    //   - declare "mimir_component_scrape"  : Mimir microservices
+    //   - declare "alloy_self_scrape"       : Alloy self-metrics
+    //   - prometheus.remote_write "mimir"   : single sink, sets
+    //                                         external_labels (cluster).
+    //   - <module> "default" { ... }        : instantiation / wiring
+    //
+    // Convention:
+    //   * Static, environment-wide labels (cluster, k8s_cluster_name)
+    //     live ONCE on remote_write.external_labels.
+    //   * Per-target k8s attributes (namespace, pod, node, container,
+    //     service) live ONCE in k8s_target_enrich.
+    //   * Scrape modules only do: keep-filters + job label + app-specific
+    //     labels (e.g. `component` for Mimir).
     // =================================================================
 
     logging {
@@ -24,17 +36,84 @@ data:
     }
 
     // ---------------------------------------------------------------
+    // Module: k8s_target_enrich
+    // Single source of truth for promoting Kubernetes meta-labels onto
+    // the wire-level Prometheus labels of every scraped sample.
+    //
+    // Emits two parallel label families on every target:
+    //   1. Prometheus de-facto convention (short names):
+    //        namespace, pod, container, node, service
+    //   2. OpenTelemetry semantic conventions (k8s.* -> k8s_*):
+    //        k8s_namespace_name, k8s_pod_name, k8s_container_name,
+    //        k8s_node_name
+    //
+    // Why both? Prom-native dashboards/alerts use the short names;
+    // OTel-native tooling and traces/logs correlation use k8s_*. Having
+    // both makes joins (e.g. metrics<->logs<->traces) trivial.
+    // ---------------------------------------------------------------
+    declare "k8s_target_enrich" {
+      argument "targets" {
+        comment = "List of discovery targets to enrich."
+      }
+
+      discovery.relabel "enriched" {
+        targets = argument.targets.value
+
+        // ---- Prometheus convention (short names) ----
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          target_label  = "service"
+        }
+
+        // ---- OpenTelemetry semantic conventions (k8s.*) ----
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "k8s_namespace_name"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "k8s_pod_name"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "k8s_container_name"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "k8s_node_name"
+        }
+      }
+
+      export "output" {
+        value = discovery.relabel.enriched.output
+      }
+    }
+
+    // ---------------------------------------------------------------
     // Module: mimir_component_scrape
-    // Discovers http-metrics endpoints of Mimir microservices in the
-    // given namespace and forwards samples to `forward_to`.
+    // Discovers http-metrics endpoints of Mimir microservices, runs
+    // them through k8s_target_enrich, then applies Mimir-specific
+    // keep-filters and the `component` + `job` labels.
     // ---------------------------------------------------------------
     declare "mimir_component_scrape" {
       argument "forward_to" {
         comment = "List of prometheus receivers to forward samples to."
-      }
-      argument "cluster" {
-        optional = true
-        default  = "prod-bwcloud"
       }
       argument "namespace" {
         optional = true
@@ -56,8 +135,14 @@ data:
         }
       }
 
-      discovery.relabel "components" {
+      // Centralized k8s attribute promotion (namespace/pod/node/container/service
+      // and k8s_* OTel conventions).
+      k8s_target_enrich "mimir" {
         targets = discovery.kubernetes.endpoints.targets
+      }
+
+      discovery.relabel "components" {
+        targets = k8s_target_enrich.mimir.output
 
         // Keep only Mimir component services
         rule {
@@ -71,26 +156,11 @@ data:
           regex         = "http-metrics|legacy-http-metrics"
           action        = "keep"
         }
-        // Stable labels
-        rule {
-          source_labels = ["__meta_kubernetes_namespace"]
-          target_label  = "namespace"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_service_name"]
-          target_label  = "service"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_pod_name"]
-          target_label  = "pod"
-        }
+
+        // App-specific label only
         rule {
           source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
           target_label  = "component"
-        }
-        rule {
-          target_label = "cluster"
-          replacement  = argument.cluster.value
         }
         rule {
           target_label = "job"
@@ -108,16 +178,13 @@ data:
 
     // ---------------------------------------------------------------
     // Module: alloy_self_scrape
-    // Scrapes Alloy's own http-metrics endpoint (default port 12345)
-    // from all Alloy pods via the `alloy` Service.
+    // Scrapes Alloy's own http-metrics endpoint (default port 12345).
+    // Enrichment is centralized in k8s_target_enrich; this module only
+    // adds the `job` label and keep-filters.
     // ---------------------------------------------------------------
     declare "alloy_self_scrape" {
       argument "forward_to" {
         comment = "List of prometheus receivers to forward samples to."
-      }
-      argument "cluster" {
-        optional = true
-        default  = "prod-bwcloud"
       }
       argument "namespace" {
         optional = true
@@ -143,8 +210,12 @@ data:
         }
       }
 
-      discovery.relabel "self" {
+      k8s_target_enrich "self" {
         targets = discovery.kubernetes.endpoints.targets
+      }
+
+      discovery.relabel "self" {
+        targets = k8s_target_enrich.self.output
 
         // Keep only the Alloy Service
         rule {
@@ -158,27 +229,7 @@ data:
           regex         = "http-metrics"
           action        = "keep"
         }
-        // Stable labels
-        rule {
-          source_labels = ["__meta_kubernetes_namespace"]
-          target_label  = "namespace"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_service_name"]
-          target_label  = "service"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_pod_name"]
-          target_label  = "pod"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_pod_node_name"]
-          target_label  = "node"
-        }
-        rule {
-          target_label = "cluster"
-          replacement  = argument.cluster.value
-        }
+
         rule {
           target_label = "job"
           replacement  = "alloy"
@@ -195,8 +246,17 @@ data:
 
     // ---------------------------------------------------------------
     // Sink – single remote_write to Mimir distributor (tenant "1").
+    //
+    // Static, environment-wide labels live here (NOT in scrape modules),
+    // so adding a new module never duplicates them and switching cluster
+    // is a one-line change. Both Prom and OTel conventions are emitted.
     // ---------------------------------------------------------------
     prometheus.remote_write "mimir" {
+      external_labels = {
+        cluster          = "prod-bwcloud",
+        k8s_cluster_name = "prod-bwcloud",
+      }
+
       endpoint {
         url = "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
 
