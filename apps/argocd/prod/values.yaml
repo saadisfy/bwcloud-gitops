@@ -46,13 +46,6 @@ argo-cd:
       # UI-/CLI-Session-Lebensdauer: 30 Tage, damit ein Pod-Roll (Self-Sync von
       # Argo CD) oder das Default-24h-TTL einen nicht ständig ausloggt.
       users.session.duration: 720h
-      # Banner im UI (auch auf der Login-Seite) — weist User darauf hin, warum
-      # GitHub-SSO "Internal Server Error" zeigt, wenn ihr GitHub-Account keine
-      # verifizierte, öffentliche primäre E-Mail hat. Dex' eigene Fehlerseite
-      # lässt sich nicht anpassen, also machen wir es hier prominent.
-      ui.bannercontent: "GitHub-SSO Login failed? GitHub account needs a verified, public primary email. Check https://github.com/settings/emails, then revoke the sso_argo OAuth app under https://github.com/settings/applications and log in again."
-      ui.bannerpermanent: "true"
-      ui.bannerposition: "top"
     params:
       server.insecure: true
     rbac:
