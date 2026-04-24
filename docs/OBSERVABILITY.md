@@ -20,23 +20,6 @@ Dieser Guide richtet sich an Customers, die unsere Observability-Lösung nutzen 
 - Zugriff auf das Ziel-Cluster (Namespaces, Ingress/Service-Zugriff).
 - Falls ihr bereits instrumentiert: vorhandene OTLP-Exports.
 
-### 1.3 Getting Started nach Instrumentierungsstand
-
-#### Keine Instrumentierung vorhanden
-Empfohlen: Auto-Instrumentierung über den OpenTelemetry Operator.
-1. Service ins Cluster deployen (via Argo CD).
-2. Auto-Instrumentierung aktivieren (Java Agent via Instrumentation-CR).
-3. Telemetry-Weiterleitung über OTLP an den Collector/Alloy.
-
-#### Teilweise instrumentiert (z. B. nur Metriken)
-Wir empfehlen, bestehende Teil-Instrumentierung durch OpenTelemetry Auto-Instrumentation zu ersetzen, um den Betrieb zu vereinfachen.
-1. Vorhandene Exporte auf OTLP umstellen.
-2. Daten an den zentralen Collector/Alloy senden.
-
-#### Voll instrumentiert (Metriken + Traces + Logs)
-1. Alle Signale (OTLP) an den zentralen Collector/Alloy schicken.
-2. Service-spezifische Dashboards/Alerts im Repo pflegen.
-
 ---
 
 ## 2. Grafana Alloy (Metrics Pipeline)
@@ -58,11 +41,11 @@ flowchart LR
       PRm[otelcol.receiver.prometheus<br/>job=mimir]
       PRa[otelcol.receiver.prometheus<br/>job=alloy]
       KA[otelcol.processor.k8sattributes<br/>enrich k8s labels]
-      OTLP[otelcol.exporter.otlp<br/>resource: cluster, k8s_cluster_name]
+      OTLP[otelcol.exporter.otlphttp<br/>Mimir Gateway]
     end
 
     subgraph MIMIR_NS["namespace: mimir"]
-      DIST[mimir-distributor<br/>:4317 OTLP/gRPC]
+      DIST[mimir-gateway<br/>OTLP/HTTP]
     end
   end
 
@@ -71,14 +54,8 @@ flowchart LR
   PRm --> KA
   PRa --> KA
   KA --> OTLP
-  OTLP --"OTLP/gRPC<br/>X-Scope-OrgID: 1"--> DIST
+  OTLP --"OTLP/HTTP<br/>X-Scope-OrgID: 1"--> DIST
 ```
-
-### 2.2 Core Concepts
-- **Vendor-Neutral Egress**: Alle Metriken werden via OTLP/HTTP an Mimir übertragen.
-- **ServiceMonitor-First**: Infrastrukturmetriken werden bevorzugt über ServiceMonitor-Discovery erfasst.
-- **Label Governance**: Ein zweistufiges Relabeling-Verfahren kontrolliert die Cardinality und stellt einen konsistenten Label-Vertrag sicher.
-- **Dual Labeling Strategy**: Wir nutzen sowohl Prometheus-Labels (`pod`, `namespace`) für Kompatibilität als auch OTel Semantic Conventions (`k8s_pod_name`, `k8s_namespace_name`) für Cross-Signal Korrelation.
 
 ---
 
@@ -113,7 +90,8 @@ flowchart LR
   end
 
   %% Write Path
-  ALLOY -- "OTLP/gRPC<br/>X-Scope-OrgID: 1" --> DIST
+  ALLOY -- "OTLP/HTTP<br/>X-Scope-OrgID: 1" --> GW
+  GW --> DIST
   DIST -- "gRPC Push" --> ING
   ING -- "Write-Ahead Log & <br/>2h Block Flush" --> FS
   COMP -- "Merge Blocks" --> FS
@@ -127,42 +105,52 @@ flowchart LR
   SG -. "Index/Chunks" .-> FS
 ```
 
-### 3.2 Operational Know-How
-- **Multi-Tenancy**: Mimir benötigt den `X-Scope-OrgID` Header (aktuell auf `"1"` gesetzt).
-- **Storage**: In diesem Setup wird das lokale Dateisystem (`filesystem`) statt S3 genutzt, um den Ressourcenverbrauch minimal zu halten.
-- **Cardinality Management**: Hohe Cardinality (viele unique Labels) führt zu hohem RAM-Verbrauch. Nutze die untenstehenden Queries zur Analyse.
+---
 
-### 3.3 Mimir Analyse & Cardinality
+## 4. Grafana Frontend & Dashboards
 
-#### Baseline Metriken
-- **Gateway request rate:** `sum(rate(nginx_http_requests_total[5m]))`
-- **Distributor received samples rate:** `sum(rate(cortex_distributor_received_samples_total[5m]))`
-- **Ingester active series:** `sum(cortex_ingester_active_series)`
+Grafana wird über den **Grafana Operator** verwaltet. Alle Dashboards und Ordner werden deklarativ über GitOps provisioniert.
 
-#### Top Metrics by Active Series
-```promql
-topk(15, count by (__name__)({__name__!~"up|scrape_.*"}))
-```
+### 4.1 Dashboard Provisioning (Automated Files Sync)
+Dashboards werden nicht manuell in der UI erstellt, sondern über JSON-Dateien im Verzeichnis `apps/grafana/prod/files/` gesteuert.
 
-#### Cardinality Drivers (Label Dimensions)
-```promql
-topk(
-  15,
-  sum by (label_name, __name__) (
-    label_replace(count by (__name__, pod)({pod!="", __name__!~"up|scrape_.*"}), "label_name", "pod", "pod", ".*")
-    or label_replace(count by (__name__, instance)({instance!="", __name__!~"up|scrape_.*"}), "label_name", "instance", "instance", ".*")
-    or label_replace(count by (__name__, path)({path!="", __name__!~"up|scrape_.*"}), "label_name", "path", "path", ".*")
-  )
-)
+#### Ordner-Mapping & Verschachtelung
+Das Helm-Template bildet die Verzeichnisstruktur unter `files/` 1:1 in Grafana ab:
+1. **GrafanaFolder**: Für jedes Verzeichnis wird eine `GrafanaFolder` Custom Resource (CR) erzeugt.
+2. **Verschachtelung**: Unterordner nutzen das Feld `parentFolderRef`, um auf ihren Eltern-Ordner zu verweisen (z. B. wird `files/mimir/dashboards` zu einem Ordner `dashboards` innerhalb des Ordners `mimir`).
+
+#### ConfigMap & Dashboard Ressourcen
+Um die Kubernetes Custom Resources klein zu halten und das Limit für `etcd`-Objekte nicht zu sprengen, wird folgende Logik angewendet:
+1. **ConfigMap**: Für jede `.json` Datei wird eine `ConfigMap` generiert, die den rohen JSON-Inhalt des Dashboards enthält.
+2. **GrafanaDashboard**: Die `GrafanaDashboard` CR referenziert diese ConfigMap (`configMapRef`) und den zugehörigen Ordner (`folderRef`).
+
+### 4.2 Passwort-Management & Reset
+Grafana speichert das Admin-Passwort in einer internen DB. Falls das Passwort in GitOps geändert wird, stellt ein **postStart-Lifecycle-Hook** sicher, dass das DB-Passwort automatisch an den neuen Wert aus dem Secret angepasst wird:
+```yaml
+command: ['/bin/sh', '-c', 'sleep 25 && grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD" || true']
 ```
 
 ---
 
-## 4. Cardinality Analyse (Agent Tooling)
+## 5. Mimir Analyse & Cardinality
+
+### 5.1 Baseline Metriken
+- **Gateway request rate:** `sum(rate(nginx_http_requests_total[5m]))`
+- **Distributor received samples rate:** `sum(rate(cortex_distributor_received_samples_total[5m]))`
+- **Ingester active series:** `sum(cortex_ingester_active_series)`
+
+### 5.2 Top Metrics by Active Series
+```promql
+topk(15, count by (__name__)({__name__!~"up|scrape_.*"}))
+```
+
+---
+
+## 6. Cardinality Analyse (Agent Tooling)
 
 Für automatisierte Analysen kann der folgende Prompt genutzt werden.
 
-### 4.1 Agent Prompt
+### 6.1 Agent Prompt
 Du bist ein technischer Analyse-Agent. Führe eine kurze Cardinality-Analyse gegen Mimir durch und speichere das Ergebnis in `docs/cardinality-analysis.yaml`.
 - Tenant Header: `X-Scope-OrgID: anonymous` (oder entsprechend konfiguriert)
 - Basis-URL: `http://127.0.0.1:8080/prometheus` (nach Port-Forward)
