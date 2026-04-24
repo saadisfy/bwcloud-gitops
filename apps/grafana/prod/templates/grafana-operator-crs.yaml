@@ -20,7 +20,7 @@
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaFolder
 metadata:
-  name: {{ $folder.name }}
+  name: {{ $folder.name | quote }}
 spec:
   instanceSelector:
 {{- toYaml $selector | nindent 4 }}
@@ -30,7 +30,7 @@ spec:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaAlertRuleGroup
 metadata:
-  name: {{ printf "%s-%s" $folder.name $group.name | trunc 63 | trimSuffix "-" }}
+  name: {{ printf "%s-%s" $folder.name $group.name | trunc 63 | trimSuffix "-" | quote }}
 spec:
   instanceSelector:
 {{- toYaml $selector | nindent 4 }}

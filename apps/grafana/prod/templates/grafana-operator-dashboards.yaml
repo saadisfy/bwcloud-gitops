@@ -34,13 +34,13 @@
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaFolder
 metadata:
-  name: {{ $safeFolderName }}
+  name: {{ $safeFolderName | quote }}
 spec:
   instanceSelector:
 {{- toYaml $selector | nindent 4 }}
   title: {{ $folderTitle | quote }}
   {{- if $parentRef }}
-  parentFolderRef: {{ $parentRef }}
+  parentFolderRef: {{ $parentRef | quote }}
   {{- end }}
 ---
 {{- end }}
@@ -55,7 +55,7 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ $resourceName }}
+  name: {{ $resourceName | quote }}
   labels:
     app.kubernetes.io/name: grafana
     app.kubernetes.io/component: dashboard
@@ -66,13 +66,13 @@ data:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
 metadata:
-  name: {{ $resourceName }}
+  name: {{ $resourceName | quote }}
 spec:
   instanceSelector:
 {{- toYaml $selector | nindent 4 }}
-  folderRef: {{ $safeFolderName }}
+  folderRef: {{ $safeFolderName | quote }}
   configMapRef:
-    name: {{ $resourceName }}
+    name: {{ $resourceName | quote }}
     key: dashboard.json
 ---
 {{- end }}
