@@ -33,6 +33,8 @@ mimir-distributed:
         backend: filesystem
         filesystem:
           dir: /data/blocks
+      limits:
+        compactor_blocks_retention_period: 24h
       alertmanager_storage:
         backend: local
         local:
