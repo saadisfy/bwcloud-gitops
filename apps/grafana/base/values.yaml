@@ -69,6 +69,9 @@ grafanaOperatorCRs:
       dashboards: grafana
     external:
       url: https://grafana.saadisfy.me
-      adminPasswordSecret:
+      adminUser:
+        name: grafana
+        key: admin-user
+      adminPassword:
         name: grafana
         key: admin-password
