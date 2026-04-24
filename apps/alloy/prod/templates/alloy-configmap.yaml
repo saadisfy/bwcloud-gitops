@@ -101,7 +101,15 @@ data:
           action        = "keep"
         }
 
-        // App-specific label only
+        // App-specific labels via discovery metadata (most reliable)
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
         rule {
           source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
           target_label  = "component"
@@ -179,6 +187,14 @@ data:
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
           regex         = "http-metrics"
           action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
         }
         rule {
           target_label = "job"
