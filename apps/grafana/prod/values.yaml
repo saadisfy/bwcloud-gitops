@@ -61,6 +61,8 @@ grafanaOperatorCRs:
       adminPassword:
         name: grafana
         key: admin-password
+    tls:
+      insecureSkipVerify: true
 
   # Mandatory alerting configuration for the operator
   alerting:

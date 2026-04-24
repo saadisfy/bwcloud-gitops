@@ -75,3 +75,5 @@ grafanaOperatorCRs:
       adminPassword:
         name: grafana
         key: admin-password
+    tls:
+      insecureSkipVerify: true
