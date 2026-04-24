@@ -31,24 +31,13 @@ alloy:
     # A: Exposes Alloy HTTP endpoint for health/debug/operations if needed.
     enabled: true
 
-  # Upstream Alloy chart values
+  # Upstream Alloy chart values (under the 'alloy' dependency key)
   alloy:
-    # Q: Why disable configMap creation?
-    # A: We provide our own custom ConfigMap named 'alloy' in templates/alloy-configmap.yaml.
-    configMap:
-      create: false
-
     extraArgs:
       # Q: What does this do?
       # A: Disables Alloy's anonymous usage reporting. It does NOT disable
       #    scraped Prometheus metrics from kube-state-metrics/node-exporter.
       - --disable-reporting
-    mounts:
-      # Q: Why disable /var/log and docker container mounts?
-      # A: This example is metrics-only. Host log mounts are unnecessary unless
-      #    we add log collection pipelines.
-      varlog: false
-      dockercontainers: false
     resources:
       # Q: Why these requests/limits?
       # A: Conservative defaults for stable scheduling and memory protection.
@@ -58,14 +47,16 @@ alloy:
       limits:
         memory: 512Mi
 
-    # Mount the modular Mimir scrape configuration.
-    extraVolumes:
-      - name: mimir-modules
-        configMap:
-          name: alloy-mimir-modules
-    extraVolumeMounts:
-      - name: mimir-modules
-        mountPath: /etc/alloy/modules
+    # ConfigMap settings inside the upstream Alloy chart's 'alloy' block
+    configMap:
+      create: false
+      name: alloy
+
+    # Default mounts
+    mounts:
+      # metrics-only: disable host log mounts
+      varlog: false
+      dockercontainers: false
 
 kube-state-metrics:
   # Q: Why fullname override?
