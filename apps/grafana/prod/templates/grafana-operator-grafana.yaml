@@ -3,10 +3,16 @@
 apiVersion: grafana.integreatly.org/v1beta1
 kind: Grafana
 metadata:
-  name: {{ $grafanaOperatorCRs.instance.name }}
+  name: {{ $grafanaOperatorCRs.instance.name | quote }}
   labels:
 {{- toYaml $grafanaOperatorCRs.instance.labels | nindent 4 }}
 spec:
+{{- if $grafanaOperatorCRs.instance.external }}
   external:
 {{- toYaml $grafanaOperatorCRs.instance.external | nindent 4 }}
+{{- end }}
+{{- if $grafanaOperatorCRs.instance.client }}
+  client:
+{{- toYaml $grafanaOperatorCRs.instance.client | nindent 4 }}
+{{- end }}
 {{- end }}
