@@ -100,7 +100,8 @@ Bitte hier das Architekturdiagramm ablegen/aktualisieren:
 - `docs/architecture-observability.png`
 
 Kurzbeschreibung (aktuell):
-- App -> OpenTelemetry Collector -> Mimir (spaeter Tempo/Loki) -> Grafana.
+- App -> OpenTelemetry Collector/Alloy -> Mimir (spaeter Tempo/Loki) -> Grafana.
+- Siehe [Alloy General Know-How](alloy/general-know-how.md) und [Current Implementation](alloy/current-implementation.md).
 
 ## Betrieb und Support
 
