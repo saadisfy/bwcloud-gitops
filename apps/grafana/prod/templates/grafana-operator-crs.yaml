@@ -105,7 +105,7 @@ spec:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaContactPoint
 metadata:
-  name: {{ $cp.name }}
+  name: {{ $cp.name | quote }}
 spec:
   instanceSelector:
 {{- toYaml $selector | nindent 4 }}
@@ -116,7 +116,7 @@ spec:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicy
 metadata:
-  name: {{ $np.name }}
+  name: {{ $np.name | quote }}
 spec:
   instanceSelector:
 {{- toYaml $selector | nindent 4 }}

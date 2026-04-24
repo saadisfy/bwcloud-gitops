@@ -65,11 +65,11 @@ grafanaOperatorCRs:
       - name: "Infrastruktur"
         title: "Infrastruktur"
   contactPoints:
-    - name: "null"
+    - name: "default-contact-point"
       spec:
         # Dummy contact point
         receivers: []
   notificationPolicies:
     - name: "root"
       spec:
-        receiver: "null"
+        receiver: "default-contact-point"
