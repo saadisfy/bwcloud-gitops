@@ -15,38 +15,6 @@ alloy:
   #    discovery and operations stable across releases.
   fullnameOverride: alloy
 
-  # Q: Why keep custom settings under alloyExample?
-  # A: This is a wrapper-local config block used to template River config values
-  #    (cluster name, scrape timings, Mimir endpoint) in one place.
-  alloyExample:
-    # Q: Why set clusterName?
-    # A: Adds a stable cluster label so metrics stay distinguishable in multi-
-    #    cluster queries and dashboards.
-    clusterName: prod-cluster
-    # Q: Why scrape every 30s?
-    # A: Good balance between freshness and load for infra metrics.
-    scrapeInterval: 30s
-    # Q: Why timeout 10s?
-    # A: Timeout stays below interval to avoid overlapping scrapes and to fail
-    #    fast on slow/unhealthy targets.
-    scrapeTimeout: 10s
-    # Optional: restrict cAdvisor metrics to specific namespaces per cluster.
-    # Empty = keep all namespaces.
-    # Example: mimir|loki|tempo|grafana|alloy
-    cadvisorNamespaceAllowlistRegex: ""
-    mimir:
-      # Q: Why use OTLP endpoint?
-      # A: We forward metrics through OTel exporter semantics (vendor-neutral
-      #    path) instead of a backend-specific write protocol.
-      endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
-      # Q: Why orgID as string?
-      # A: Mimir tenant header expects a string value for X-Scope-OrgID.
-      orgID: "1"
-      # Q: Why insecure=true?
-      # A: Simplifies in-cluster bootstrap. In hardened prod, switch to proper
-      #    TLS verification and certificates.
-      insecure: true
-
   controller:
     # Q: Why daemonset mode?
     # A: Runs one Alloy per node for node-local scraping and simple rollout,
@@ -91,6 +59,15 @@ alloy:
       create: false
       name: alloy-config
       key: config.alloy
+
+    # Mount the modular Mimir scrape configuration.
+    extraVolumes:
+      - name: mimir-modules
+        configMap:
+          name: alloy-mimir-modules
+    extraVolumeMounts:
+      - name: mimir-modules
+        mountPath: /etc/alloy/modules
 
 kube-state-metrics:
   # Q: Why fullname override?

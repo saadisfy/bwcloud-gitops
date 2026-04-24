@@ -5,9 +5,3 @@
 alloy:
   controller:
     type: daemonset
-  alloyExample:
-    clusterName: prod-bwcloud
-    mimir:
-      endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
-      orgID: "1"
-      insecure: true
