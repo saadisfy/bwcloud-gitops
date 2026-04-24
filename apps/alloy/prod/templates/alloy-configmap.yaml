@@ -191,14 +191,12 @@ data:
     }
 
     // ---------------------------------------------------------------
-    // Sink – OTelCol OTLP exporter to Mimir distributor.
+    // Sink – OTelCol OTLP/HTTP exporter to Mimir distributor.
+    // Mimir recommended path is OTLP over HTTP to port 8080.
     // ---------------------------------------------------------------
-    otelcol.exporter.otlp "mimir" {
+    otelcol.exporter.otlphttp "mimir" {
       client {
-        endpoint = "mimir-distributor.mimir.svc.cluster.local:4317"
-        tls {
-          insecure = true
-        }
+        endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
         headers = {
           "X-Scope-OrgID" = "1",
         }
@@ -209,7 +207,7 @@ data:
     // Instantiation
     // ---------------------------------------------------------------
     otelcol_k8s_enrich "global" {
-      forward_to = [otelcol.exporter.otlp.mimir.input]
+      forward_to = [otelcol.exporter.otlphttp.mimir.input]
     }
 
     otelcol_mimir_scrape "default" {
