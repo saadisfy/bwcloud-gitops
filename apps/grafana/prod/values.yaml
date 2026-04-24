@@ -62,7 +62,7 @@ grafanaOperatorCRs:
   # Mandatory alerting configuration for the operator
   alerting:
     folders:
-      - name: "Infrastruktur"
+      - name: "infrastruktur"
         title: "Infrastruktur"
   contactPoints:
     - name: "default-contact-point"
@@ -72,4 +72,5 @@ grafanaOperatorCRs:
   notificationPolicies:
     - name: "root"
       spec:
-        receiver: "default-contact-point"
+        route:
+          receiver: "default-contact-point"

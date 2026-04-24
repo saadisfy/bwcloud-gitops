@@ -34,6 +34,7 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
+          - ServerSideApply=true
         managedNamespaceMetadata:
           labels:
             argocd.argoproj.io/managed-by: argocd
