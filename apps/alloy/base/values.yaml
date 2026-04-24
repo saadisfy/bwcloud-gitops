@@ -31,7 +31,13 @@ alloy:
     # A: Exposes Alloy HTTP endpoint for health/debug/operations if needed.
     enabled: true
 
+  # Upstream Alloy chart values
   alloy:
+    # Q: Why disable configMap creation?
+    # A: We provide our own custom ConfigMap named 'alloy' in templates/alloy-configmap.yaml.
+    configMap:
+      create: false
+
     extraArgs:
       # Q: What does this do?
       # A: Disables Alloy's anonymous usage reporting. It does NOT disable
@@ -51,14 +57,6 @@ alloy:
         memory: 192Mi
       limits:
         memory: 512Mi
-
-    configMap:
-      # Q: Why external ConfigMap instead of inline content in values?
-      # A: Keeps the River config in a dedicated template file where wrapper-level
-      #    values can be used directly and maintained more cleanly.
-      create: false
-      name: alloy-config
-      key: config.alloy
 
     # Mount the modular Mimir scrape configuration.
     extraVolumes:

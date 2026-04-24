@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: alloy-config
+  name: alloy
   namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: alloy
@@ -10,21 +10,6 @@ data:
   config.alloy: |-
     // =================================================================
     // Alloy config – modular via River `declare` blocks and imports.
-    //
-    // Layout:
-    //   - declare "otelcol_k8s_enrich"      : OTelCol-native k8s label enrichment
-    //   - declare "otelcol_alloy_scrape"    : Alloy self-metrics scrape (OTelCol)
-    //   - import.file "mimir"               : Load Mimir scrape modules from volume
-    //   - otelcol.exporter.otlp "mimir"     : single sink, sets resource attributes (cluster)
-    //   - <module> "default" { ... }        : instantiation / wiring
-    //
-    // Convention:
-    //   * Static, environment-wide resource attributes (cluster, k8s_cluster_name)
-    //     live ONCE on otelcol.exporter.otlp.resource.
-    //   * Per-target k8s attributes (namespace, pod, node, container,
-    //     service, k8s_*) live ONCE in otelcol.processor.k8sattributes.
-    //   * Scrape modules only do: keep-filters + job label + app-specific
-    //     labels (e.g. `component` for Mimir).
     // =================================================================
 
     logging {
@@ -34,13 +19,10 @@ data:
 
     // ---------------------------------------------------------------
     // Module: otelcol_k8s_enrich
-    // OTelCol-native k8sattributes processor for resource enrichment.
-    // Applies both Prometheus and OTel semantic conventions.
     // ---------------------------------------------------------------
     declare "otelcol_k8s_enrich" {
-      argument "input" {
-        comment = "Input pipeline for metrics."
-      }
+      argument "input" {}
+
       otelcol.processor.k8sattributes "enrich" {
         inputs = [argument.input.value]
         extract {
@@ -57,7 +39,6 @@ data:
 
     // ---------------------------------------------------------------
     // Import: Mimir Scrape Modules
-    // Loads the otelcol_mimir_scrape module from the mounted ConfigMap.
     // ---------------------------------------------------------------
     import.file "mimir" {
       filename = "/etc/alloy/modules/mimir-modules.river"
@@ -65,12 +46,9 @@ data:
 
     // ---------------------------------------------------------------
     // Module: otelcol_alloy_scrape
-    // OTelCol-native scrape for Alloy self-metrics, with k8s enrichment.
     // ---------------------------------------------------------------
     declare "otelcol_alloy_scrape" {
-      argument "forward_to" {
-        comment = "List of OTelCol exporters to forward metrics to."
-      }
+      argument "forward_to" {}
       argument "namespace" {
         optional = true
         default  = "alloy"
@@ -89,34 +67,27 @@ data:
       }
 
       otelcol.receiver.prometheus "alloy" {
-        config {
-          scrape_configs = [{
-            job_name        = "alloy"
-            kubernetes_sd_configs = [{
-              role = "endpoints"
-              namespaces = { names = [argument.namespace.value] }
-            }]
-            relabel_configs = [
-              {
-                source_labels = ["__meta_kubernetes_service_name"]
-                regex         = argument.service_name.value
-                action        = "keep"
-              },
-              {
-                source_labels = ["__meta_kubernetes_endpoint_port_name"]
-                regex         = "http-metrics"
-                action        = "keep"
-              },
-              {
-                target_label = "job"
-                replacement  = "alloy"
-                action       = "replace"
-              }
-            ]
-            scrape_interval = argument.scrape_interval.value
-            scrape_timeout  = argument.scrape_timeout.value
-          }]
-        }
+        config = <<-EOT
+          scrape_configs:
+            - job_name: alloy
+              kubernetes_sd_configs:
+                - role: endpoints
+                  namespaces:
+                    names:
+                      - ${argument.namespace.value}
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_service_name]
+                  regex: ${argument.service_name.value}
+                  action: keep
+                - source_labels: [__meta_kubernetes_endpoint_port_name]
+                  regex: http-metrics
+                  action: keep
+                - target_label: job
+                  replacement: alloy
+                  action: replace
+              scrape_interval: ${argument.scrape_interval.value}
+              scrape_timeout: ${argument.scrape_timeout.value}
+        EOT
       }
 
       otelcol_k8s_enrich "alloy" {
@@ -129,11 +100,7 @@ data:
     }
 
     // ---------------------------------------------------------------
-    // Sink – OTelCol OTLP exporter to Mimir distributor (tenant "1").
-    //
-    // Static, environment-wide resource attributes live here (NOT in scrape modules),
-    // so adding a new module never duplicates them and switching cluster
-    // is a one-line change. Both Prom and OTel conventions are emitted.
+    // Sink – OTelCol OTLP exporter to Mimir distributor.
     // ---------------------------------------------------------------
     otelcol.exporter.otlp "mimir" {
       client {
@@ -142,19 +109,19 @@ data:
           insecure = true
         }
         headers = {
-          "X-Scope-OrgID" = "1"
+          "X-Scope-OrgID" = "1",
         }
-        resource {
-          attributes = {
-            cluster          = "prod-bwcloud"
-            k8s_cluster_name = "prod-bwcloud"
-          }
+      }
+      resource {
+        attributes = {
+          cluster          = "prod-bwcloud",
+          k8s_cluster_name = "prod-bwcloud",
         }
       }
     }
 
     // ---------------------------------------------------------------
-    // Instantiation – wire modules to the OTelCol OTLP exporter sink.
+    // Instantiation
     // ---------------------------------------------------------------
     mimir.otelcol_mimir_scrape "default" {
       forward_to = [otelcol.exporter.otlp.mimir.input]
