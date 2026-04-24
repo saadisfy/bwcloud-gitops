@@ -211,6 +211,14 @@ data:
 
       discovery.relabel "kubelet" {
         targets = discovery.kubernetes.nodes.targets
+        
+        // Filter: each Alloy pod only scrapes its OWN node to avoid duplication.
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          regex         = sys.env("K8S_NODE_NAME")
+          action        = "keep"
+        }
+
         rule {
           target_label = "job"
           replacement  = "kubelet"
@@ -231,9 +239,9 @@ data:
           target_label = "__scheme__"
           replacement  = "https"
         }
+        // Use InternalIP for reliable connectivity
         rule {
-          source_labels = ["__address__"]
-          regex         = "(.*)(:\\d+)?"
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
           target_label  = "__address__"
           replacement   = "${1}:10250"
         }
@@ -248,9 +256,6 @@ data:
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           insecure_skip_verify = true
-        }
-        clustering {
-          enabled = true
         }
       }
 
@@ -282,6 +287,14 @@ data:
 
       discovery.relabel "cadvisor" {
         targets = discovery.kubernetes.nodes.targets
+
+        // Filter: each Alloy pod only scrapes its OWN node to avoid duplication.
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          regex         = sys.env("K8S_NODE_NAME")
+          action        = "keep"
+        }
+
         rule {
           target_label = "job"
           replacement  = "cadvisor"
@@ -303,14 +316,14 @@ data:
           replacement  = "https"
         }
         rule {
-          source_labels = ["__address__"]
-          regex         = "(.*)(:\\d+)?"
-          target_label  = "__address__"
-          replacement   = "${1}:10250"
-        }
-        rule {
           target_label = "__metrics_path__"
           replacement  = "/metrics/cadvisor"
+        }
+        // Use InternalIP for reliable connectivity
+        rule {
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
         }
       }
 
@@ -323,9 +336,6 @@ data:
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           insecure_skip_verify = true
-        }
-        clustering {
-          enabled = true
         }
       }
 
