@@ -73,8 +73,11 @@ grafanaOperatorCRs:
   contactPoints:
     - name: "default-contact-point"
       spec:
-        # Dummy contact point
-        receivers: []
+        receivers:
+          - disableResolveMessage: false
+            type: email
+            settings:
+              addresses: "dummy@example.com"
   notificationPolicies:
     - name: "root"
       spec:
