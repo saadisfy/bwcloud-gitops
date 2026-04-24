@@ -196,7 +196,7 @@ data:
     // ---------------------------------------------------------------
     otelcol.exporter.otlphttp "mimir" {
       client {
-        endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
+        endpoint = "http://mimir-gateway.mimir.svc.cluster.local/otlp"
         headers = {
           "X-Scope-OrgID" = "1",
         }
