@@ -23,8 +23,7 @@ metadata:
   name: {{ $folder.name }}
 spec:
   instanceSelector:
-    matchLabels:
-{{- toYaml $selector | nindent 6 }}
+{{- toYaml $selector | nindent 4 }}
   title: {{ default $folder.name $folder.title | quote }}
 ---
 {{- range $group := ($folder.groups | default (list)) }}
@@ -34,8 +33,7 @@ metadata:
   name: {{ printf "%s-%s" $folder.name $group.name | trunc 63 | trimSuffix "-" }}
 spec:
   instanceSelector:
-    matchLabels:
-{{- toYaml $selector | nindent 6 }}
+{{- toYaml $selector | nindent 4 }}
   name: {{ default $group.name $group.title | quote }}
   folderRef: {{ $folder.name }}
   interval: {{ default "1m" $group.interval }}
@@ -110,8 +108,7 @@ metadata:
   name: {{ $cp.name }}
 spec:
   instanceSelector:
-    matchLabels:
-{{- toYaml $selector | nindent 6 }}
+{{- toYaml $selector | nindent 4 }}
 {{- toYaml $cp.spec | nindent 2 }}
 ---
 {{- end }}
@@ -122,8 +119,7 @@ metadata:
   name: {{ $np.name }}
 spec:
   instanceSelector:
-    matchLabels:
-{{- toYaml $selector | nindent 6 }}
+{{- toYaml $selector | nindent 4 }}
 {{- toYaml $np.spec | nindent 2 }}
 ---
 {{- end }}

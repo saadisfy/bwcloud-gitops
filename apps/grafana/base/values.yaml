@@ -56,3 +56,19 @@ grafana:
       memory: 128Mi
     limits:
       memory: 256Mi
+
+# Default values for Grafana Operator Custom Resources
+grafanaOperatorCRs:
+  enabled: false
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  instance:
+    name: grafana
+    labels:
+      dashboards: grafana
+    external:
+      url: https://grafana.saadisfy.me
+      adminPasswordSecret:
+        name: grafana
+        key: admin-password

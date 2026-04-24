@@ -40,8 +40,36 @@ grafana:
       client_id: $__env{GF_AUTH_GITHUB_CLIENT_ID}
       client_secret: $__env{GF_AUTH_GITHUB_CLIENT_SECRET}
 
-# Operator CRs are not configured for prod yet.
-# Keep this key defined so templates that check .Values.grafanaOperatorCRs.enabled
-# do not fail with nil-pointer errors during Argo CD rendering.
+# Operator CRs configuration
 grafanaOperatorCRs:
   enabled: true
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  instance:
+    name: grafana
+    labels:
+      dashboards: grafana
+    external:
+      url: https://grafana.saadisfy.me
+      # The operator needs to know how to log in to the external Grafana instance
+      # to provision dashboards. It uses the admin password from the secret
+      # created by the Grafana Helm chart.
+      adminPasswordSecret:
+        name: grafana
+        key: admin-password
+
+  # Mandatory alerting configuration for the operator
+  alerting:
+    folders:
+      - name: "Infrastruktur"
+        title: "Infrastruktur"
+  contactPoints:
+    - name: "null"
+      spec:
+        # Dummy contact point
+        receivers: []
+  notificationPolicies:
+    - name: "root"
+      spec:
+        receiver: "null"

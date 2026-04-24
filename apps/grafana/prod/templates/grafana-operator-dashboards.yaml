@@ -37,8 +37,7 @@ metadata:
   name: {{ $safeFolderName }}
 spec:
   instanceSelector:
-    matchLabels:
-{{- toYaml $selector | nindent 6 }}
+{{- toYaml $selector | nindent 4 }}
   title: {{ $folderTitle | quote }}
   {{- if $parentRef }}
   parentFolderRef: {{ $parentRef }}
@@ -70,8 +69,7 @@ metadata:
   name: {{ $resourceName }}
 spec:
   instanceSelector:
-    matchLabels:
-{{- toYaml $selector | nindent 6 }}
+{{- toYaml $selector | nindent 4 }}
   folderRef: {{ $safeFolderName }}
   configMapRef:
     name: {{ $resourceName }}
