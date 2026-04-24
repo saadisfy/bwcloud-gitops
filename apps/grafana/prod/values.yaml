@@ -44,4 +44,4 @@ grafana:
 # Keep this key defined so templates that check .Values.grafanaOperatorCRs.enabled
 # do not fail with nil-pointer errors during Argo CD rendering.
 grafanaOperatorCRs:
-  enabled: false
+  enabled: true
