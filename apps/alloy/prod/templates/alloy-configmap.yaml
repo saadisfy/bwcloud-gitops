@@ -191,6 +191,152 @@ data:
     }
 
     // ---------------------------------------------------------------
+    // Module: otelcol_kubelet_scrape
+    // OTelCol-native scrape for Kubelet metrics.
+    // ---------------------------------------------------------------
+    declare "otelcol_kubelet_scrape" {
+      argument "forward_to" {}
+      argument "scrape_interval" {
+        optional = true
+        default  = "30s"
+      }
+      argument "scrape_timeout" {
+        optional = true
+        default  = "10s"
+      }
+
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
+
+      discovery.relabel "kubelet" {
+        targets = discovery.kubernetes.nodes.targets
+        rule {
+          target_label = "job"
+          replacement  = "kubelet"
+        }
+        rule {
+          target_label = "cluster"
+          replacement  = "prod-bwcloud"
+        }
+        rule {
+          target_label = "k8s_cluster_name"
+          replacement  = "prod-bwcloud"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          target_label = "__scheme__"
+          replacement  = "https"
+        }
+        rule {
+          source_labels = ["__address__"]
+          regex         = "(.*)(:\\d+)?"
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
+        }
+      }
+
+      prometheus.scrape "kubelet" {
+        targets    = discovery.relabel.kubelet.output
+        forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
+        scrape_interval = argument.scrape_interval.value
+        scrape_timeout  = argument.scrape_timeout.value
+
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          insecure_skip_verify = true
+        }
+        clustering {
+          enabled = true
+        }
+      }
+
+      otelcol.receiver.prometheus "kubelet" {
+        output {
+          metrics = [argument.forward_to.value]
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
+    // Module: otelcol_cadvisor_scrape
+    // OTelCol-native scrape for cAdvisor metrics.
+    // ---------------------------------------------------------------
+    declare "otelcol_cadvisor_scrape" {
+      argument "forward_to" {}
+      argument "scrape_interval" {
+        optional = true
+        default  = "30s"
+      }
+      argument "scrape_timeout" {
+        optional = true
+        default  = "10s"
+      }
+
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
+
+      discovery.relabel "cadvisor" {
+        targets = discovery.kubernetes.nodes.targets
+        rule {
+          target_label = "job"
+          replacement  = "cadvisor"
+        }
+        rule {
+          target_label = "cluster"
+          replacement  = "prod-bwcloud"
+        }
+        rule {
+          target_label = "k8s_cluster_name"
+          replacement  = "prod-bwcloud"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          target_label = "__scheme__"
+          replacement  = "https"
+        }
+        rule {
+          source_labels = ["__address__"]
+          regex         = "(.*)(:\\d+)?"
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
+        }
+        rule {
+          target_label = "__metrics_path__"
+          replacement  = "/metrics/cadvisor"
+        }
+      }
+
+      prometheus.scrape "cadvisor" {
+        targets    = discovery.relabel.cadvisor.output
+        forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
+        scrape_interval = argument.scrape_interval.value
+        scrape_timeout  = argument.scrape_timeout.value
+
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          insecure_skip_verify = true
+        }
+        clustering {
+          enabled = true
+        }
+      }
+
+      otelcol.receiver.prometheus "cadvisor" {
+        output {
+          metrics = [argument.forward_to.value]
+        }
+      }
+    }
+
+    // ---------------------------------------------------------------
     // Sink – OTelCol OTLP/HTTP exporter to Mimir distributor.
     // Mimir recommended path is OTLP over HTTP to port 8080.
     // ---------------------------------------------------------------
@@ -215,5 +361,13 @@ data:
     }
 
     otelcol_alloy_scrape "default" {
+      forward_to = otelcol_k8s_enrich.global.input
+    }
+
+    otelcol_kubelet_scrape "default" {
+      forward_to = otelcol_k8s_enrich.global.input
+    }
+
+    otelcol_cadvisor_scrape "default" {
       forward_to = otelcol_k8s_enrich.global.input
     }
