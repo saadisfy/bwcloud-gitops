@@ -73,6 +73,12 @@ grafanaOperatorCRs:
   contactPoints:
     - name: "default-contact-point"
       spec:
+        # Using deprecated top-level fields for compatibility
+        type: email
+        disableResolveMessage: false
+        settings:
+          addresses: "dummy@example.com"
+        # Keep receivers list just in case
         receivers:
           - disableResolveMessage: false
             type: email
