@@ -58,7 +58,13 @@ flowchart LR
 - **ServiceMonitor-First**: Infrastrukturmetriken werden bevorzugt über ServiceMonitor-Discovery erfasst.
 - **Node-Local Scraping**: Für Node-Metriken (Kubelet/cAdvisor) nutzt jeder Alloy-Pod die **InternalIP** und filtert über `sys.env("K8S_NODE_NAME")`, um Duplikate zu vermeiden.
 
-### 2.3 Kubernetes Label Enrichment & Pod Association
+### 2.3 Reliable Labeling Strategy
+Um sicherzustellen, dass alle Metriken (auch statische wie `cortex_build_info`) über das `namespace` Label filterbar sind, nutzen wir eine zweistufige Strategie:
+
+1.  **Explizites Discovery-Relabeling**: Jedes Scrape-Modul (Mimir, Alloy, Kubelet) erzeugt die Labels `namespace` und `pod` direkt aus den Kubernetes-Metadaten (`__meta_kubernetes_namespace`). Dies ist die zuverlässigste Methode für Prometheus-Scrapes.
+2.  **OTel Processor Enrichment**: Der globale `otelcol_k8s_enrich` Block reichert alle Signale zusätzlich mit OTel-Attributen an und mappt diese via `transform`-Prozessor auf die Legacy-Namen.
+
+### 2.4 Advanced Label Enrichment & Pod Association
 Die Anreicherung erfolgt zentral im Modul `otelcol_k8s_enrich`. Ein kritischer Teil dabei ist die **Pod Association**, also die Logik, wie eine Metrik einem konkreten Pod zugeordnet wird.
 
 #### Pod Association Strategien
@@ -71,7 +77,7 @@ Wir nutzen aktuell die **Connection**-Strategie, da sie für Prometheus-Scrapes 
 | **pod_name** | Sucht den Pod explizit über ein Label oder Attribut, das den Namen enthält. | Legacy-Szenarien oder spezielle Identifier. |
 
 #### Legacy Label Mapping (Compatibility)
-Da viele Community-Dashboards (z. B. für cAdvisor) die Standard-Prometheus-Labels (`namespace`, `pod`, `container`) erwarten, mappt Alloy die OTel-Semantic-Conventions automatisch um:
+Da viele Community-Dashboards (z. B. für cAdvisor) die Standard-Prometheus-Labels (`namespace`, `pod`, `container`) erwarten, mappt Alloy die OTel-Semantic-Conventions automatisch um. Dies erfolgt über einen `otelcol.processor.transform` Block mit dem Feld `metric_statements`:
 - `k8s.namespace.name` -> `namespace`
 - `k8s.pod.name` -> `pod`
 - `k8s.container.name` -> `container`
@@ -120,6 +126,12 @@ flowchart LR
   QR -- "Fetch" --> ING & SG
   SG -.-> FS
 ```
+
+### 3.2 Operational Know-How
+- **Multi-Tenancy**: Mimir benötigt den `X-Scope-OrgID` Header (aktuell auf `"1"` gesetzt).
+- **Storage**: In diesem Setup wird das lokale Dateisystem (`filesystem`) statt S3 genutzt, um den Ressourcenverbrauch minimal zu halten.
+- **Retention**: Die Aufbewahrungsdauer der Metriken ist aktuell auf **1 Tag (24h)** konfiguriert (`compactor_blocks_retention_period: 24h`). Dies dient dazu, den Speicherverbrauch auf dem lokalen Filesystem gering zu halten.
+- **Cardinality Management**: Hohe Cardinality (viele unique Labels) führt zu hohem RAM-Verbrauch. Nutze die untenstehenden Queries zur Analyse.
 
 ---
 
