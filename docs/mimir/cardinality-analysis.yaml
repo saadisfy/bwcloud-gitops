@@ -1,0 +1,12 @@
+analysis:
+  generated_at: ""
+  tenant: "anonymous"
+  base_url: "http://127.0.0.1:8080/prometheus"
+  source:
+    cardinality_endpoint_available: false
+    endpoints_used: []
+  top_label_names: []
+  top_label_values_by_label: {}
+  recommendations: []
+  notes:
+    - "Template-Datei: morgen durch Agent befüllen"
