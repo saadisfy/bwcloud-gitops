@@ -74,7 +74,7 @@ data:
             "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
             "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil",
             "set(attributes[\"k8s_node_name\"], resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil",
-            "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil"
+            "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
           ]
         }
 
@@ -104,10 +104,15 @@ data:
           deployment_name_from_replicaset = true
         }
         pod_association {
-          source { from = "resource_attribute" name = "k8s.pod.ip" }
+          source {
+            from = "resource_attribute"
+            name = "k8s.pod.ip"
+          }
         }
         pod_association {
-          source { from = "connection" }
+          source {
+            from = "connection"
+          }
         }
       }
 
