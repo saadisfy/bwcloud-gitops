@@ -133,57 +133,14 @@ data:
     // PHASE 1: RECEIVE (Target-Specific Scrapes)
     // ===============================================================
 
-    // --- Module: Mimir Scrape ---
-    declare "otelcol_mimir_scrape" {
-      argument "forward_to" {}
-      argument "namespace" {
-        optional = true
-        default  = "mimir"
-      }
+    // --- ServiceMonitors (e.g. for Mimir Components) ---
+    prometheus.operator.servicemonitors "cluster" {
+      forward_to = [otelcol.receiver.prometheus.servicemonitors.receiver]
+    }
 
-      discovery.kubernetes "endpoints" {
-        role = "endpoints"
-        namespaces {
-          names = [argument.namespace.value]
-        }
-      }
-
-      discovery.relabel "mimir" {
-        targets = discovery.kubernetes.endpoints.targets
-        
-        rule {
-          source_labels = ["__meta_kubernetes_service_name"]
-          regex         = "mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?"
-          action        = "keep"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex         = "http-metrics|legacy-http-metrics"
-          action        = "keep"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_pod_ip"]
-          target_label  = "k8s_pod_ip" 
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
-          target_label  = "component"
-        }
-        rule {
-          target_label = "job"
-          replacement  = "mimir"
-        }
-      }
-
-      prometheus.scrape "mimir" {
-        targets    = discovery.relabel.mimir.output
-        forward_to = [otelcol.receiver.prometheus.mimir.receiver]
-      }
-
-      otelcol.receiver.prometheus "mimir" {
-        output {
-          metrics = argument.forward_to.value
-        }
+    otelcol.receiver.prometheus "servicemonitors" {
+      output {
+        metrics = [otelcol.processor.memory_limiter.default.input]
       }
     }
 
@@ -240,7 +197,9 @@ data:
       }
     }
 
-    // --- Module: Kubelet Scrape ---
+    /*
+    // --- Example Module: Kubelet Scrape ---
+    // (Kept as a blueprint for manual API-Server proxied node scrapes)
     declare "otelcol_kubelet_scrape" {
       argument "forward_to" {}
 
@@ -285,6 +244,7 @@ data:
         }
       }
     }
+    */
 
     // --- Module: cAdvisor Scrape ---
     declare "otelcol_cadvisor_scrape" {
@@ -438,17 +398,15 @@ data:
     // INSTANTIATION
     // ===============================================================
 
-    otelcol_mimir_scrape "default" {
-      forward_to = [otelcol.processor.memory_limiter.default.input]
-    }
-
     otelcol_alloy_scrape "default" {
       forward_to = [otelcol.processor.memory_limiter.default.input]
     }
 
+    /*
     otelcol_kubelet_scrape "default" {
       forward_to = [otelcol.processor.memory_limiter.default.input]
     }
+    */
 
     otelcol_cadvisor_scrape "default" {
       forward_to = [otelcol.processor.memory_limiter.default.input]
