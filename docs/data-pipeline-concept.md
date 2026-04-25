@@ -21,7 +21,7 @@ Hier definieren wir nur, *was* gesammelt wird und welche *absolut spezifischen* 
 
 **Zuständigkeiten:**
 *   `discovery.kubernetes`: Finden der Endpunkte (Pods, Nodes).
-*   `discovery.relabel`: Setzen der absoluten Basis-Labels (`job`, `instance`) und **Wichtig:** Sichern der Ziel-IP (`__address__`) als OTel-Resource-Attribut `k8s.pod.ip` für die spätere Anreicherung.
+*   `discovery.relabel`: Setzen der absoluten Basis-Labels (`job`, `instance`). **Wichtig für Pod-Scrapes:** Sichern der Ziel-IP (`__meta_kubernetes_pod_ip`) als sichtbares Label `k8s_pod_ip` (ohne doppelte Unterstriche `__`, da diese sonst von Prometheus gedroppt werden) für die spätere Anreicherung.
 *   `prometheus.scrape`: Ausführen des eigentlichen Scrapes (nur für Pull-basierte Targets).
 *   `otelcol.receiver.otlp`: Empfangen von Push-Metriken (z.B. von der Java-App).
 
@@ -35,13 +35,15 @@ Hier laufen alle Metriken aller Targets zusammen. Dies ist der "Single Point of 
     Der wichtigste Prozessor. Wenn Mimir kurz ausfällt, stauen sich Metriken im Arbeitsspeicher von Alloy. Ohne diesen Limiter stürzt Alloy durch OOM (Out Of Memory) ab. Er droppt im Notfall Metriken, um die Pipeline am Leben zu halten.
 2.  **Resource Attribute Enrichment (`otelcol.processor.k8sattributes`)**: 
     Hängt fehlende Kubernetes-Metadaten (Namespace, Pod-Name, Deployment-Name) an. Der Prozessor nutzt einen Multi-Source-Ansatz zur **Pod Association**:
-    *   **Pull-Targets**: Nutzt das in Phase 1 gesetzte Attribut `k8s.pod.ip`. (Die `connection` funktioniert hier *nicht*, da sie die IP von Alloy selbst wäre).
+    *   **Pull-Targets (Pods)**: Nutzt das in Phase 1 gesetzte, sichtbare Attribut `k8s_pod_ip`.
     *   **Push-Targets**: Nutzt als Fallback die Quell-IP der eingehenden Verbindung (`connection`).
+    *   *Achtung:* Node-Level Targets (wie Kubelet/cAdvisor) durchlaufen diese Pod-Association nicht oder nutzen den Node-Namen als Identifier, da sie keine Pod-IPs haben.
     *   *Achtung:* Damit der Deployment-Name aufgelöst wird, muss `deployment_name_from_replicaset = true` explizit konfiguriert sein.
 3.  **Cluster Name Injection (`otelcol.processor.resource`)**:
     Da die Kube-API den Namen des Clusters selbst nicht kennt, wird `k8s.cluster.name` hier hart (oder via Environment Variable) für alle Signale injiziert.
 4.  **Legacy Label Mapping (`otelcol.processor.transform`)**: 
-    Nutzt OTTL, um die OTel-spezifischen Attribute in die Welt der klassischen Prometheus-Dashboards zu spiegeln (z.B. `k8s.namespace.name` zu `namespace`).
+    Nutzt OTTL im **Datapoint-Kontext**, um OTel Resource Attributes sicher in klassische Prometheus-Metrik-Labels (Datapoints) zu promoten.
+    *   *Design Entscheidung zur Label-Duplizierung:* Wir behalten bewusst beide Formate (OTel und Prometheus-Legacy) parallel. Zwar bedeutet dies ca. 30-50% mehr Label-Overhead in Mimir, jedoch sichert es maximale Kompatibilität "out-of-the-box" für bestehende Community-Dashboards, ohne dass komplexe Recording Rules gepflegt werden müssen.
 5.  **Performance (`otelcol.processor.batch`)**:
     Bündelt tausende kleine Datenpunkte in große Pakete, bevor sie gesendet werden. Reduziert die Netzwerk- und CPU-Last auf Mimir drastisch.
 
@@ -68,8 +70,10 @@ Das nennt man **Pod Association**. Wir nutzen zwei Strategien:
 
 *   **Bei OTLP-Push (Java App):**
     Die App kennt zwar via Downward API ihren Pod-Namen, aber nicht ihren Owner (Deployment) oder ihre Node-Labels. Der K8s-Prozessor agiert hier als **vertrauenswürdige zentrale Instanz**: Er nimmt die Quell-IP der Java-App (`connection`), identifiziert den Pod sicher in seinem lokalen API-Cache und reichert den gesamten fehlenden Kontext konsistent an.
-*   **Bei Prometheus-Scrapes (Alloy Pull):**
-    Wenn Alloy selbst scrapt, ist die Netzwerk-Verbindung (`connection`) die von Alloy, nicht die des Targets. Daher müssen wir im `discovery.relabel` Block die IP des Targets (`__address__`) als temporäres Attribut `k8s.pod.ip` speichern. Der `k8sattributes` Prozessor liest dieses Attribut (`resource_attribute`) und findet so den korrekten Pod in der API.
+*   **Bei Prometheus-Scrapes (Alloy Pull - Pod Level):**
+    Wenn Alloy selbst Pods scrapt, ist die Netzwerk-Verbindung (`connection`) die von Alloy, nicht die des Targets. Daher müssen wir im `discovery.relabel` Block die IP des Targets (`__meta_kubernetes_pod_ip`) als temporäres Attribut `k8s_pod_ip` speichern. Der `k8sattributes` Prozessor liest dieses Attribut (`resource_attribute`) und findet so den korrekten Pod in der API.
+*   **Bei Node-Scrapes (Kubelet/cAdvisor):**
+    Nodes haben keine Pod-IP. Hier wird im Target direkt der Node-Name ausgelesen (`__meta_kubernetes_node_name`) und diese Metriken erfordern keine Pod-Association durch den `k8sattributes` Prozessor.
 
 ---
 
@@ -107,15 +111,15 @@ otelcol.processor.batch "default" {
   timeout         = "5s"
 }
 
-// 4. Spiegeln der Labels für Prometheus-Kompatibilität
+// 4. Spiegeln der Labels für Prometheus-Kompatibilität (Datapoint Context!)
 otelcol.processor.transform "mirror_legacy_labels" {
   output { metrics = [otelcol.processor.batch.default.input] }
   metric_statements {
-    context = "resource"
+    context = "datapoint"
     statements = [
-      "set(attributes[\"namespace\"], attributes[\"k8s.namespace.name\"])",
-      "set(attributes[\"cluster\"], attributes[\"k8s.cluster.name\"])",
-      "set(attributes[\"pod\"], attributes[\"k8s.pod.name\"])",
+      "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"])",
+      "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])",
+      "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])",
     ]
   }
 }
@@ -139,7 +143,7 @@ otelcol.processor.k8sattributes "global_enrich" {
   }
   pod_association {
     // Priorität 1: Für gescrapte Targets (IP wird von Phase 1 propagiert)
-    source { from = "resource_attribute" name = "k8s.pod.ip" }
+    source { from = "resource_attribute" name = "k8s_pod_ip" }
   }
   pod_association {
     // Priorität 2: Fallback für OTLP-Push
@@ -166,24 +170,33 @@ otelcol.receiver.otlp "default" {
 // === PHASE 1: RECEIVE (TARGET-SPEZIFISCH) ===
 // ==========================================
 
-// --- Target: Kubelet ---
-discovery.kubernetes "nodes" { role = "node" }
-discovery.relabel "kubelet" { 
-  targets = discovery.kubernetes.nodes.targets
-  // WICHTIG: Sichern der IP für Pod-Association in Phase 2
+// --- Target: App Scrape (Pod Level) ---
+discovery.kubernetes "pods" { role = "pod" }
+discovery.relabel "app" { 
+  targets = discovery.kubernetes.pods.targets
+  // WICHTIG: Sichern der IP OHNE Doppel-Underscore für Pod-Association in Phase 2
   rule {
-    source_labels = ["__meta_kubernetes_node_address_InternalIP"]
-    target_label  = "__k8s_pod_ip__" 
+    source_labels = ["__meta_kubernetes_pod_ip"]
+    target_label  = "k8s_pod_ip" 
   }
-  rule { target_label = "job"; replacement = "kubelet" }
+  rule { target_label = "job"; replacement = "my-app" }
 }
 
-prometheus.scrape "kubelet" {
-  targets    = discovery.relabel.kubelet.output
-  forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
+prometheus.scrape "app" {
+  targets    = discovery.relabel.app.output
+  forward_to = [prometheus.relabel.drop_ip.receiver]
 }
 
-otelcol.receiver.prometheus "kubelet" {
+// Optional: Hilfslabel nach dem Scrape wieder entfernen, bevor es zu OTel geht
+prometheus.relabel "drop_ip" {
+  forward_to = [otelcol.receiver.prometheus.app.receiver]
+  rule {
+    action = "labeldrop"
+    regex  = "k8s_pod_ip"
+  }
+}
+
+otelcol.receiver.prometheus "app" {
   output { metrics = [otelcol.processor.memory_limiter.default.input] }
 }
 ```
@@ -235,15 +248,15 @@ flowchart TB
 
 #### 1. Discovery & Scraping (Die "Fühler")
 *   **`discovery.kubernetes`**: Spricht mit dem K8s-API-Server, um IP-Adressen von Pods oder Nodes zu finden.
-*   **`discovery.relabel`**: Filtert die gefundenen Ziele und sichert die Target-IP in `__k8s_pod_ip__`, was später zum Resource-Attribut `k8s.pod.ip` wird.
+*   **`discovery.relabel`**: Filtert die gefundenen Ziele und sichert die Target-IP in `k8s_pod_ip`, was später vom K8s-Prozessor genutzt wird.
 *   **`prometheus.scrape`**: Der eigentliche "Staubsauger", der die `/metrics` Endpunkte abfragt.
 *   **`otelcol.receiver.prometheus`**: Ein Übersetzer. Er nimmt die Prometheus-Daten und wandelt sie in das interne OpenTelemetry-Format (OTel) um.
 
 #### 2. Central Processing (Die "Fabrik")
 *   **`otelcol.processor.memory_limiter`**: Der Lebensretter. Ohne ihn crasht Alloy bei Backend-Ausfällen.
-*   **`otelcol.processor.k8sattributes`**: Die Intelligenz-Zentrale. Er nimmt die `k8s.pod.ip` (Pull) oder die `connection` IP (Push), schaut im K8s-Cache nach und fügt die "Resource Attributes" (Deployment, ReplicaSet, Labels) hinzu. Erfordert RBAC.
+*   **`otelcol.processor.k8sattributes`**: Die Intelligenz-Zentrale. Er nimmt die `k8s_pod_ip` (Pull) oder die `connection` IP (Push), schaut im K8s-Cache nach und fügt die "Resource Attributes" (Deployment, ReplicaSet, Labels) hinzu. Erfordert RBAC.
 *   **`otelcol.processor.resource`**: Injiziert harte Werte wie den `k8s.cluster.name`.
-*   **`otelcol.processor.transform`**: Der Label-Spiegler. Er nutzt OTTL, um aus dem OTel-Attribut `k8s.namespace.name` das klassische Prometheus-Label `namespace` zu kopieren.
+*   **`otelcol.processor.transform`**: Der Label-Spiegler. Er nutzt OTTL, um aus dem OTel-Attribut `k8s.namespace.name` das klassische Prometheus-Label `namespace` auf Datapoint-Ebene zu kopieren.
 *   **`otelcol.processor.batch`**: Der Paketdienst. Bündelt hunderte Einzelmetriken in kompakte HTTP-Requests.
 
 #### 3. Export (Der "Versand")
