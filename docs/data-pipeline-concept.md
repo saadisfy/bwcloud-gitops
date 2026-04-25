@@ -111,22 +111,30 @@ otelcol.processor.batch "default" {
   timeout         = "5s"
 }
 
-// 4. Spiegeln der Labels für Prometheus-Kompatibilität (Datapoint Context!)
+// 5. Spiegeln der Labels für Prometheus-Kompatibilität & Cleanup
 otelcol.processor.transform "mirror_legacy_labels" {
   output { metrics = [otelcol.processor.batch.default.input] }
+  
+  // Block 1: Datapoint-Kontext – Labels promoten
   metric_statements {
     context = "datapoint"
     statements = [
       "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"])",
       "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])",
       "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])",
-      // Aufräumen: Hilfsattribut entfernen, damit es nicht in Mimir landet
-      "delete(resource.attributes[\"k8s_pod_ip\"])",
+    ]
+  }
+
+  // Block 2: Resource-Kontext – Hilfsattribut aufräumen
+  metric_statements {
+    context = "resource"
+    statements = [
+      "delete_key(attributes, \"k8s_pod_ip\")",
     ]
   }
 }
 
-// 3. Cluster-Name statisch injizieren
+// 4. Cluster-Name statisch injizieren
 otelcol.processor.resource "inject_cluster" {
   output { metrics = [otelcol.processor.transform.mirror_legacy_labels.input] }
   attributes {
@@ -136,7 +144,7 @@ otelcol.processor.resource "inject_cluster" {
   }
 }
 
-// 2. K8s Metadaten anreichern (Single Point of Truth)
+// 3. K8s Metadaten anreichern (Single Point of Truth)
 otelcol.processor.k8sattributes "global_enrich" {
   output { metrics = [otelcol.processor.resource.inject_cluster.input] }
   extract {
@@ -144,8 +152,7 @@ otelcol.processor.k8sattributes "global_enrich" {
     deployment_name_from_replicaset = true
   }
   pod_association {
-    // Priorität 1: Für gescrapte Targets (IP wird von Phase 1 propagiert)
-    // Hinweis: Im Alloy UI prüfen, ob otelcol.receiver.prometheus dies schon als k8s.pod.ip propagiert.
+    // Priorität 1: Für gescrapte Targets (IP wird von promote_pod_ip propagiert)
     source { from = "resource_attribute" name = "k8s_pod_ip" }
   }
   pod_association {
@@ -154,9 +161,23 @@ otelcol.processor.k8sattributes "global_enrich" {
   }
 }
 
+// 2. Vorstufe: Metrik-Label als Resource Attribute hochziehen (vor k8sattributes!)
+otelcol.processor.transform "promote_pod_ip" {
+  output { metrics = [otelcol.processor.k8sattributes.global_enrich.input] }
+  metric_statements {
+    context = "datapoint"
+    statements = [
+      // Datapoint-Attribut -> Resource-Attribut kopieren
+      "set(resource.attributes[\"k8s_pod_ip\"], attributes[\"k8s_pod_ip\"])",
+      // Original auf Datapoint-Ebene entfernen
+      "delete_key(attributes, \"k8s_pod_ip\")",
+    ]
+  }
+}
+
 // 1. Memory Limiter (OOM Schutz)
 otelcol.processor.memory_limiter "default" {
-  output { metrics = [otelcol.processor.k8sattributes.global_enrich.input] }
+  output { metrics = [otelcol.processor.transform.promote_pod_ip.input] }
   check_interval  = "1s"
   limit_mib       = 512
   spike_limit_mib = 128
