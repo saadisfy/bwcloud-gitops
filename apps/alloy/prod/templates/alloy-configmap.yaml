@@ -21,10 +21,6 @@ data:
     // PHASE 3: EXPORT
     // ===============================================================
 
-    local.file_match "queue_storage" {
-      path_targets = [{"__path__" = "/tmp/alloy/queue"}]
-    }
-
     otelcol.exporter.otlphttp "mimir" {
       client {
         endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
@@ -35,7 +31,6 @@ data:
       sending_queue {
         enabled    = true
         queue_size = 5000
-        storage    = local.file_match.queue_storage.targets[0] 
       }
       retry_on_failure {
         enabled          = true
@@ -130,8 +125,8 @@ data:
     otelcol.processor.memory_limiter "default" {
       output { metrics = [otelcol.processor.transform.promote_pod_ip.input] }
       check_interval  = "1s"
-      limit_mib       = 400
-      spike_limit_mib = 100
+      limit           = "400MiB"
+      spike_limit     = "100MiB"
     }
 
     // ===============================================================
