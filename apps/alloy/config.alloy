@@ -1,197 +1,464 @@
-// Q: Why logfmt + info?
-// A: Readable operational logs with moderate verbosity.
-logging {
-  level  = "info"
-  format = "logfmt"
-}
+name: alloy
+namespace: {{ .Release.Namespace }}
+labels:
+  app.kubernetes.io/name: alloy
+  app.kubernetes.io/part-of: alloy-wrapper
+config.alloy: |-
+  // =================================================================
+  // Alloy config – modular architecture (Receive -> Process -> Export)
+  // =================================================================
 
-// Q: Why use otelcol.receiver.prometheus?
-// A: Scrapes Prometheus targets but feeds into OTel pipeline components,
-//    keeping exporter path vendor-neutral.
-otelcol.receiver.prometheus "kubernetes" {
-  config = <<-EOT
-        global:
-          scrape_interval: 30s
-          scrape_timeout: 10s
-
-        scrape_configs:
-          - job_name: kube-state-metrics
-            kubernetes_sd_configs:
-              - role: endpoints
-                namespaces:
-                  #    in this example deployment.
-                  names: ["default"]
-            relabel_configs:
-              # Q: Why keep only kube-state-metrics service?
-              # A: Prevents scraping unrelated endpoints discovered in same ns.
-              - source_labels: [__meta_kubernetes_service_name]
-                action: keep
-                regex: kube-state-metrics
-              # Q: Why allow multiple port-name variants?
-              # A: Improves chart compatibility across small naming
-              #    differences (http/http-metrics/metrics).
-              - source_labels: [__meta_kubernetes_endpoint_port_name]
-                action: keep
-                regex: http|http-metrics|metrics
-              # Q: Why map to namespace/pod labels?
-              # A: Keep both compatibility sets: Prometheus-style labels for
-              #    community dashboards and k8s_* labels for vendor-neutral
-              #    attribute-style usage.
-              - source_labels: [__meta_kubernetes_namespace]
-                target_label: namespace
-              - source_labels: [__meta_kubernetes_namespace]
-                target_label: k8s_namespace_name
-              - source_labels: [__meta_kubernetes_pod_name]
-                target_label: pod
-              - source_labels: [__meta_kubernetes_pod_name]
-                target_label: k8s_pod_name
-              # Q: Why add cluster label?
-              # A: Add both cluster and k8s_cluster_name for dual-label
-              #    compatibility.
-              - target_label: cluster
-                replacement: prod-bwcloud
-              - target_label: k8s_cluster_name
-                replacement: prod-bwcloud
-            metric_relabel_configs:
-              # Q: Why drop uid/annotation labels?
-              # A: Reduces high-cardinality dimensions and time series growth.
-              - action: labeldrop
-                regex: pod_uid|uid|annotation_.*
-
-          # Q: Why dedicated node-exporter job?
-          # A: Collects node-level host metrics exposed by node-exporter.
-          - job_name: node-exporter
-            kubernetes_sd_configs:
-              - role: endpoints
-                namespaces:
-                  names: ["default"]
-            relabel_configs:
-              # Q: Why keep only node-exporter service + metrics port?
-              # A: Avoids accidental endpoint ingestion and keeps target set
-              #    deterministic.
-              - source_labels: [__meta_kubernetes_service_name]
-                action: keep
-                regex: node-exporter
-              - source_labels: [__meta_kubernetes_endpoint_port_name]
-                action: keep
-                regex: metrics
-              # Q: Why normalize to namespace/pod/node labels?
-              # A: Preserve Prometheus labels and also add k8s_* mirror labels
-              #    so both query styles are possible.
-              - source_labels: [__meta_kubernetes_namespace]
-                target_label: namespace
-              - source_labels: [__meta_kubernetes_namespace]
-                target_label: k8s_namespace_name
-              - source_labels: [__meta_kubernetes_pod_name]
-                target_label: pod
-              - source_labels: [__meta_kubernetes_pod_name]
-                target_label: k8s_pod_name
-              - source_labels: [__meta_kubernetes_pod_node_name]
-                target_label: node
-              - source_labels: [__meta_kubernetes_pod_node_name]
-                target_label: k8s_node_name
-              - target_label: cluster
-                replacement: prod-bwcloud
-              - target_label: k8s_cluster_name
-                replacement: prod-bwcloud
-            metric_relabel_configs:
-              # Q: Why drop container/image IDs here too?
-              # A: Prevents cardinality spikes from highly volatile labels.
-              - action: labeldrop
-                regex: pod_uid|uid|container_id|image_id|annotation_.*
-
-          # Q: Why scrape kubelet through API server proxy?
-          # A: Works reliably from pod network and uses service-account auth.
-          - job_name: kubelet
-            scheme: https
-            kubernetes_sd_configs:
-              - role: node
-            # Q: Why bearer token + CA file?
-            # A: Uses in-cluster credentials for authenticated Kubernetes API
-            #    access.
-            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-            tls_config:
-              # Q: Why insecure_skip_verify true?
-              # A: Simplifies bootstrap; tighten with proper trust chain in
-              #    hardened environments.
-              insecure_skip_verify: true
-              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            relabel_configs:
-              # Q: Why force address to kubernetes.default.svc:443?
-              # A: Requests go through API server, not directly to node IPs.
-              - target_label: __address__
-                replacement: kubernetes.default.svc:443
-              # Q: Why rewrite metrics path with node name?
-              # A: API server node proxy path requires /nodes/<name>/proxy/...
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: __metrics_path__
-                regex: (.+)
-                replacement: /api/v1/nodes/$1/proxy/metrics
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: node
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: k8s_node_name
-              - target_label: cluster
-                replacement: prod-bwcloud
-              - target_label: k8s_cluster_name
-                replacement: prod-bwcloud
-
-          # Q: Why separate cadvisor job?
-          # A: cAdvisor endpoint gives container/runtime utilization metrics.
-          - job_name: cadvisor
-            scheme: https
-            kubernetes_sd_configs:
-              - role: node
-            bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
-            tls_config:
-              insecure_skip_verify: true
-              ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-            relabel_configs:
-              - target_label: __address__
-                replacement: kubernetes.default.svc:443
-              # Q: Why cadvisor-specific proxy path?
-              # A: kubelet exposes cadvisor metrics on /metrics/cadvisor.
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: __metrics_path__
-                regex: (.+)
-                replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: node
-              - source_labels: [__meta_kubernetes_node_name]
-                target_label: k8s_node_name
-              - target_label: cluster
-                replacement: prod-bwcloud
-              - target_label: k8s_cluster_name
-                replacement: prod-bwcloud
-  EOT
-
-  output {
-    // Q: Why send receiver output to batch processor first?
-    // A: Batching improves export efficiency and smooths transient load.
-    metrics = [otelcol.processor.batch.default.input]
+  logging {
+    level  = "info"
+    format = "logfmt"
   }
-}
 
-// Keep one canonical key set (`namespace`, `pod`, `node`) to avoid
-// duplicate dimensions with both Prometheus-style and OTel-style labels.
-// TODO(Observability): When Gateway is introduced, move label governance
-// and multi-backend routing to the gateway pipeline.
-otelcol.processor.batch "default" {
-  output {
-    // Q: Why OTLPHTTP exporter target instead of backend-specific one?
-    // A: Keeps the egress path OTel-native and easier to repoint later.
-    metrics = [otelcol.exporter.otlphttp.mimir.input]
+  // ===============================================================
+  // PHASE 3: EXPORT
+  // ===============================================================
+
+  local.file_match "queue_storage" {
+    path_targets = [{"__path__" = "/tmp/alloy/queue"}]
   }
-}
 
-otelcol.exporter.otlphttp "mimir" {
-  client {
-    // Q: Why endpoint/header/tls from values?
-    // A: Environment-specific backend settings remain externalized.
-    endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
-    headers  = { "X-Scope-OrgID" = "1" }
-    tls {
-      insecure = true
+  otelcol.exporter.otlphttp "mimir" {
+    client {
+      endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
+      headers = {
+        "X-Scope-OrgID" = "1",
+      }
+    }
+    sending_queue {
+      enabled    = true
+      queue_size = 5000
+      storage    = local.file_match.queue_storage.targets[0] 
+    }
+    retry_on_failure {
+      enabled          = true
+      max_elapsed_time = "5m"
     }
   }
-}
+
+  // ===============================================================
+  // PHASE 2: PROCESS (Central Enrichment & Label Mapping)
+  // ===============================================================
+
+  declare "otelcol_pipeline_process" {
+    argument "forward_to" {}
+
+    // 6. Batching
+    otelcol.processor.batch "default" {
+      output { metrics = [argument.forward_to.value] }
+      send_batch_size = 1024
+      timeout         = "5s"
+    }
+
+    // 5. Mirror Legacy Labels and Cleanup
+    otelcol.processor.transform "mirror_legacy_labels" {
+      output { metrics = [otelcol.processor.batch.default.input] }
+      
+      metric_statements {
+        context = "datapoint"
+        statements = [
+          "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"])",
+          "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])",
+          "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])",
+          "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"])",
+          "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])",
+        ]
+      }
+
+      metric_statements {
+        context = "resource"
+        statements = [
+          "delete_key(attributes, \"k8s.pod.ip\")",
+        ]
+      }
+    }
+
+    // 4. Inject Cluster Name
+    otelcol.processor.resource "inject_cluster" {
+      output { metrics = [otelcol.processor.transform.mirror_legacy_labels.input] }
+      attributes {
+        action = "insert"
+        key    = "k8s.cluster.name"
+        value  = "prod-bwcloud"
+      }
+    }
+
+    // 3. K8s Attributes Enrichment
+    otelcol.processor.k8sattributes "global_enrich" {
+      output { metrics = [otelcol.processor.resource.inject_cluster.input] }
+      extract {
+        metadata = ["k8s.namespace.name", "k8s.pod.name", "k8s.node.name", "k8s.deployment.name", "k8s.container.name"]
+        deployment_name_from_replicaset = true
+      }
+      pod_association {
+        source { from = "resource_attribute" name = "k8s.pod.ip" }
+      }
+      pod_association {
+        source { from = "connection" }
+      }
+    }
+
+    // 2. Promote Pod IP to Resource Level
+    otelcol.processor.transform "promote_pod_ip" {
+      output { metrics = [otelcol.processor.k8sattributes.global_enrich.input] }
+      metric_statements {
+        context = "datapoint"
+        statements = [
+          "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
+          "delete_key(attributes, \"k8s_pod_ip\") where attributes[\"k8s_pod_ip\"] != nil",
+        ]
+      }
+    }
+
+    // 1. Memory Limiter (OOM Schutz) Limit: 400 MiB (80% of 512 MiB limit)
+    otelcol.processor.memory_limiter "default" {
+      output { metrics = [otelcol.processor.transform.promote_pod_ip.input] }
+      check_interval  = "1s"
+      limit_mib       = 400
+      spike_limit_mib = 100
+    }
+
+    export "input" {
+      value = otelcol.processor.memory_limiter.default.input
+    }
+  }
+
+  // ===============================================================
+  // PHASE 1: RECEIVE (Target-Specific Scrapes)
+  // ===============================================================
+
+  // --- Module: Mimir Scrape ---
+  declare "otelcol_mimir_scrape" {
+    argument "forward_to" {}
+    argument "namespace" {
+      optional = true
+      default  = "mimir"
+    }
+
+    discovery.kubernetes "endpoints" {
+      role = "endpoints"
+      namespaces {
+        names = [argument.namespace.value]
+      }
+    }
+
+    discovery.relabel "mimir" {
+      targets = discovery.kubernetes.endpoints.targets
+      
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        regex         = "mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_endpoint_port_name"]
+        regex         = "http-metrics|legacy-http-metrics"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_ip"]
+        target_label  = "k8s_pod_ip" 
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
+        target_label  = "component"
+      }
+      rule {
+        target_label = "job"
+        replacement  = "mimir"
+      }
+    }
+
+    prometheus.scrape "mimir" {
+      targets    = discovery.relabel.mimir.output
+      forward_to = [otelcol.receiver.prometheus.mimir.receiver]
+    }
+
+    otelcol.receiver.prometheus "mimir" {
+      output {
+        metrics = [argument.forward_to.value]
+      }
+    }
+  }
+
+  // --- Module: Alloy Scrape ---
+  declare "otelcol_alloy_scrape" {
+    argument "forward_to" {}
+    argument "namespace" {
+      optional = true
+      default  = "alloy"
+    }
+    argument "service_name" {
+      optional = true
+      default  = "alloy"
+    }
+
+    discovery.kubernetes "endpoints" {
+      role = "endpoints"
+      namespaces {
+        names = [argument.namespace.value]
+      }
+    }
+
+    discovery.relabel "alloy" {
+      targets = discovery.kubernetes.endpoints.targets
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        regex         = argument.service_name.value
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_endpoint_port_name"]
+        regex         = "http-metrics"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_ip"]
+        target_label  = "k8s_pod_ip" 
+      }
+      rule {
+        target_label = "job"
+        replacement  = "alloy"
+      }
+    }
+
+    prometheus.scrape "alloy" {
+      targets    = discovery.relabel.alloy.output
+      forward_to = [otelcol.receiver.prometheus.alloy.receiver]
+    }
+
+    otelcol.receiver.prometheus "alloy" {
+      output {
+        metrics = [argument.forward_to.value]
+      }
+    }
+  }
+
+  // --- Module: Kubelet Scrape ---
+  declare "otelcol_kubelet_scrape" {
+    argument "forward_to" {}
+
+    discovery.kubernetes "nodes" {
+      role = "node"
+    }
+
+    discovery.relabel "kubelet" {
+      targets = discovery.kubernetes.nodes.targets
+      rule {
+        source_labels = ["__meta_kubernetes_node_name"]
+        regex         = sys.env("HOSTNAME")
+        action        = "keep"
+      }
+      rule {
+        target_label = "job"
+        replacement  = "kubelet"
+      }
+      rule {
+        target_label = "__scheme__"
+        replacement  = "https"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+        target_label  = "__address__"
+        replacement   = "${1}:10250"
+      }
+    }
+
+    prometheus.scrape "kubelet" {
+      targets    = discovery.relabel.kubelet.output
+      forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
+      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      tls_config {
+        insecure_skip_verify = true
+      }
+    }
+
+    otelcol.receiver.prometheus "kubelet" {
+      output {
+        metrics = [argument.forward_to.value]
+      }
+    }
+  }
+
+  // --- Module: cAdvisor Scrape ---
+  declare "otelcol_cadvisor_scrape" {
+    argument "forward_to" {}
+
+    discovery.kubernetes "nodes" {
+      role = "node"
+    }
+
+    discovery.relabel "cadvisor" {
+      targets = discovery.kubernetes.nodes.targets
+      rule {
+        source_labels = ["__meta_kubernetes_node_name"]
+        regex         = sys.env("HOSTNAME")
+        action        = "keep"
+      }
+      rule {
+        target_label = "job"
+        replacement  = "cadvisor"
+      }
+      rule {
+        target_label = "__scheme__"
+        replacement  = "https"
+      }
+      rule {
+        target_label = "__metrics_path__"
+        replacement  = "/metrics/cadvisor"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+        target_label  = "__address__"
+        replacement   = "${1}:10250"
+      }
+    }
+
+    prometheus.scrape "cadvisor" {
+      targets    = discovery.relabel.cadvisor.output
+      forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
+      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      tls_config {
+        insecure_skip_verify = true
+      }
+    }
+
+    otelcol.receiver.prometheus "cadvisor" {
+      output {
+        metrics = [argument.forward_to.value]
+      }
+    }
+  }
+
+  // --- Module: Kube-State-Metrics Scrape ---
+  declare "otelcol_ksm_scrape" {
+    argument "forward_to" {}
+    argument "namespace" {
+      optional = true
+      default  = "alloy"
+    }
+
+    discovery.kubernetes "endpoints" {
+      role = "endpoints"
+      namespaces {
+        names = [argument.namespace.value]
+      }
+    }
+
+    discovery.relabel "ksm" {
+      targets = discovery.kubernetes.endpoints.targets
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        regex         = "(alloy-)?kube-state-metrics"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_endpoint_port_name"]
+        regex         = "http|http-metrics"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_ip"]
+        target_label  = "k8s_pod_ip" 
+      }
+      rule {
+        target_label = "job"
+        replacement  = "kube-state-metrics"
+      }
+    }
+
+    prometheus.scrape "ksm" {
+      targets    = discovery.relabel.ksm.output
+      forward_to = [otelcol.receiver.prometheus.ksm.receiver]
+    }
+
+    otelcol.receiver.prometheus "ksm" {
+      output {
+        metrics = [argument.forward_to.value]
+      }
+    }
+  }
+
+  // --- Module: Node-Exporter Scrape ---
+  declare "otelcol_node_exporter_scrape" {
+    argument "forward_to" {}
+    argument "namespace" {
+      optional = true
+      default  = "alloy"
+    }
+
+    discovery.kubernetes "endpoints" {
+      role = "endpoints"
+      namespaces {
+        names = [argument.namespace.value]
+      }
+    }
+
+    discovery.relabel "node_exporter" {
+      targets = discovery.kubernetes.endpoints.targets
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        regex         = "(alloy-)?(prometheus-)?node-exporter"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_endpoint_port_name"]
+        regex         = "metrics|http-metrics"
+        action        = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_ip"]
+        target_label  = "k8s_pod_ip" 
+      }
+      rule {
+        target_label = "job"
+        replacement  = "node-exporter"
+      }
+    }
+
+    prometheus.scrape "node_exporter" {
+      targets    = discovery.relabel.node_exporter.output
+      forward_to = [otelcol.receiver.prometheus.node_exporter.receiver]
+    }
+
+    otelcol.receiver.prometheus "node_exporter" {
+      output {
+        metrics = [argument.forward_to.value]
+      }
+    }
+  }
+
+  // ===============================================================
+  // INSTANTIATION
+  // ===============================================================
+
+  otelcol_pipeline_process "global" {
+    forward_to = otelcol.exporter.otlphttp.mimir.input
+  }
+
+  otelcol_mimir_scrape "default" {
+    forward_to = otelcol_pipeline_process.global.input
+  }
+
+  otelcol_alloy_scrape "default" {
+    forward_to = otelcol_pipeline_process.global.input
+  }
+
+  otelcol_kubelet_scrape "default" {
+    forward_to = otelcol_pipeline_process.global.input
+  }
+
+  otelcol_cadvisor_scrape "default" {
+    forward_to = otelcol_pipeline_process.global.input
+  }
+
+  otelcol_ksm_scrape "default" {
+    forward_to = otelcol_pipeline_process.global.input
+  }
+
+  otelcol_node_exporter_scrape "default" {
+    forward_to = otelcol_pipeline_process.global.input
+  }

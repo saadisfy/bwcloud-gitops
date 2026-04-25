@@ -18,58 +18,115 @@ data:
     }
 
     // ===============================================================
+    // PHASE 3: EXPORT
+    // ===============================================================
+
+    local.file_match "queue_storage" {
+      path_targets = [{"__path__" = "/tmp/alloy/queue"}]
+    }
+
+    otelcol.exporter.otlphttp "mimir" {
+      client {
+        endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
+        headers = {
+          "X-Scope-OrgID" = "1",
+        }
+      }
+      sending_queue {
+        enabled    = true
+        queue_size = 5000
+        storage    = local.file_match.queue_storage.targets[0] 
+      }
+      retry_on_failure {
+        enabled          = true
+        max_elapsed_time = "5m"
+      }
+    }
+
+    // ===============================================================
     // PHASE 2: PROCESS (Central Enrichment & Label Mapping)
     // ===============================================================
 
     declare "otelcol_pipeline_process" {
       argument "forward_to" {}
 
-      // 1. Enrich with Kubernetes Metadata
-      otelcol.processor.k8sattributes "enrich" {
-        output {
-          metrics = [otelcol.processor.transform.mirror_labels.input]
-        }
-        extract {
-          metadata = [
-            "k8s.namespace.name",
-            "k8s.pod.name",
-            "k8s.container.name",
-            "k8s.node.name",
-            "k8s.deployment.name",
-            "k8s.statefulset.name",
-            "k8s.daemonset.name",
-            "k8s.cronjob.name",
-            "k8s.job.name",
-          ]
-        }
-        pod_association {
-          source {
-            from = "connection"
-          }
-        }
+      // 6. Batching
+      otelcol.processor.batch "default" {
+        output { metrics = [argument.forward_to.value] }
+        send_batch_size = 1024
+        timeout         = "5s"
       }
 
-      // 2. Mirror OTel attributes to legacy Prometheus labels for dashboard compatibility
-      otelcol.processor.transform "mirror_labels" {
-        error_mode = "ignore"
-        output {
-          metrics = argument.forward_to.value
+      // 5. Mirror Legacy Labels and Cleanup
+      otelcol.processor.transform "mirror_legacy_labels" {
+        output { metrics = [otelcol.processor.batch.default.input] }
+        
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"])",
+            "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])",
+            "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])",
+            "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"])",
+            "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])",
+          ]
         }
+
         metric_statements {
           context = "resource"
           statements = [
-            "set(attributes[\"namespace\"], attributes[\"k8s.namespace.name\"]) where attributes[\"k8s.namespace.name\"] != nil",
-            "set(attributes[\"pod\"], attributes[\"k8s.pod.name\"]) where attributes[\"k8s.pod.name\"] != nil",
-            "set(attributes[\"container\"], attributes[\"k8s.container.name\"]) where attributes[\"k8s.container.name\"] != nil",
-            "set(attributes[\"node\"], attributes[\"k8s.node.name\"]) where attributes[\"k8s.node.name\"] != nil",
-            "set(attributes[\"cluster\"], \"prod-bwcloud\")",
-            "set(attributes[\"k8s_cluster_name\"], \"prod-bwcloud\")",
+            "delete_key(attributes, \"k8s.pod.ip\")",
           ]
         }
       }
 
+      // 4. Inject Cluster Name
+      otelcol.processor.resource "inject_cluster" {
+        output { metrics = [otelcol.processor.transform.mirror_legacy_labels.input] }
+        attributes {
+          action = "insert"
+          key    = "k8s.cluster.name"
+          value  = "prod-bwcloud"
+        }
+      }
+
+      // 3. K8s Attributes Enrichment
+      otelcol.processor.k8sattributes "global_enrich" {
+        output { metrics = [otelcol.processor.resource.inject_cluster.input] }
+        extract {
+          metadata = ["k8s.namespace.name", "k8s.pod.name", "k8s.node.name", "k8s.deployment.name", "k8s.container.name"]
+          deployment_name_from_replicaset = true
+        }
+        pod_association {
+          source { from = "resource_attribute" name = "k8s.pod.ip" }
+        }
+        pod_association {
+          source { from = "connection" }
+        }
+      }
+
+      // 2. Promote Pod IP to Resource Level
+      otelcol.processor.transform "promote_pod_ip" {
+        output { metrics = [otelcol.processor.k8sattributes.global_enrich.input] }
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
+            "delete_key(attributes, \"k8s_pod_ip\") where attributes[\"k8s_pod_ip\"] != nil",
+          ]
+        }
+      }
+
+      // 1. Memory Limiter (OOM Schutz) Limit: 400 MiB (80% of 512 MiB limit)
+      otelcol.processor.memory_limiter "default" {
+        output { metrics = [otelcol.processor.transform.promote_pod_ip.input] }
+        check_interval  = "1s"
+        limit_mib       = 400
+        spike_limit_mib = 100
+      }
+
       export "input" {
-        value = otelcol.processor.k8sattributes.enrich.input
+        value = otelcol.processor.memory_limiter.default.input
       }
     }
 
@@ -104,6 +161,10 @@ data:
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
           regex         = "http-metrics|legacy-http-metrics"
           action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip" 
         }
         rule {
           source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
@@ -159,6 +220,10 @@ data:
           action        = "keep"
         }
         rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip" 
+        }
+        rule {
           target_label = "job"
           replacement  = "alloy"
         }
@@ -188,7 +253,7 @@ data:
         targets = discovery.kubernetes.nodes.targets
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
-          regex         = sys.env("K8S_NODE_NAME")
+          regex         = sys.env("HOSTNAME")
           action        = "keep"
         }
         rule {
@@ -234,7 +299,7 @@ data:
         targets = discovery.kubernetes.nodes.targets
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
-          regex         = sys.env("K8S_NODE_NAME")
+          regex         = sys.env("HOSTNAME")
           action        = "keep"
         }
         rule {
@@ -300,6 +365,10 @@ data:
           action        = "keep"
         }
         rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip" 
+        }
+        rule {
           target_label = "job"
           replacement  = "kube-state-metrics"
         }
@@ -345,6 +414,10 @@ data:
           action        = "keep"
         }
         rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip" 
+        }
+        rule {
           target_label = "job"
           replacement  = "node-exporter"
         }
@@ -363,24 +436,11 @@ data:
     }
 
     // ===============================================================
-    // PHASE 3: EXPORT (Sink)
-    // ===============================================================
-
-    otelcol.exporter.otlphttp "mimir" {
-      client {
-        endpoint = "http://mimir-gateway.mimir.svc.cluster.local/otlp"
-        headers = {
-          "X-Scope-OrgID" = "1",
-        }
-      }
-    }
-
-    // ===============================================================
     // INSTANTIATION
     // ===============================================================
 
     otelcol_pipeline_process "global" {
-      forward_to = [otelcol.exporter.otlphttp.mimir.input]
+      forward_to = otelcol.exporter.otlphttp.mimir.input
     }
 
     otelcol_mimir_scrape "default" {

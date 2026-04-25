@@ -23,17 +23,15 @@ alloy:
 
   rbac:
     # Q: Why create RBAC?
-    # A: Needed for Kubernetes discovery and kubelet/cadvisor access via API.
+    # A: Needed for Kubernetes discovery and kubelet/cadvisor access via API,
+    #    as well as k8sattributes processor for Pod association.
     create: true
     clusterRules:
       - apiGroups: [""]
-        resources: ["nodes"]
+        resources: ["nodes", "nodes/proxy", "nodes/metrics", "namespaces", "pods"]
         verbs: ["get", "list", "watch"]
-      - apiGroups: [""]
-        resources: ["nodes/pods"]
-        verbs: ["get", "list", "watch"]
-      - apiGroups: [""]
-        resources: ["nodes/metrics"]
+      - apiGroups: ["apps"]
+        resources: ["replicasets", "deployments"]
         verbs: ["get", "list", "watch"]
       - nonResourceURLs: ["/metrics", "/metrics/cadvisor"]
         verbs: ["get"]
