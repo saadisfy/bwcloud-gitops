@@ -7,6 +7,12 @@ mimir-distributed:
   global:
     podAnnotations:
       reloader.stakater.com/auto: "true"
+  metaMonitoring:
+    serviceMonitor:
+      enabled: true
+      labels:
+        app.kubernetes.io/part-of: mimir
+      clusterLabel: prod-bwcloud
   gateway:
     enabledNonEnterprise: true
     replicas: 1
