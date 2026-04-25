@@ -33,18 +33,22 @@ Hier laufen alle Metriken aller Targets zusammen. Dies ist der "Single Point of 
 **Zuständigkeiten (in strikter Ausführungsreihenfolge):**
 1.  **Stabilität (`otelcol.processor.memory_limiter`)**:
     Der wichtigste Prozessor. Wenn Mimir kurz ausfällt, stauen sich Metriken im Arbeitsspeicher von Alloy. Ohne diesen Limiter stürzt Alloy durch OOM (Out Of Memory) ab. Er droppt im Notfall Metriken, um die Pipeline am Leben zu halten.
-2.  **Resource Attribute Enrichment (`otelcol.processor.k8sattributes`)**: 
+2.  **Vorbereitung zur Pod-Association (`otelcol.processor.transform.promote_pod_ip`)**:
+    Ein essenzieller Zwischenschritt für Pull-Targets: Prometheus-Scrapes erzeugen Metrik-Labels (sog. Datapoint Attributes). Der nachfolgende K8s-Prozessor sucht sein Assoziations-Attribut aber auf der höheren Resource-Ebene. Hier ziehen wir das in Phase 1 gesicherte Label `k8s_pod_ip` via OTTL sicher auf die Resource-Ebene hoch.
+3.  **Resource Attribute Enrichment (`otelcol.processor.k8sattributes`)**: 
     Hängt fehlende Kubernetes-Metadaten (Namespace, Pod-Name, Deployment-Name) an. Der Prozessor nutzt einen Multi-Source-Ansatz zur **Pod Association**:
-    *   **Pull-Targets (Pods)**: Nutzt das in Phase 1 gesetzte, sichtbare Attribut `k8s_pod_ip`.
+    *   **Pull-Targets (Pods)**: Nutzt das nun durch Schritt 2 als Resource Attribute verfügbare `k8s_pod_ip`.
     *   **Push-Targets**: Nutzt als Fallback die Quell-IP der eingehenden Verbindung (`connection`).
     *   *Achtung:* Node-Level Targets (wie Kubelet/cAdvisor) durchlaufen diese Pod-Association nicht oder nutzen den Node-Namen als Identifier, da sie keine Pod-IPs haben.
     *   *Achtung:* Damit der Deployment-Name aufgelöst wird, muss `deployment_name_from_replicaset = true` explizit konfiguriert sein.
-3.  **Cluster Name Injection (`otelcol.processor.resource`)**:
+4.  **Cluster Name Injection (`otelcol.processor.resource`)**:
     Da die Kube-API den Namen des Clusters selbst nicht kennt, wird `k8s.cluster.name` hier hart (oder via Environment Variable) für alle Signale injiziert.
-4.  **Legacy Label Mapping (`otelcol.processor.transform`)**: 
-    Nutzt OTTL im **Datapoint-Kontext**, um OTel Resource Attributes sicher in klassische Prometheus-Metrik-Labels (Datapoints) zu promoten.
+5.  **Legacy Label Mapping & Cleanup (`otelcol.processor.transform`)**: 
+    Nutzt OTTL in zwei Kontexten:
+    *   **Datapoint-Kontext**: Um OTel Resource Attributes sicher in klassische Prometheus-Metrik-Labels (Datapoints) zu promoten.
+    *   **Resource-Kontext**: Um das temporäre Hilfsattribut `k8s_pod_ip` via `delete_key` sicher zu löschen, damit es nicht im Backend landet.
     *   *Design Entscheidung zur Label-Duplizierung:* Wir behalten bewusst beide Formate (OTel und Prometheus-Legacy) parallel. Zwar bedeutet dies ca. 30-50% mehr Label-Overhead in Mimir, jedoch sichert es maximale Kompatibilität "out-of-the-box" für bestehende Community-Dashboards, ohne dass komplexe Recording Rules gepflegt werden müssen.
-5.  **Performance (`otelcol.processor.batch`)**:
+6.  **Performance (`otelcol.processor.batch`)**:
     Bündelt tausende kleine Datenpunkte in große Pakete, bevor sie gesendet werden. Reduziert die Netzwerk- und CPU-Last auf Mimir drastisch.
 
 **Output:** Vollständig angereicherte, gebatchte und standardisierte Metriken.
