@@ -62,25 +62,35 @@ flowchart LR
 Um sicherzustellen, dass alle Metriken (auch statische wie `cortex_build_info`) über das `namespace` Label filterbar sind, nutzen wir eine zweistufige Strategie:
 
 1.  **Explizites Discovery-Relabeling**: Jedes Scrape-Modul (Mimir, Alloy, Kubelet) erzeugt die Labels `namespace` und `pod` direkt aus den Kubernetes-Metadaten (`__meta_kubernetes_namespace`). Dies ist die zuverlässigste Methode für Prometheus-Scrapes.
-2.  **OTel Processor Enrichment**: Der globale `otelcol_k8s_enrich` Block reichert alle Signale zusätzlich mit OTel-Attributen an und mappt diese via `transform`-Prozessor auf die Legacy-Namen.
+2.  **OTel Processor Enrichment**: Der globale `otelcol_k8s_enrich` Block reichert alle Signale zusätzlich mit OTel-Attributen an. Dabei werden die OTel-Semantic-Conventions nicht nur "übersetzt", sondern **dupliziert (gespiegelt)**. Wir behalten bewusst beide Formate (OTel und Prometheus-Legacy) parallel im Datenstrom, um maximale Kompatibilität für bestehende und zukünftige Dashboards zu gewährleisten.
 
 ### 2.4 Advanced Label Enrichment & Pod Association
-Die Anreicherung erfolgt zentral im Modul `otelcol_k8s_enrich`. Ein kritischer Teil dabei ist die **Pod Association**, also die Logik, wie eine Metrik einem konkreten Pod zugeordnet wird.
+Die Anreicherung erfolgt zentral im Modul `otelcol_k8s_enrich`. Der Prozessor `otelcol.processor.k8sattributes` unterhält dafür im Hintergrund eine eigene, privilegierte Verbindung zur Kubernetes-API und pflegt einen lokalen Cache aller relevanten Objekte (Pods, Namespaces, Deployments). 
+
+Ein kritischer Teil dabei ist die **Pod Association**, also die Logik, wie eine eingehende Metrik einem konkreten Pod im Cluster zugeordnet wird, um die Metadaten anzuhängen.
 
 #### Pod Association Strategien
-Wir nutzen aktuell die **Connection**-Strategie, da sie für Prometheus-Scrapes am zuverlässigsten ist.
+Wir nutzen aktuell primär die **Connection**-Strategie.
 
-| Strategie | Funktionsweise | Anwendungsfall |
+| Strategie | Funktionsweise | Anwendungsfall & Details |
 | :--- | :--- | :--- |
-| **connection** (Standard) | Nutzt die IP-Adresse der eingehenden Verbindung, um den Pod im API-Server zu finden. | Ideal für direktes Scraping von Pod-Endpunkten. |
-| **resource_attribute** | Nutzt bereits vorhandene Attribute (wie `k8s.pod.ip` oder `k8s.pod.name`) im Resource-Objekt. | Wenn Daten von einem anderen Collector (z.B. OTel Gateway) kommen. |
-| **pod_name** | Sucht den Pod explizit über ein Label oder Attribut, das den Namen enthält. | Legacy-Szenarien oder spezielle Identifier. |
+| **connection** (Standard) | Nutzt die IP-Adresse der eingehenden Netzwerkverbindung, um den Pod im API-Server zu finden. | Ideal für direktes Scraping von Pod-Endpunkten und **OTLP-Push**. |
+| **resource_attribute** | Nutzt bereits vorhandene Attribute (wie `k8s.pod.ip`) im OTel-Resource-Objekt. | Wenn Daten von einem anderen Collector (z.B. OTel Gateway) weitergereicht werden. |
+| **pod_name** | Sucht den Pod explizit über ein Label, das den Namen enthält. | Legacy-Szenarien oder wenn IP-Matching nicht möglich ist. |
+
+#### Warum Prozessierung bei OTLP-Push (Java App)?
+Man könnte annehmen, dass eine OTel-instrumentierte Java-App bereits alle korrekten Labels selbst sendet. In der Praxis "sieht" eine Anwendung von innen heraus jedoch oft nicht den vollen Kubernetes-Kontext:
+- Sie kennt oft ihren Pod-Namen, aber nicht unbedingt das übergeordnete `Deployment`, das `ReplicaSet` oder den `Node`.
+- Sie hat keinen Zugriff auf K8s-Labels oder Annotations, die ein Administrator von "außen" an den Pod geheftet hat.
+- Der `k8sattributes` Prozessor agiert hier als **vertrauenswürdige zentrale Instanz**: Er nimmt die Quell-IP der Java-App, identifiziert sie sicher gegen die K8s-API und reichert den gesamten fehlenden Kontext konsistent an.
 
 #### Legacy Label Mapping (Compatibility)
-Da viele Community-Dashboards (z. B. für cAdvisor) die Standard-Prometheus-Labels (`namespace`, `pod`, `container`) erwarten, mappt Alloy die OTel-Semantic-Conventions automatisch um. Dies erfolgt über einen `otelcol.processor.transform` Block mit dem Feld `metric_statements`:
+Über einen `otelcol.processor.transform` Block werden die OTel-Attribute zusätzlich in die Welt der klassischen Prometheus-Dashboards gespiegelt. Wir **erweitern** den Label-Satz, statt ihn zu ersetzen:
 - `k8s.namespace.name` -> `namespace`
 - `k8s.pod.name` -> `pod`
 - `k8s.container.name` -> `container`
+- `k8s.node.name` -> `node`
+- `k8s.cluster.name` -> `cluster` (statisch auf `prod-bwcloud` gesetzt)
 
 ---
 
