@@ -104,7 +104,7 @@ otelcol.exporter.otlphttp "mimir" {
 // === PHASE 2: PROCESS (ZENTRAL) ===
 // ==========================================
 
-// 5. Batching für Performance
+// 6. Batching für Performance
 otelcol.processor.batch "default" {
   output { metrics = [otelcol.exporter.otlphttp.mimir.input] }
   send_batch_size = 1024
@@ -167,10 +167,10 @@ otelcol.processor.transform "promote_pod_ip" {
   metric_statements {
     context = "datapoint"
     statements = [
-      // Datapoint-Attribut -> Resource-Attribut kopieren
-      "set(resource.attributes[\"k8s_pod_ip\"], attributes[\"k8s_pod_ip\"])",
+      // Datapoint-Attribut -> Resource-Attribut kopieren (nur wenn vorhanden)
+      "set(resource.attributes[\"k8s_pod_ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
       // Original auf Datapoint-Ebene entfernen
-      "delete_key(attributes, \"k8s_pod_ip\")",
+      "delete_key(attributes, \"k8s_pod_ip\") where attributes[\"k8s_pod_ip\"] != nil",
     ]
   }
 }
