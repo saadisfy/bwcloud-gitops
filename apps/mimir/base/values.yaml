@@ -35,6 +35,7 @@ mimir-distributed:
           dir: /data/blocks
       limits:
         compactor_blocks_retention_period: 24h
+        max_global_series_per_user: 500000
       alertmanager_storage:
         backend: local
         local:
