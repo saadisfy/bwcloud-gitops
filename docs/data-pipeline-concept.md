@@ -230,3 +230,21 @@ flowchart TB
     style ML fill:#ff9999,stroke:#333,stroke-width:2px
     style BA fill:#99ff99,stroke:#333,stroke-width:2px
 ```
+
+### Komponenten-Erklärung
+
+#### 1. Discovery & Scraping (Die "Fühler")
+*   **`discovery.kubernetes`**: Spricht mit dem K8s-API-Server, um IP-Adressen von Pods oder Nodes zu finden.
+*   **`discovery.relabel`**: Filtert die gefundenen Ziele und sichert die Target-IP in `__k8s_pod_ip__`, was später zum Resource-Attribut `k8s.pod.ip` wird.
+*   **`prometheus.scrape`**: Der eigentliche "Staubsauger", der die `/metrics` Endpunkte abfragt.
+*   **`otelcol.receiver.prometheus`**: Ein Übersetzer. Er nimmt die Prometheus-Daten und wandelt sie in das interne OpenTelemetry-Format (OTel) um.
+
+#### 2. Central Processing (Die "Fabrik")
+*   **`otelcol.processor.memory_limiter`**: Der Lebensretter. Ohne ihn crasht Alloy bei Backend-Ausfällen.
+*   **`otelcol.processor.k8sattributes`**: Die Intelligenz-Zentrale. Er nimmt die `k8s.pod.ip` (Pull) oder die `connection` IP (Push), schaut im K8s-Cache nach und fügt die "Resource Attributes" (Deployment, ReplicaSet, Labels) hinzu. Erfordert RBAC.
+*   **`otelcol.processor.resource`**: Injiziert harte Werte wie den `k8s.cluster.name`.
+*   **`otelcol.processor.transform`**: Der Label-Spiegler. Er nutzt OTTL, um aus dem OTel-Attribut `k8s.namespace.name` das klassische Prometheus-Label `namespace` zu kopieren.
+*   **`otelcol.processor.batch`**: Der Paketdienst. Bündelt hunderte Einzelmetriken in kompakte HTTP-Requests.
+
+#### 3. Export (Der "Versand")
+*   **`otelcol.exporter.otlphttp`**: Sendet die Pakete an Mimir. Verfügt über `retry_on_failure` und `sending_queue` für robusten Betrieb.
