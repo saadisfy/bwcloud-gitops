@@ -59,16 +59,22 @@ data:
 
       // 5. Mirror Legacy Labels and Cleanup
       otelcol.processor.transform "mirror_legacy_labels" {
+        error_mode = "ignore"
         output { metrics = [otelcol.processor.batch.default.input] }
         
         metric_statements {
           context = "datapoint"
           statements = [
-            "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"])",
-            "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])",
-            "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])",
-            "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"])",
-            "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])",
+            "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
+            "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
+            "set(attributes[\"k8s_cluster_name\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
+            "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil",
+            "set(attributes[\"k8s_pod_name\"], resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil",
+            "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
+            "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
+            "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil",
+            "set(attributes[\"k8s_node_name\"], resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil",
+            "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil"
           ]
         }
 
