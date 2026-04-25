@@ -9,7 +9,7 @@ metadata:
 data:
   config.alloy: |-
     // =================================================================
-    // Alloy config – consolidated for stability (bypassing node limits).
+    // Alloy config – modular architecture (Receive -> Process -> Export)
     // =================================================================
 
     logging {
@@ -17,19 +17,30 @@ data:
       format = "logfmt"
     }
 
-    // ---------------------------------------------------------------
-    // Module: otelcol_k8s_enrich
-    // Centralized K8s label enrichment and mapping for OTelCol pipelines.
-    // ---------------------------------------------------------------
-    declare "otelcol_k8s_enrich" {
+    // ===============================================================
+    // PHASE 2: PROCESS (Central Enrichment & Label Mapping)
+    // ===============================================================
+
+    declare "otelcol_pipeline_process" {
       argument "forward_to" {}
 
+      // 1. Enrich with Kubernetes Metadata
       otelcol.processor.k8sattributes "enrich" {
         output {
-          metrics = [otelcol.processor.transform.add_legacy_labels.input]
+          metrics = [otelcol.processor.transform.mirror_labels.input]
         }
         extract {
-          metadata = ["k8s.namespace.name", "k8s.pod.name", "k8s.container.name", "k8s.node.name"]
+          metadata = [
+            "k8s.namespace.name",
+            "k8s.pod.name",
+            "k8s.container.name",
+            "k8s.node.name",
+            "k8s.deployment.name",
+            "k8s.statefulset.name",
+            "k8s.daemonset.name",
+            "k8s.cronjob.name",
+            "k8s.job.name",
+          ]
         }
         pod_association {
           source {
@@ -38,18 +49,21 @@ data:
         }
       }
 
-      otelcol.processor.transform "add_legacy_labels" {
+      // 2. Mirror OTel attributes to legacy Prometheus labels for dashboard compatibility
+      otelcol.processor.transform "mirror_labels" {
         error_mode = "ignore"
         output {
           metrics = argument.forward_to.value
         }
-        transformation {
+        metric_statements {
           context = "resource"
           statements = [
             "set(attributes[\"namespace\"], attributes[\"k8s.namespace.name\"]) where attributes[\"k8s.namespace.name\"] != nil",
             "set(attributes[\"pod\"], attributes[\"k8s.pod.name\"]) where attributes[\"k8s.pod.name\"] != nil",
             "set(attributes[\"container\"], attributes[\"k8s.container.name\"]) where attributes[\"k8s.container.name\"] != nil",
             "set(attributes[\"node\"], attributes[\"k8s.node.name\"]) where attributes[\"k8s.node.name\"] != nil",
+            "set(attributes[\"cluster\"], \"prod-bwcloud\")",
+            "set(attributes[\"k8s_cluster_name\"], \"prod-bwcloud\")",
           ]
         }
       }
@@ -59,23 +73,16 @@ data:
       }
     }
 
-    // ---------------------------------------------------------------
-    // Module: otelcol_mimir_scrape
-    // OTelCol-native scrape for Mimir microservices.
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // PHASE 1: RECEIVE (Target-Specific Scrapes)
+    // ===============================================================
+
+    // --- Module: Mimir Scrape ---
     declare "otelcol_mimir_scrape" {
       argument "forward_to" {}
       argument "namespace" {
         optional = true
         default  = "mimir"
-      }
-      argument "scrape_interval" {
-        optional = true
-        default  = "30s"
-      }
-      argument "scrape_timeout" {
-        optional = true
-        default  = "10s"
       }
 
       discovery.kubernetes "endpoints" {
@@ -88,27 +95,15 @@ data:
       discovery.relabel "mimir" {
         targets = discovery.kubernetes.endpoints.targets
         
-        // Keep only Mimir component services
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
           regex         = "mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?"
           action        = "keep"
         }
-        // Keep http-metrics (gateway also exposes legacy-http-metrics)
         rule {
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
           regex         = "http-metrics|legacy-http-metrics"
           action        = "keep"
-        }
-
-        // App-specific labels via discovery metadata (most reliable)
-        rule {
-          source_labels = ["__meta_kubernetes_namespace"]
-          target_label  = "namespace"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_pod_name"]
-          target_label  = "pod"
         }
         rule {
           source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
@@ -118,25 +113,11 @@ data:
           target_label = "job"
           replacement  = "mimir"
         }
-        rule {
-          target_label = "cluster"
-          replacement  = "prod-bwcloud"
-        }
-        rule {
-          target_label = "k8s_cluster_name"
-          replacement  = "prod-bwcloud"
-        }
       }
 
       prometheus.scrape "mimir" {
         targets    = discovery.relabel.mimir.output
         forward_to = [otelcol.receiver.prometheus.mimir.receiver]
-        scrape_interval = argument.scrape_interval.value
-        scrape_timeout  = argument.scrape_timeout.value
-
-        clustering {
-          enabled = true
-        }
       }
 
       otelcol.receiver.prometheus "mimir" {
@@ -146,10 +127,7 @@ data:
       }
     }
 
-    // ---------------------------------------------------------------
-    // Module: otelcol_alloy_scrape
-    // OTelCol-native scrape for Alloy self-metrics.
-    // ---------------------------------------------------------------
+    // --- Module: Alloy Scrape ---
     declare "otelcol_alloy_scrape" {
       argument "forward_to" {}
       argument "namespace" {
@@ -159,14 +137,6 @@ data:
       argument "service_name" {
         optional = true
         default  = "alloy"
-      }
-      argument "scrape_interval" {
-        optional = true
-        default  = "30s"
-      }
-      argument "scrape_timeout" {
-        optional = true
-        default  = "10s"
       }
 
       discovery.kubernetes "endpoints" {
@@ -189,36 +159,14 @@ data:
           action        = "keep"
         }
         rule {
-          source_labels = ["__meta_kubernetes_namespace"]
-          target_label  = "namespace"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_pod_name"]
-          target_label  = "pod"
-        }
-        rule {
           target_label = "job"
           replacement  = "alloy"
-        }
-        rule {
-          target_label = "cluster"
-          replacement  = "prod-bwcloud"
-        }
-        rule {
-          target_label = "k8s_cluster_name"
-          replacement  = "prod-bwcloud"
         }
       }
 
       prometheus.scrape "alloy" {
         targets    = discovery.relabel.alloy.output
         forward_to = [otelcol.receiver.prometheus.alloy.receiver]
-        scrape_interval = argument.scrape_interval.value
-        scrape_timeout  = argument.scrape_timeout.value
-
-        clustering {
-          enabled = true
-        }
       }
 
       otelcol.receiver.prometheus "alloy" {
@@ -228,20 +176,9 @@ data:
       }
     }
 
-    // ---------------------------------------------------------------
-    // Module: otelcol_kubelet_scrape
-    // OTelCol-native scrape for Kubelet metrics.
-    // ---------------------------------------------------------------
+    // --- Module: Kubelet Scrape ---
     declare "otelcol_kubelet_scrape" {
       argument "forward_to" {}
-      argument "scrape_interval" {
-        optional = true
-        default  = "30s"
-      }
-      argument "scrape_timeout" {
-        optional = true
-        default  = "10s"
-      }
 
       discovery.kubernetes "nodes" {
         role = "node"
@@ -249,35 +186,19 @@ data:
 
       discovery.relabel "kubelet" {
         targets = discovery.kubernetes.nodes.targets
-        
-        // Filter: each Alloy pod only scrapes its OWN node to avoid duplication.
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
           regex         = sys.env("K8S_NODE_NAME")
           action        = "keep"
         }
-
         rule {
           target_label = "job"
           replacement  = "kubelet"
         }
         rule {
-          target_label = "cluster"
-          replacement  = "prod-bwcloud"
-        }
-        rule {
-          target_label = "k8s_cluster_name"
-          replacement  = "prod-bwcloud"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_node_name"]
-          target_label  = "node"
-        }
-        rule {
           target_label = "__scheme__"
           replacement  = "https"
         }
-        // Use InternalIP for reliable connectivity
         rule {
           source_labels = ["__meta_kubernetes_node_address_InternalIP"]
           target_label  = "__address__"
@@ -288,9 +209,6 @@ data:
       prometheus.scrape "kubelet" {
         targets    = discovery.relabel.kubelet.output
         forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
-        scrape_interval = argument.scrape_interval.value
-        scrape_timeout  = argument.scrape_timeout.value
-
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           insecure_skip_verify = true
@@ -304,20 +222,9 @@ data:
       }
     }
 
-    // ---------------------------------------------------------------
-    // Module: otelcol_cadvisor_scrape
-    // OTelCol-native scrape for cAdvisor metrics.
-    // ---------------------------------------------------------------
+    // --- Module: cAdvisor Scrape ---
     declare "otelcol_cadvisor_scrape" {
       argument "forward_to" {}
-      argument "scrape_interval" {
-        optional = true
-        default  = "30s"
-      }
-      argument "scrape_timeout" {
-        optional = true
-        default  = "10s"
-      }
 
       discovery.kubernetes "nodes" {
         role = "node"
@@ -325,29 +232,14 @@ data:
 
       discovery.relabel "cadvisor" {
         targets = discovery.kubernetes.nodes.targets
-
-        // Filter: each Alloy pod only scrapes its OWN node to avoid duplication.
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
           regex         = sys.env("K8S_NODE_NAME")
           action        = "keep"
         }
-
         rule {
           target_label = "job"
           replacement  = "cadvisor"
-        }
-        rule {
-          target_label = "cluster"
-          replacement  = "prod-bwcloud"
-        }
-        rule {
-          target_label = "k8s_cluster_name"
-          replacement  = "prod-bwcloud"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_node_name"]
-          target_label  = "node"
         }
         rule {
           target_label = "__scheme__"
@@ -357,7 +249,6 @@ data:
           target_label = "__metrics_path__"
           replacement  = "/metrics/cadvisor"
         }
-        // Use InternalIP for reliable connectivity
         rule {
           source_labels = ["__meta_kubernetes_node_address_InternalIP"]
           target_label  = "__address__"
@@ -368,9 +259,6 @@ data:
       prometheus.scrape "cadvisor" {
         targets    = discovery.relabel.cadvisor.output
         forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
-        scrape_interval = argument.scrape_interval.value
-        scrape_timeout  = argument.scrape_timeout.value
-
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           insecure_skip_verify = true
@@ -384,10 +272,10 @@ data:
       }
     }
 
-    // ---------------------------------------------------------------
-    // Sink – OTelCol OTLP/HTTP exporter to Mimir distributor.
-    // Mimir recommended path is OTLP over HTTP to port 8080.
-    // ---------------------------------------------------------------
+    // ===============================================================
+    // PHASE 3: EXPORT (Sink)
+    // ===============================================================
+
     otelcol.exporter.otlphttp "mimir" {
       client {
         endpoint = "http://mimir-gateway.mimir.svc.cluster.local/otlp"
@@ -397,25 +285,26 @@ data:
       }
     }
 
-    // ---------------------------------------------------------------
-    // Instantiation
-    // ---------------------------------------------------------------
-    otelcol_k8s_enrich "global" {
+    // ===============================================================
+    // INSTANTIATION
+    // ===============================================================
+
+    otelcol_pipeline_process "global" {
       forward_to = [otelcol.exporter.otlphttp.mimir.input]
     }
 
     otelcol_mimir_scrape "default" {
-      forward_to = otelcol_k8s_enrich.global.input
+      forward_to = otelcol_pipeline_process.global.input
     }
 
     otelcol_alloy_scrape "default" {
-      forward_to = otelcol_k8s_enrich.global.input
+      forward_to = otelcol_pipeline_process.global.input
     }
 
     otelcol_kubelet_scrape "default" {
-      forward_to = otelcol_k8s_enrich.global.input
+      forward_to = otelcol_pipeline_process.global.input
     }
 
     otelcol_cadvisor_scrape "default" {
-      forward_to = otelcol_k8s_enrich.global.input
+      forward_to = otelcol_pipeline_process.global.input
     }
