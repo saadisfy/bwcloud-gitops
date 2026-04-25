@@ -455,25 +455,25 @@ data:
     }
 
     otelcol_mimir_scrape "default" {
-      forward_to = otelcol_pipeline_process.global.input
+      forward_to = [otelcol_pipeline_process.global.exports.input]
     }
 
     otelcol_alloy_scrape "default" {
-      forward_to = otelcol_pipeline_process.global.input
+      forward_to = [otelcol_pipeline_process.global.exports.input]
     }
 
     otelcol_kubelet_scrape "default" {
-      forward_to = otelcol_pipeline_process.global.input
+      forward_to = [otelcol_pipeline_process.global.exports.input]
     }
 
     otelcol_cadvisor_scrape "default" {
-      forward_to = otelcol_pipeline_process.global.input
+      forward_to = [otelcol_pipeline_process.global.exports.input]
     }
 
     otelcol_ksm_scrape "default" {
-      forward_to = otelcol_pipeline_process.global.input
+      forward_to = [otelcol_pipeline_process.global.exports.input]
     }
 
     otelcol_node_exporter_scrape "default" {
-      forward_to = otelcol_pipeline_process.global.input
+      forward_to = [otelcol_pipeline_process.global.exports.input]
     }
