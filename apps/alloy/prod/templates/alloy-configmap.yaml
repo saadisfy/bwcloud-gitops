@@ -272,6 +272,96 @@ data:
       }
     }
 
+    // --- Module: Kube-State-Metrics Scrape ---
+    declare "otelcol_ksm_scrape" {
+      argument "forward_to" {}
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
+
+      discovery.kubernetes "endpoints" {
+        role = "endpoints"
+        namespaces {
+          names = [argument.namespace.value]
+        }
+      }
+
+      discovery.relabel "ksm" {
+        targets = discovery.kubernetes.endpoints.targets
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          regex         = "(alloy-)?kube-state-metrics"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_endpoint_port_name"]
+          regex         = "http|http-metrics"
+          action        = "keep"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "kube-state-metrics"
+        }
+      }
+
+      prometheus.scrape "ksm" {
+        targets    = discovery.relabel.ksm.output
+        forward_to = [otelcol.receiver.prometheus.ksm.receiver]
+      }
+
+      otelcol.receiver.prometheus "ksm" {
+        output {
+          metrics = [argument.forward_to.value]
+        }
+      }
+    }
+
+    // --- Module: Node-Exporter Scrape ---
+    declare "otelcol_node_exporter_scrape" {
+      argument "forward_to" {}
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
+
+      discovery.kubernetes "endpoints" {
+        role = "endpoints"
+        namespaces {
+          names = [argument.namespace.value]
+        }
+      }
+
+      discovery.relabel "node_exporter" {
+        targets = discovery.kubernetes.endpoints.targets
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          regex         = "(alloy-)?(prometheus-)?node-exporter"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_endpoint_port_name"]
+          regex         = "metrics|http-metrics"
+          action        = "keep"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "node-exporter"
+        }
+      }
+
+      prometheus.scrape "node_exporter" {
+        targets    = discovery.relabel.node_exporter.output
+        forward_to = [otelcol.receiver.prometheus.node_exporter.receiver]
+      }
+
+      otelcol.receiver.prometheus "node_exporter" {
+        output {
+          metrics = [argument.forward_to.value]
+        }
+      }
+    }
+
     // ===============================================================
     // PHASE 3: EXPORT (Sink)
     // ===============================================================
@@ -306,5 +396,13 @@ data:
     }
 
     otelcol_cadvisor_scrape "default" {
+      forward_to = otelcol_pipeline_process.global.input
+    }
+
+    otelcol_ksm_scrape "default" {
+      forward_to = otelcol_pipeline_process.global.input
+    }
+
+    otelcol_node_exporter_scrape "default" {
       forward_to = otelcol_pipeline_process.global.input
     }
