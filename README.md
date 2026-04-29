@@ -42,5 +42,13 @@ Promotions between stages (Dev -> Int -> Prod) are handled by **Kargo**.
 -   Promotions update stage-specific `values.yaml` files via automated commits.
 -   Managed via `apps/kargo-projects/`.
 
+## 📚 Documentation & Concepts
+
+Detailed information about the architecture and usage of this stack:
+
+-   **[Observability Guide](docs/OBSERVABILITY.md)**: Central source of truth for the observability stack, including architecture, onboarding, and operational know-how.
+-   **[Data Pipeline Concept (Alloy)](docs/data-pipeline-concept.md)**: Deep dive into the Grafana Alloy pipeline (Receive -> Process -> Export) and label enrichment strategy.
+-   **[Instrumentation & Pod Association](docs/OBSERVABILITY.md#24-advanced-label-enrichment--pod-association)**: How applications are identified and enriched with Kubernetes metadata.
+
 ---
 *Maintained by Saad Masood. Managed via Argo CD.*
