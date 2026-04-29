@@ -1,30 +1,6 @@
 # bwcloud-gitops
 
-This is a modern GitOps repository managing a complete Observability and CD stack using Argo CD, Kargo, Grafana, and Mimir. It follows the **Zero-Day Deployment Pattern**, where infrastructure configuration is declarative in Git, but sensitive secrets are managed externally.
-
-## 🚀 Quick Start (Zero-Day Setup)
-
-To bootstrap this environment, follow these steps in order. **Secrets never enter the Git repository.**
-
-1.  **Connect Argo CD to GitHub:**
-    ```bash
-    cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
-    # Replace DEIN_GITHUB_PAT with your Personal Access Token
-    kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
-    ```
-
-2.  **Initialize Application Secrets:**
-    ```bash
-    cp 0day-deployment-manifests/app-admin-secrets.yaml.example 0day-deployment-manifests/app-admin-secrets.yaml
-    # Fill in your rotated bcrypt hashes and keys
-    kubectl apply -f 0day-deployment-manifests/app-admin-secrets.yaml
-    ```
-
-3.  **Apply Root Application:**
-    This application manages all other `appsets/` in the cluster.
-    ```bash
-    kubectl apply -f 0day-deployment-manifests/root-application.yaml
-    ```
+This is a modern GitOps repository managing a complete Observability and CD stack using Argo CD, Kargo, Grafana, and Mimir. It follows a declarative approach where infrastructure configuration lives in Git, while sensitive data is decoupled from the codebase.
 
 ## 📂 Repository Structure
 
@@ -32,7 +8,7 @@ To bootstrap this environment, follow these steps in order. **Secrets never ente
 -   **`apps/`**: Helm charts and stage-specific values.
     -   `base/`: Common configuration shared across all environments.
     -   `prod/`: Production overrides (primary focus).
--   **`0day-deployment-manifests/`**: Templates for manual bootstrap (Secrets, Repo-Access).
+-   **`0day-deployment-manifests/`**: Templates for manual bootstrap (Secrets, Repo-Access). **See `BOOTSTRAP.md` inside this folder for setup instructions.**
 -   **`manifests/`**: Static Kubernetes manifests (e.g., Kargo Stages).
 
 ## 🛠 Managed Applications
@@ -49,8 +25,8 @@ To bootstrap this environment, follow these steps in order. **Secrets never ente
 
 This repository is designed to be **public**. We use two mechanisms to keep it secure:
 
-1.  **External Secrets:** Applications like Grafana use `existingSecret` references. The content is applied manually once and ignored by Git.
-2.  **Argo CD `ignoreDifferences`:** For components that generate their own secrets (like Argo CD's `server.secretkey`), we use `ignoreDifferences` in the ApplicationSet to prevent Git placeholders from overwriting live cluster data.
+1.  **External Secrets:** Applications like Grafana use `existingSecret` references. The Kubernetes Secret is created once manually; the Helm chart only references it by name.
+2.  **Selective ignoreDifferences:** For Argo CD and Kargo, the Helm charts manage the Secret structure (including the auto-generated `server.secretkey`), but we use `ignoreDifferences` in the ApplicationSet to prevent Git placeholders from overwriting the manually set admin password hashes.
 
 ## 📊 Observability Stack
 
