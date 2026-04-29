@@ -198,8 +198,55 @@ data:
     }
 
     /*
-    // --- Example Module: Kubelet Scrape ---
-    // (Kept as a blueprint for manual API-Server proxied node scrapes)
+    // --- Example Module: Custom API Scrape ---
+    // (Kept as a blueprint for manual API-Server proxied scrapes)
+    declare "otelcol_custom_api_scrape_example" {
+      argument "forward_to" {}
+
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
+
+      discovery.relabel "kubelet" {
+        targets = discovery.kubernetes.nodes.targets
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "custom-node-job"
+        }
+        rule {
+          target_label = "__scheme__"
+          replacement  = "https"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
+        }
+      }
+
+      prometheus.scrape "kubelet" {
+        targets    = discovery.relabel.kubelet.output
+        forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          insecure_skip_verify = true
+        }
+      }
+
+      otelcol.receiver.prometheus "kubelet" {
+        output {
+          metrics = argument.forward_to.value
+        }
+      }
+    }
+    */
+
+    // --- Module: Kubelet Scrape ---
     declare "otelcol_kubelet_scrape" {
       argument "forward_to" {}
 
@@ -244,7 +291,6 @@ data:
         }
       }
     }
-    */
 
     // --- Module: cAdvisor Scrape ---
     declare "otelcol_cadvisor_scrape" {
@@ -402,11 +448,9 @@ data:
       forward_to = [otelcol.processor.memory_limiter.default.input]
     }
 
-    /*
     otelcol_kubelet_scrape "default" {
       forward_to = [otelcol.processor.memory_limiter.default.input]
     }
-    */
 
     otelcol_cadvisor_scrape "default" {
       forward_to = [otelcol.processor.memory_limiter.default.input]
