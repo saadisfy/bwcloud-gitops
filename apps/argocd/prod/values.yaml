@@ -74,9 +74,8 @@ argo-cd:
         g, mcp, role:mcp
         g, saadisfy, role:admin
     secret:
-      # Argo CD (Go bcrypt) erwartet i.d.R. $2a/$2b. Mit $2y kann es zu unerwünschter Rotation kommen.
-      # Plaintext-Passwort liegt im Passwort-Manager; hier nur der bcrypt-Hash.
-      argocdServerAdminPassword: "$2a$10$P3NxFPXA4063yhcR1alN/eyVmkv/QZ7T4tTCvM4aBmPETdM1p92Fq"
+      # Argo CD admin password (bcrypt hash) is managed via 0day-deployment-manifests/app-admin-secrets.yaml
+      # argocdServerAdminPassword: ""
       argocdServerAdminPasswordMtime: "2026-04-18T21:30:00Z"
     repositories:
       # Public Helm-Repos für Wrapper-Chart-Dependencies

@@ -18,6 +18,6 @@ kargo:
         selfSignedCert: false
         secretName: kargo-tls  # cert-manager erstellt dieses Secret
     adminAccount:
-      # Bcrypt-Hash; Initial-Passwort siehe README Abschnitt "Kargo (Promotion)"
-      passwordHash: '$2y$10$JQ6/m3Q091Z0iTVnjcXwQuCcWaWxJuRs5n.mwYe2XlNVD2puckkM.'
-      tokenSigningKey: 'REPLACE_KARGO_TOKEN_SIGNING_KEY'
+      # Bcrypt-Hash and tokenSigningKey are managed via 0day-deployment-manifests/app-admin-secrets.yaml
+      # passwordHash: ''
+      # tokenSigningKey: ''

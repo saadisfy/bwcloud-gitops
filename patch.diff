@@ -1,0 +1,61 @@
+--- docs/data-pipeline-concept.md
++++ docs/data-pipeline-concept.md
+@@ -107,6 +107,8 @@
+   client {
+     endpoint = "http://mimir-gateway.mimir.svc.cluster.local/otlp"
+     headers  = { "X-Scope-OrgID" = "1" }
++    // tls { insecure_skip_verify = true } // Optional: TLS-Konfiguration in Production prüfen
+   }
+   sending_queue {
+     enabled    = true
+@@ -155,7 +155,7 @@
+   metric_statements {
+     context = "resource"
+     statements = [
+-      "delete_key(attributes, \"k8s_pod_ip\")",
++      "delete_key(attributes, \"k8s.pod.ip\")",
+     ]
+   }
+ }
+@@ -183,7 +183,7 @@
+   }
+   pod_association {
+     // Priorität 1: Für gescrapte Targets (IP wird von promote_pod_ip als k8s.pod.ip propagiert)
+-    source { from = "resource_attribute" name = "k8s_pod_ip" }
++    source { from = "resource_attribute" name = "k8s.pod.ip" }
+   }
+   pod_association {
+     // Priorität 2: Fallback für OTLP-Push
+@@ -198,9 +198,9 @@
+     context = "datapoint"
+     statements = [
+-      // Datapoint-Attribut -> Resource-Attribut kopieren (nur wenn vorhanden)
+-      "set(resource.attributes[\"k8s_pod_ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
++      // Datapoint-Attribut (k8s_pod_ip) -> Resource-Attribut (k8s.pod.ip) kopieren (nur wenn vorhanden)
++      "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
+       // Original auf Datapoint-Ebene entfernen
+       "delete_key(attributes, \"k8s_pod_ip\") where attributes[\"k8s_pod_ip\"] != nil",
+     ]
+   }
+@@ -210,6 +210,7 @@
+ otelcol.processor.memory_limiter "default" {
+   output { metrics = [otelcol.processor.transform.promote_pod_ip.input] }
+   check_interval  = "1s"
++  // WICHTIG: Diese Werte müssen ca. 80% des Kubernetes Pod Memory Limits entsprechen!
+   limit_mib       = 512
+   spike_limit_mib = 128
+ }
+@@ -227,6 +228,13 @@
+ discovery.kubernetes "pods" { role = "pod" }
+ discovery.relabel "app" { 
+   targets = discovery.kubernetes.pods.targets
++  
++  // WICHTIGER FILTER: Niemals alle Pods scrapen!
++  rule { 
++    source_labels = ["__meta_kubernetes_pod_label_app"] 
++    regex = "my-app"
++    action = "keep" 
++  }
++  
+   // WICHTIG: Sichern der IP OHNE Doppel-Underscore für Pod-Association in Phase 2
+   rule {
