@@ -1,156 +1,70 @@
 # bwcloud-gitops
 
-GitOps repository for Argo CD. Repo: [github.com/saadisfy/bwcloud-gitops](https://github.com/saadisfy/bwcloud-gitops). Server: `ssh noctua`.
+This is a modern GitOps repository managing a complete Observability and CD stack using Argo CD, Kargo, Grafana, and Mimir. It follows the **Zero-Day Deployment Pattern**, where infrastructure configuration is declarative in Git, but sensitive secrets are managed externally.
 
-## Structure
+## 🚀 Quick Start (Zero-Day Setup)
 
-- **`initial-plan.md`** – Short reference of the setup (stages, namespaces, apps).
-- **`appsets/`** – ApplicationSet manifests (one per app); werden von der **Root-Application** verwaltet.
-- **`0day-deployment-manifests/root-application.yaml`** – Root-Application: eine Argo-CD-Application, unter der alle ApplicationSets hängen (synct `appsets/`).
-- **`apps/<app>/`**
-  - `base/values.yaml` – Shared values for all stages.
-  - `<stage>/` – `dev`, `int`, `prod`:
-    - `Chart.yaml` – Helm chart (wrapper with dependency or custom chart).
-    - `values.yaml` – Stage overrides.
-    - `templates/` – (optional) Chart templates.
+To bootstrap this environment, follow these steps in order. **Secrets never enter the Git repository.**
 
-Values merge order: `base/values.yaml` then `<stage>/values.yaml`.
+1.  **Connect Argo CD to GitHub:**
+    ```bash
+    cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
+    # Replace DEIN_GITHUB_PAT with your Personal Access Token
+    kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
+    ```
 
-## Stages and namespaces
+2.  **Initialize Application Secrets:**
+    ```bash
+    cp 0day-deployment-manifests/app-admin-secrets.yaml.example 0day-deployment-manifests/app-admin-secrets.yaml
+    # Fill in your rotated bcrypt hashes and keys
+    kubectl apply -f 0day-deployment-manifests/app-admin-secrets.yaml
+    ```
 
-| Stage | Namespace pattern |
-|-------|-------------------|
-| prod  | `<app>` (e.g. `grafana`) |
-| dev   | `<app>-dev` (e.g. `grafana-dev`) |
-| int   | `<app>-int` (e.g. `grafana-int`) |
+3.  **Apply Root Application:**
+    This application manages all other `appsets/` in the cluster.
+    ```bash
+    kubectl apply -f 0day-deployment-manifests/root-application.yaml
+    ```
 
-## Apps
+## 📂 Repository Structure
 
-| App | Chart type | Notes |
-|-----|------------|--------|
-| argocd | Wrapper (argo-cd) | prod only, self-managed |
-| grafana | Wrapper (grafana) | |
-| reloader | Wrapper (stakater/reloader) | Auto-reload on Config/Secret changes |
-| otel-operator | Wrapper (opentelemetry-operator) | |
-| mimir | Wrapper (mimir-distributed) | Low-resource base values (Beispiel: nur Mimir) |
-| spring-petclinic | Custom | Default-Image: docker.io/arey/springboot-petclinic; für GHCR: image in values überschreiben + imagePullSecrets |
-| kargo | Wrapper (OCI kargo) | prod only |
+-   **`appsets/`**: Argo CD ApplicationSets (one per service). Managed by the Root App.
+-   **`apps/`**: Helm charts and stage-specific values.
+    -   `base/`: Common configuration shared across all environments.
+    -   `prod/`: Production overrides (primary focus).
+-   **`0day-deployment-manifests/`**: Templates for manual bootstrap (Secrets, Repo-Access).
+-   **`manifests/`**: Static Kubernetes manifests (e.g., Kargo Stages).
 
-## Argo CD Konfiguration (Hauptregel)
+## 🛠 Managed Applications
 
-Alle Argo-CD-Konfigurationen (Repositories, Einstellungen) liegen in **[apps/argocd/prod/values.yaml](apps/argocd/prod/values.yaml)**. Nach Änderungen anwenden mit:
+| Application | Role | Access URL |
+| :--- | :--- | :--- |
+| **Argo CD** | Continuous Delivery (GitOps) | [argocd.saadisfy.me](https://argocd.saadisfy.me) |
+| **Grafana** | Visualization & Alerting | [grafana.saadisfy.me](https://grafana.saadisfy.me) |
+| **Kargo** | Multi-Stage Promotion | [kargo.saadisfy.me](https://kargo.saadisfy.me) |
+| **Mimir** | Long-term Metric Storage | [mimir.saadisfy.me](https://mimir.saadisfy.me) |
+| **Alloy** | Telemetry Collection | (Internal Cluster DaemonSet) |
 
-```bash
-cd apps/argocd/prod
-helm dependency build
-helm upgrade argocd . -n argocd -f ../../base/values.yaml -f values.yaml --wait
-```
+## 🔐 Security & GitOps Decoupling
 
-- **Helm-Repos** (grafana, open-telemetry, argo) sind in `configs.repositories` in dieser Datei definiert.
-- **Git-Repo** (bwcloud-gitops) mit Token wird weiterhin separat über `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` angelegt (Token nicht ins Git).
+This repository is designed to be **public**. We use two mechanisms to keep it secure:
 
-## Root-Application (alle ApplicationSets)
+1.  **External Secrets:** Applications like Grafana use `existingSecret` references. The content is applied manually once and ignored by Git.
+2.  **Argo CD `ignoreDifferences`:** For components that generate their own secrets (like Argo CD's `server.secretkey`), we use `ignoreDifferences` in the ApplicationSet to prevent Git placeholders from overwriting live cluster data.
 
-Eine **Root-Application** (`0day-deployment-manifests/root-application.yaml`) synct das Verzeichnis `appsets/` und erzeugt/aktualisiert damit alle ApplicationSets. Einmal anwenden:
+## 📊 Observability Stack
 
-```bash
-kubectl apply -f 0day-deployment-manifests/root-application.yaml
-```
+-   **Collector**: **Grafana Alloy** runs as a DaemonSet, scraping metrics (KSM, Node-Exporter) and forwarding them via OTLP.
+-   **Storage**: **Grafana Mimir** (Distributed) stores metrics with high efficiency.
+-   **Dashboarding**: **Grafana Operator** manages dashboards and alerts as code via Custom Resources (CRs).
+-   **Auto-Reload**: **Stakater Reloader** monitors Secrets and ConfigMaps to trigger zero-downtime rolling restarts on changes.
 
-Danach erscheint in Argo CD die Application **root**; unter ihren Ressourcen hängen alle ApplicationSets (grafana, mimir, otel-operator, spring-petclinic, argocd, kargo). Änderungen an `appsets/*.yaml` werden über die Root-App gesynct.
+## 🔄 Promotion Workflow (Kargo)
 
-## Before first sync (done)
+Promotions between stages (Dev -> Int -> Prod) are handled by **Kargo**.
+-   Freight is composed of Git commits and Container images.
+-   Promotions update stage-specific `values.yaml` files via automated commits.
+-   Managed via `apps/kargo-projects/`.
 
-- Argo CD is installed (Day 0) und wird per Helm aus `apps/argocd/prod/values.yaml` verwaltet.
-- Root-Application anwenden (siehe oben); ApplicationSets werden von der Root verwaltet; die generierten Applications erscheinen nach Repo-Anbindung.
-
-## Dein Schritt: GitHub-Repo-Zugriff
-
-1. **Secret anlegen** (mit deinem GitHub PAT):
-   ```bash
-   cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
-   # DEIN_GITHUB_PAT in der Datei durch dein Token ersetzen (ghp_...)
-   kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
-   ```
-
-2. Danach verbindet Argo CD das Repo und die Applications können syncen.
-
-## Spring Petclinic image
-
-**Standard:** Es wird das öffentliche Image `docker.io/arey/springboot-petclinic:latest` verwendet (Deployment funktioniert ohne eigene Registry).
-
-**Eigenes Image (GHCR):** In `apps/spring-petclinic/base/values.yaml` oder `prod/values.yaml` `image.repository` und `image.tag` überschreiben sowie `imagePullSecrets` setzen (z. B. `[ { name: ghcr } ]`). Build und Push:
-
-```bash
-# In spring-petclinic repo
-./mvnw spring-boot:build-image -Dspring-boot.build-image.imageName=ghcr.io/saadisfy/spring-petclinic:latest
-docker push ghcr.io/saadisfy/spring-petclinic:latest
-```
-
-## Deployments (nur prod)
-
-Über die ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, Spring Petclinic). Der Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`, wird aber nicht von Argo CD ausgerollt. Die **Argo CD Application-Namen** sind die App-Namen ohne Stage (z. B. `grafana`, `mimir`, `spring-petclinic`); in Deployment- und Ressourcennamen kommt „prod“ nicht vor.
-
-## Observability (Grafana, Mimir, OTel) – Beispiel nur Mimir
-
-- **Grafana** (siehe `apps/grafana/base/values.yaml`): **Mimir** als Prometheus-Datasource über **lokales Netz**: `http://mimir-mimir-distributed-gateway.mimir.svc.cluster.local`.
-  - **Admin-Passwort**: Wird ausschließlich über den Helm-Chart gesteuert. In **`apps/grafana/prod/values.yaml`** steht `adminPassword`; der Chart erzeugt/aktualisiert den Kubernetes-Secret daraus (GitOps, kein manuelles `kubectl apply` Secret). **Zukünftige Änderungen (Stakater Reloader):** Grafana-Pods haben `reloader.stakater.com/auto: "true"`. Änderst du das Passwort in den Values und Argo CD synct, wird der Secret aktualisiert → **Stakater Reloader** löst einen Rolling Restart der Grafana-Deployment aus. Zusätzlich setzt ein **postStart-Lifecycle-Hook** nach jedem Pod-Start das Admin-Passwort in der DB auf den Wert aus dem Secret (`grafana cli admin reset-admin-password`). Damit bleiben Secret und DB bei Passwort-Änderungen in Sync. **Aktuelles Passwort auslesen:** `kubectl get secret grafana -n grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo`. Falls Login trotzdem fehlschlägt (bekanntes Grafana-Verhalten, [Issue #55887](https://github.com/grafana/grafana/issues/55887)): einmalig Reset im Pod oder PVC löschen (Datenverlust) und neu starten.
-- **OTel Operator** (Namespace `otel-operator`) mit CRs in `apps/otel-operator/prod-cr/`:
-  - **OpenTelemetryCollector**: OTLP-Empfang (gRPC/HTTP); **Metrics** → Mimir (otlphttp, Distributor :8080/otlp); **Target Allocator** aktiv (Prometheus-Receiver + TA).
-  - **Instrumentation** Java: Auto-Instrumentation; Endpoint = Collector; Resource-Attribute `deployment.environment: prod`.
-- **Spring Petclinic**: OTel-Injection über `otelInstrumentation.enabled` (default: true). Pod-Annotation `instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"`; Endpoint HTTP :4318 (Instrumentation CR). Lokaler Collector deaktiviert (`otelCollector.enabled: false`).
-
-### Grafana Operator CR-GitOps (dev)
-
-In `apps/grafana/dev/` ist zusaetzlich zum Grafana-Chart der **Grafana Operator** als Helm-Dependency eingebunden (`grafana-operator` aus `https://grafana.github.io/helm-charts`). Das Deployment erzeugt CRs aus `values.yaml`:
-
-- `Grafana` (external mode): verbindet den Operator mit einer existierenden Grafana-URL (`grafanaOperatorCRs.instance.external.url`), ohne dass der Operator selbst eine Grafana-Deployment verwaltet.
-- `GrafanaDashboard`: Dashboards koennen per URL/JSON als CR definiert und automatisch importiert werden (`grafanaOperatorCRs.dashboards`).
-- Alerting ist als **Minimal-Values** umgesetzt: in `apps/grafana/dev/values.yaml` reichen `grafanaOperatorCRs.alerting.enabled`, `email` (und optional `datasourceUid`). Die detaillierte CR-Logik fuer `GrafanaAlertRuleGroup`, `GrafanaContactPoint` und `GrafanaNotificationPolicy` liegt im Template `apps/grafana/dev/templates/grafana-operator-crs.yaml`.
-- Optional bleiben Advanced-Listen fuer volle Custom-CRs verfuegbar: `grafanaOperatorCRs.alertRuleGroups|contactPoints|notificationPolicies`.
-
-Secret-Referenzen fuer den external Grafana-Zugang (admin-user/admin-password) kommen aus dem bereits vorhandenen Grafana-Secret (`grafana-dev`), sodass keine zusaetzlichen Zugangsdaten separat gepflegt werden muessen.
-
-## Erreichbarkeit (Ingress)
-
-Alle folgenden Apps sind über **Ingress** (nginx) unter **\*.saadisfy.me** erreichbar. DNS für die Subdomains auf die Cluster-IP zeigen lassen. TLS via cert-manager (ClusterIssuer letsencrypt-prod); Spring Petclinic derzeit ohne TLS (`ingress.tls: false` in base).
-
-| App                | URL (nur Pod/Ingress)                    |
-|--------------------|-------------------------------------------|
-| Argo CD            | https://argocd.saadisfy.me                |
-| Grafana            | https://grafana.saadisfy.me               |
-| Kargo              | https://kargo.saadisfy.me                  |
-| Mimir              | https://mimir.saadisfy.me                  |
-| Spring Petclinic   | http://spring-petclinic.saadisfy.me       |
-
-## Kargo (Promotion)
-
-Kargo ist unter `apps/kargo/prod/` deployed. **Erst-Deployment:** `passwordHash` und `tokenSigningKey` sind in `apps/kargo/prod/values.yaml` gesetzt. **Initial-Admin-Passwort** (für Kargo-API-Login): `AkqRwOFnDkK8AM6xVy23riNQMoZXIHkc` – nach erstem Login in Kargo ändern. Nach Chart-Versionsänderung: `cd apps/kargo/prod && helm dependency build`.
-
-**Promotions** laufen über **Values-Datei** und optional **Chart-Version-Bumping**:
-
-- **Warehouse** (`apps/kargo-projects/spring-petclinic/warehouse.yaml`): abonniert das Git-Repo (bwcloud-gitops) und das Container-Image (spring-petclinic). Optional können Helm-Chart-Repos ergänzt werden.
-- **Stages** (`apps/kargo-projects/spring-petclinic/stage-*.yaml`): `dev` nimmt Freight direkt aus dem Warehouse; `int` und `prod` nur nach Verifikation in der jeweiligen Upstream-Stage.
-- **Promotion-Template** (in Stage `int`/`prod`): Beim Promoten wird das **Ziel-Stage-Branch** (z. B. `stage/int`) ausgecheckt, dann:
-  1. **Values-Update**: `yaml-update` schreibt z. B. `image.tag` in `apps/spring-petclinic/<stage>/values.yaml` aus dem aktuellen Freight (z. B. `${{ imageFrom("ghcr.io/saadisfy/spring-petclinic").Tag }}`).
-  2. **Chart-Version-Bump** (optional): Mit einer chart-Subscription im Warehouse kann ein Schritt `helm-update-chart` die Dependency-Version in `apps/<app>/<stage>/Chart.yaml` aus dem Freight setzen.
-  3. Commit und Push auf das Stage-Branch; Argo CD synct danach die betroffenen Applications.
-
-Deployment der Kargo‑CRs erfolgt via Argo CD (ApplicationSet `kargo-projects`, Pfad `apps/kargo-projects/`).
-
-**Fehler `spec.selector: field is immutable`** (z. B. bei `kargo-webhooks-server`): Nach Chart-Upgrade kann das Selector-Feld nicht geändert werden. Deployment löschen, Argo CD legt es neu an:
-
-```bash
-kubectl delete deployment kargo-webhooks-server -n kargo
-```
-
-Argo CD Applications für Promotion freigeben: Annotation `kargo.akuity.io/authorized-stage: <project>:<stage>` (siehe [Kargo Docs](https://docs.kargo.io)).
-
-## Generated Values (Basepromoter)
-
-Idee fuer generated Values (Grafana): Ein GitLab-Job erzeugt aus dev/int/prod
-gemeinsame Keys als `base_values.yaml` und schreibt die Diffs in separate
-dev/int/prod Value-Files. Diese werden in **einem separaten Repo oder Branch**
-committed, damit Argo CD nicht direkt deployt. Kargo subscribed auf die
-generated Files und promoted sie in den Deploy-Branch. Details:
-`docs/basepromoter.md`.
+---
+*Maintained by Saad Masood. Managed via Argo CD.*
