@@ -279,9 +279,9 @@ flowchart TB
     OTLP --> GW[Mimir Gateway]
 
     %% Styling
-    style Phase1 fill:#f9f,stroke:#333,stroke-width:2px
+    style Phase1 fill:#bbf,stroke:#333,stroke-width:2px
     style Phase2 fill:#bbf,stroke:#333,stroke-width:2px
-    style Phase3 fill:#bfb,stroke:#333,stroke-width:2px
+    style Phase3 fill:#bbf,stroke:#333,stroke-width:2px
     style ML fill:#ff9999,stroke:#333,stroke-width:2px
     style BA fill:#99ff99,stroke:#333,stroke-width:2px
 ```
