@@ -18,6 +18,7 @@ kargo:
         selfSignedCert: false
         secretName: kargo-tls  # cert-manager erstellt dieses Secret
     adminAccount:
-      # Bcrypt-Hash and tokenSigningKey are managed via 0day-deployment-manifests/app-admin-secrets.yaml
-      # passwordHash: ''
-      # tokenSigningKey: ''
+      # Bcrypt-Hash and tokenSigningKey are managed outside of Git.
+      # ignoreDifferences in ApplicationSet ensures Argo CD doesn't overwrite manual cluster values.
+      passwordHash: 'PLACEHOLDER_MANAGED_OUTSIDE_GIT'
+      tokenSigningKey: 'REPLACE_KARGO_TOKEN_SIGNING_KEY'

@@ -26,14 +26,15 @@ spec:
       destination:
         server: https://kubernetes.default.svc
         namespace: kargo
-      # Secret kargo-api: Chart nutzt stringData, K8s speichert als data (base64) → Argo CD meldet sonst ständig OutOfSync
+      # Secret kargo-api: Admin password hash and signing key are managed outside of Git.
       ignoreDifferences:
         - group: ""
           kind: Secret
           name: kargo-api
           namespace: kargo
-          jqPathExpressions:
-            - .data
+          jsonPointers:
+            - /data/ADMIN_ACCOUNT_PASSWORD_HASH
+            - /data/ADMIN_ACCOUNT_TOKEN_SIGNING_KEY
       syncPolicy:
         automated:
           prune: true

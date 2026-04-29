@@ -74,9 +74,11 @@ argo-cd:
         g, mcp, role:mcp
         g, saadisfy, role:admin
     secret:
-      # Argo CD main secret (argocd-secret) is managed MANUALLY via 0day-deployment-manifests.
-      # This keeps the server.secretkey and admin password out of Git.
-      createSecret: false
+      # Argo CD main secret (argocd-secret).
+      # The admin password hash is managed outside of Git.
+      # ignoreDifferences in ApplicationSet prevents Argo CD from overwriting the manual password.
+      createSecret: true
+      argocdServerAdminPassword: "PLACEHOLDER_MANAGED_OUTSIDE_GIT"
       argocdServerAdminPasswordMtime: "2026-04-18T21:30:00Z"
     repositories:
       # Public Helm-Repos für Wrapper-Chart-Dependencies
