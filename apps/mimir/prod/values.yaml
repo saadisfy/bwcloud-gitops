@@ -1,5 +1,13 @@
 # Mimir prod stage overrides
 mimir-distributed:
+  mimir:
+    structuredConfig:
+      ruler:
+        rule_path: /data/ruler-rules
+      ruler_storage:
+        backend: local
+        local:
+          directory: /data/ruler-storage
   ruler:
     enabled: true
     replicas: 1
