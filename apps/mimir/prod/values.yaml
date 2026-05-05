@@ -2,6 +2,8 @@
 mimir-distributed:
   mimir:
     structuredConfig:
+      # Required: ruler writes temporary/state files at startup.
+      # With readOnlyRootFilesystem=true, /tmp is not writable, so we must use /data.
       ruler:
         rule_path: /data/ruler-rules
       ruler_storage:
