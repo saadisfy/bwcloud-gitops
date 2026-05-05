@@ -9,3 +9,23 @@ queryFrontendIngress:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
   host: mimir-query.saadisfy.me
   tlsSecretName: mimir-query-tls
+
+rulerRuleSync:
+  enabled: false
+  # Mimir query-frontend/gateway URL exposing /prometheus API.
+  address: "http://mimir-nginx.mimir.svc.cluster.local/prometheus"
+  # Tenant / OrgID used for ruler API calls.
+  tenantId: "anonymous"
+  # Optional auth secret containing token or user/password.
+  auth:
+    existingSecret: ""
+    tokenKey: "token"
+    usernameKey: "username"
+    passwordKey: "password"
+  # Hook mode makes Argo CD rerun the sync job on each sync.
+  argocdHook: true
+  syncWave: "5"
+  image:
+    repository: grafana/mimirtool
+    tag: "3.0.1"
+    pullPolicy: IfNotPresent

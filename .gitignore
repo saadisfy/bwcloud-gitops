@@ -10,3 +10,5 @@
 tools/mcp-argocd-k8s/node_modules/
 
 *.tgz
+
+untrack/

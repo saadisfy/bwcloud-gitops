@@ -4,7 +4,9 @@
 
 {{- /* Collect all unique folders from the files directory */ -}}
 {{- $folders := dict }}
-{{- range $path, $bytes := .Files.Glob "files/**/*.json" }}
+{{- $folderSources := list "files/**/*.json" "files/**/alerts*.yaml" "files/**/alerts*.yml" "files/**/alert-rules*.yaml" "files/**/alert-rules*.yml" }}
+{{- range $glob := $folderSources }}
+{{- range $path, $bytes := $.Files.Glob $glob }}
   {{- $relDir := dir $path | trimPrefix "files/" | trimPrefix "files" }}
   {{- if ne $relDir "" }}
     {{- $parts := splitList "/" $relDir }}
@@ -20,6 +22,7 @@
       {{- end }}
     {{- end }}
   {{- end }}
+{{- end }}
 {{- end }}
 
 {{- /* Generate GrafanaFolder CRs for each directory */ -}}

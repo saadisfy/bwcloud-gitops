@@ -1,0 +1,17 @@
+{{- if (((($.Values).grafanaOperatorCRs | default dict).enabled) | default false) }}
+{{- if eq (len (((($.Values).grafanaOperatorCRs | default dict).notificationPolicies) | default (list))) 0 }}
+{{- fail "grafanaOperatorCRs.notificationPolicies is required (fallback removed)" }}
+{{- end }}
+
+{{- range $np := (((($.Values).grafanaOperatorCRs | default dict).notificationPolicies) | default (list)) }}
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicy
+metadata:
+  name: {{ $np.name | quote }}
+spec:
+  instanceSelector:
+{{- toYaml ((($.Values).grafanaOperatorCRs | default dict).instanceSelector) | nindent 4 }}
+{{- toYaml $np.spec | nindent 2 }}
+---
+{{- end }}
+{{- end }}

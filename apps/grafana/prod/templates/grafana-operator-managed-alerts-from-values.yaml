@@ -1,29 +1,12 @@
-{{- $grafanaOperatorCRs := .Values.grafanaOperatorCRs | default dict }}
-{{- if ($grafanaOperatorCRs.enabled | default false) }}
-{{- $selector := $grafanaOperatorCRs.instanceSelector }}
-{{- $alerting := $grafanaOperatorCRs.alerting | default dict }}
-{{- $alertingFolders := $alerting.folders | default (list) }}
-{{- $datasourceUid := "mimir" }}
-{{- $customContactPoints := $grafanaOperatorCRs.contactPoints | default (list) }}
-{{- $customNotificationPolicies := $grafanaOperatorCRs.notificationPolicies | default (list) }}
-{{- if eq (len $alertingFolders) 0 }}
-{{- fail "grafanaOperatorCRs.alerting.folders is required (fallback removed)" }}
-{{- end }}
-{{- if eq (len $customContactPoints) 0 }}
-{{- fail "grafanaOperatorCRs.contactPoints is required (fallback removed)" }}
-{{- end }}
-{{- if eq (len $customNotificationPolicies) 0 }}
-{{- fail "grafanaOperatorCRs.notificationPolicies is required (fallback removed)" }}
-{{- end }}
-
-{{- range $folder := $alertingFolders }}
+{{- if (((($.Values).grafanaOperatorCRs | default dict).enabled) | default false) }}
+{{- range $folder := (((((($.Values).grafanaOperatorCRs | default dict).alerting) | default dict).folders) | default (list)) }}
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaFolder
 metadata:
   name: {{ $folder.name | quote }}
 spec:
   instanceSelector:
-{{- toYaml $selector | nindent 4 }}
+{{- toYaml ((($.Values).grafanaOperatorCRs | default dict).instanceSelector) | nindent 4 }}
   title: {{ default $folder.name $folder.title | quote }}
 ---
 {{- range $group := ($folder.groups | default (list)) }}
@@ -33,18 +16,18 @@ metadata:
   name: {{ printf "%s-%s" $folder.name $group.name | trunc 63 | trimSuffix "-" | quote }}
 spec:
   instanceSelector:
-{{- toYaml $selector | nindent 4 }}
+{{- toYaml ((($.Values).grafanaOperatorCRs | default dict).instanceSelector) | nindent 4 }}
   name: {{ default $group.name $group.title | quote }}
-  folderRef: {{ $folder.name }}
-  interval: {{ default "1m" $group.interval }}
+  folderRef: {{ $folder.name | quote }}
+  interval: {{ default "1m" $group.interval | quote }}
   rules:
 {{- range $rule := ($group.rules | default (list)) }}
-    - uid: {{ $rule.uid }}
+    - uid: {{ $rule.uid | quote }}
       title: {{ $rule.title | quote }}
       condition: B
-      for: {{ default "5m" $rule.for }}
-      noDataState: {{ default "NoData" $rule.noDataState }}
-      execErrState: {{ default "Error" $rule.execErrState }}
+      for: {{ default "5m" $rule.for | quote }}
+      noDataState: {{ default "NoData" $rule.noDataState | quote }}
+      execErrState: {{ default "Error" $rule.execErrState | quote }}
 {{- if $rule.labels }}
       labels:
 {{- toYaml $rule.labels | nindent 8 }}
@@ -55,14 +38,14 @@ spec:
 {{- end }}
       data:
         - refId: A
-          datasourceUid: {{ $datasourceUid }}
+          datasourceUid: "mimir"
           relativeTimeRange:
             from: {{ default 600 $rule.relativeTimeRangeFrom }}
             to: {{ default 0 $rule.relativeTimeRangeTo }}
           model:
             datasource:
               type: prometheus
-              uid: {{ $datasourceUid }}
+              uid: "mimir"
             editorMode: code
             expr: {{ $rule.expr | quote }}
             instant: true
@@ -79,7 +62,7 @@ spec:
               - evaluator:
                   params:
                     - {{ default 0 $rule.threshold }}
-                  type: {{ default "gt" $rule.evalOperator }}
+                  type: {{ default "gt" $rule.evalOperator | quote }}
                 operator:
                   type: and
                 query:
@@ -100,27 +83,5 @@ spec:
 {{- end }}
 ---
 {{- end }}
-{{- end }}
-{{- range $cp := $customContactPoints }}
-apiVersion: grafana.integreatly.org/v1beta1
-kind: GrafanaContactPoint
-metadata:
-  name: {{ $cp.name | quote }}
-spec:
-  instanceSelector:
-{{- toYaml $selector | nindent 4 }}
-{{- toYaml $cp.spec | nindent 2 }}
----
-{{- end }}
-{{- range $np := $customNotificationPolicies }}
-apiVersion: grafana.integreatly.org/v1beta1
-kind: GrafanaNotificationPolicy
-metadata:
-  name: {{ $np.name | quote }}
-spec:
-  instanceSelector:
-{{- toYaml $selector | nindent 4 }}
-{{- toYaml $np.spec | nindent 2 }}
----
 {{- end }}
 {{- end }}

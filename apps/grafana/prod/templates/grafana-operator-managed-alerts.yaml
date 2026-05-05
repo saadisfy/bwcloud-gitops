@@ -1,0 +1,5 @@
+{{- /* Deprecated: split into
+  - grafana-operator-managed-alerts-from-values.yaml
+  - grafana-operator-managed-alerts-from-prometheus-files.yaml
+  - grafana-operator-managed-alerts-from-grafana-exports.yaml
+*/ -}}
