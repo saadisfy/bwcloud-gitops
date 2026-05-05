@@ -1,5 +1,8 @@
 # Mimir prod stage overrides
-mimir-distributed: {}
+mimir-distributed:
+  ruler:
+    enabled: true
+    replicas: 1
 
 queryFrontendIngress:
   enabled: true
@@ -11,9 +14,9 @@ queryFrontendIngress:
   tlsSecretName: mimir-query-tls
 
 rulerRuleSync:
-  enabled: false
+  enabled: true
   # Mimir query-frontend/gateway URL exposing /prometheus API.
-  address: "http://mimir-nginx.mimir.svc.cluster.local/prometheus"
+  address: "http://mimir-gateway.mimir.svc.cluster.local/prometheus"
   # Tenant / OrgID used for ruler API calls.
   tenantId: "anonymous"
   # Optional auth secret containing token or user/password.
