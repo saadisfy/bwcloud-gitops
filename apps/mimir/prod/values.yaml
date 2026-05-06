@@ -9,10 +9,16 @@ mimir-distributed:
       ruler_storage:
         backend: local
         local:
-          directory: /data/ruler
+          directory: /ruler-storage
   ruler:
     enabled: true
     replicas: 1
+    extraVolumes:
+      - name: ruler-storage
+        emptyDir: {}
+    extraVolumeMounts:
+      - name: ruler-storage
+        mountPath: /ruler-storage
 
 queryFrontendIngress:
   enabled: true
