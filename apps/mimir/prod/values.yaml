@@ -8,16 +8,16 @@ mimir-distributed:
         rule_path: /data/ruler-rules
         alertmanager_url: "http://mimir-alertmanager-headless.mimir.svc.cluster.local:8080"
       ruler_storage:
-        backend: local
-        local:
-          directory: /ruler-storage
+        backend: filesystem
+        filesystem:
+          dir: /ruler-storage
   ruler:
     enabled: true
     replicas: 1
     initContainers:
       - name: setup-storage
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /ruler-storage/1 && touch /ruler-storage/1/rules"]
+        command: ["sh", "-c", "mkdir -p /ruler-storage/1"]
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
