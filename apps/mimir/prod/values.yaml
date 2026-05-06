@@ -17,7 +17,7 @@ mimir-distributed:
     initContainers:
       - name: setup-storage
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /ruler-storage/1"]
+        command: ["sh", "-c", "mkdir -p /ruler-storage/1 && touch /ruler-storage/1/rules"]
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
