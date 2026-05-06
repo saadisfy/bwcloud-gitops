@@ -64,7 +64,8 @@ mimir-distributed:
   alertmanager:
     replicas: 1
     persistentVolume:
-      enabled: false
+      enabled: true
+      size: 1Gi
     resources:
       requests:
         cpu: 50m
@@ -74,7 +75,8 @@ mimir-distributed:
 
   compactor:
     persistentVolume:
-      enabled: false
+      enabled: true
+      size: 2Gi
     resources:
       requests:
         cpu: 50m
@@ -94,7 +96,8 @@ mimir-distributed:
   ingester:
     replicas: 1
     persistentVolume:
-      enabled: false
+      enabled: true
+      size: 5Gi
     resources:
       requests:
         cpu: 100m
@@ -127,7 +130,8 @@ mimir-distributed:
   store_gateway:
     replicas: 1
     persistentVolume:
-      enabled: false
+      enabled: true
+      size: 5Gi
     resources:
       requests:
         cpu: 50m
