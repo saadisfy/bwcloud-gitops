@@ -204,7 +204,6 @@ data:
     // --- ServiceMonitors (e.g. for Mimir Components) ---
     prometheus.operator.servicemonitors "cluster" {
       forward_to = [otelcol.receiver.prometheus.servicemonitors.receiver]
-      scrape_interval = "15s"
     }
 
     otelcol.receiver.prometheus "servicemonitors" {
