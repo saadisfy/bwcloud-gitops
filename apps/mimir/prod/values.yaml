@@ -42,7 +42,7 @@ rulerRuleSync:
     usernameKey: "username"
     passwordKey: "password"
   # Hook mode makes Argo CD rerun the sync job on each sync.
-  argocdHook: true
+  argocdHook: false
   syncWave: "5"
   image:
     repository: grafana/mimirtool
