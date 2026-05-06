@@ -16,7 +16,7 @@ mimir-distributed:
     initContainers:
       - name: setup-storage
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /ruler-storage/anonymous/rules && chown -R 10001:10001 /ruler-storage"]
+        command: ["sh", "-c", "mkdir -p /ruler-storage/anonymous && chown -R 10001:10001 /ruler-storage"]
         securityContext:
           runAsUser: 0
         volumeMounts:
