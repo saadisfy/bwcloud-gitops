@@ -405,35 +405,24 @@ data:
     // --- Module: Node-Exporter Scrape ---
     declare "otelcol_node_exporter_scrape" {
       argument "forward_to" {}
-      argument "namespace" {
-        optional = true
-        default  = "alloy"
-      }
-      discovery.kubernetes "endpoints" {
-        role = "endpoints"
-        namespaces {
-          names = [argument.namespace.value]
-        }
+      discovery.kubernetes "nodes" {
+        role = "node"
       }
       discovery.relabel "node_exporter" {
-        targets = discovery.kubernetes.endpoints.targets
-        rule {
-          source_labels = ["__meta_kubernetes_service_name"]
-          regex         = "^node-exporter$"
-          action        = "keep"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex         = "metrics|http-metrics"
-          action        = "keep"
-        }
+        targets = discovery.kubernetes.nodes.targets
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
-          target_label  = "instance"
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+          target_label  = "__address__"
+          replacement   = "${1}:9100"
         }
         rule {
           target_label = "job"
-          replacement  = "node-exporter"
+          replacement = "node-exporter"
         }
       }
       prometheus.scrape "node_exporter" {
@@ -442,9 +431,7 @@ data:
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "node_exporter" {
-        output {
-          metrics = [argument.forward_to.value]
-        }
+        output { metrics = [argument.forward_to.value] }
       }
     }
 
