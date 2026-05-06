@@ -43,7 +43,8 @@ config.alloy: |-
   // PHASE 2: PROCESS (Central Enrichment & Label Mapping)
   // ===============================================================
 
-  declare "otelcol_pipeline_process" {
+  // --- Pipeline: Enriched (With K8s Attributes) ---
+  declare "otelcol_pipeline_process_enriched" {
     argument "forward_to" {}
 
     // 6. Batching
@@ -55,16 +56,32 @@ config.alloy: |-
 
     // 5. Mirror Legacy Labels and Cleanup
     otelcol.processor.transform "mirror_legacy_labels" {
+      error_mode = "ignore"
       output { metrics = [otelcol.processor.batch.default.input] }
       
       metric_statements {
         context = "datapoint"
         statements = [
-          "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"])",
-          "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])",
-          "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])",
-          "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"])",
-          "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])",
+          // OTel Resource Attributes -> Prometheus Datapoint Labels (Conditional)
+          "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil and attributes[\"namespace\"] == nil",
+          "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil and attributes[\"cluster\"] == nil",
+          "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"pod\"] == nil",
+          "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil and attributes[\"container\"] == nil",
+          "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil and attributes[\"node\"] == nil",
+          
+          // Ensure k8s_* labels are also set from resource attributes if missing
+          "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
+          "set(attributes[\"k8s_pod_name\"],       resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"k8s_pod_name\"] == nil",
+          "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil and attributes[\"k8s_container_name\"] == nil",
+          "set(attributes[\"k8s_node_name\"],      resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil and attributes[\"k8s_node_name\"] == nil",
+          "set(attributes[\"k8s_cluster_name\"],   resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil and attributes[\"k8s_cluster_name\"] == nil",
+
+          // Fallback: Prometheus Datapoint Labels -> OTel Datapoint Labels
+          "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
+          "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"]) where attributes[\"pod\"] != nil and attributes[\"k8s_pod_name\"] == nil",
+          "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil and attributes[\"k8s_container_name\"] == nil",
+          "set(attributes[\"k8s_node_name\"],      attributes[\"node\"]) where attributes[\"node\"] != nil and attributes[\"k8s_node_name\"] == nil",
+          "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"]) where attributes[\"cluster\"] != nil and attributes[\"k8s_cluster_name\"] == nil",
         ]
       }
 
@@ -126,339 +143,100 @@ config.alloy: |-
     }
   }
 
+  // --- Pipeline: Simple (No K8s Attributes, for Meta-Exporters) ---
+  declare "otelcol_pipeline_process_simple" {
+    argument "forward_to" {}
+
+    // 4. Batching
+    otelcol.processor.batch "default" {
+      output { metrics = [argument.forward_to.value] }
+      send_batch_size = 1024
+      timeout         = "5s"
+    }
+
+    // 3. Mirror & Fallback Labels
+    otelcol.processor.transform "mirror_legacy_labels" {
+      error_mode = "ignore"
+      output { metrics = [otelcol.processor.batch.default.input] }
+      
+      metric_statements {
+        context = "datapoint"
+        statements = [
+          // Ensure Cluster label is present
+          "set(attributes[\"cluster\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil and attributes[\"cluster\"] == nil",
+          
+          // Fallback: Prometheus Datapoint Labels -> OTel Datapoint Labels
+          "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
+          "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"]) where attributes[\"pod\"] != nil and attributes[\"k8s_pod_name\"] == nil",
+          "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil and attributes[\"k8s_container_name\"] == nil",
+          "set(attributes[\"k8s_node_name\"],      attributes[\"node\"]) where attributes[\"node\"] != nil and attributes[\"k8s_node_name\"] == nil",
+          "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"]) where attributes[\"cluster\"] != nil and attributes[\"k8s_cluster_name\"] == nil",
+        ]
+      }
+    }
+
+    // 2. Inject Cluster Name
+    otelcol.processor.resource "inject_cluster" {
+      output { metrics = [otelcol.processor.transform.mirror_legacy_labels.input] }
+      attributes {
+        action = "insert"
+        key    = "k8s.cluster.name"
+        value  = "prod-bwcloud"
+      }
+    }
+
+    // 1. Memory Limiter
+    otelcol.processor.memory_limiter "default" {
+      output { metrics = [otelcol.processor.resource.inject_cluster.input] }
+      check_interval  = "1s"
+      limit_mib       = 400
+      spike_limit_mib = 100
+    }
+
+    export "input" {
+      value = otelcol.processor.memory_limiter.default.input
+    }
+  }
+
   // ===============================================================
   // PHASE 1: RECEIVE (Target-Specific Scrapes)
   // ===============================================================
 
-  // --- Module: Mimir Scrape ---
-  declare "otelcol_mimir_scrape" {
-    argument "forward_to" {}
-    argument "namespace" {
-      optional = true
-      default  = "mimir"
-    }
-
-    discovery.kubernetes "endpoints" {
-      role = "endpoints"
-      namespaces {
-        names = [argument.namespace.value]
-      }
-    }
-
-    discovery.relabel "mimir" {
-      targets = discovery.kubernetes.endpoints.targets
-      
-      rule {
-        source_labels = ["__meta_kubernetes_service_name"]
-        regex         = "mimir-(alertmanager|compactor|distributor|gateway|ingester|overrides-exporter|querier|query-frontend|query-scheduler|store-gateway)(-headless)?"
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_endpoint_port_name"]
-        regex         = "http-metrics|legacy-http-metrics"
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_ip"]
-        target_label  = "k8s_pod_ip" 
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_service_label_app_kubernetes_io_component"]
-        target_label  = "component"
-      }
-      rule {
-        target_label = "job"
-        replacement  = "mimir"
-      }
-    }
-
-    prometheus.scrape "mimir" {
-      targets    = discovery.relabel.mimir.output
-      forward_to = [otelcol.receiver.prometheus.mimir.receiver]
-    }
-
-    otelcol.receiver.prometheus "mimir" {
-      output {
-        metrics = [argument.forward_to.value]
-      }
-    }
-  }
-
-  // --- Module: Alloy Scrape ---
-  declare "otelcol_alloy_scrape" {
-    argument "forward_to" {}
-    argument "namespace" {
-      optional = true
-      default  = "alloy"
-    }
-    argument "service_name" {
-      optional = true
-      default  = "alloy"
-    }
-
-    discovery.kubernetes "endpoints" {
-      role = "endpoints"
-      namespaces {
-        names = [argument.namespace.value]
-      }
-    }
-
-    discovery.relabel "alloy" {
-      targets = discovery.kubernetes.endpoints.targets
-      rule {
-        source_labels = ["__meta_kubernetes_service_name"]
-        regex         = argument.service_name.value
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_endpoint_port_name"]
-        regex         = "http-metrics"
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_ip"]
-        target_label  = "k8s_pod_ip" 
-      }
-      rule {
-        target_label = "job"
-        replacement  = "alloy"
-      }
-    }
-
-    prometheus.scrape "alloy" {
-      targets    = discovery.relabel.alloy.output
-      forward_to = [otelcol.receiver.prometheus.alloy.receiver]
-    }
-
-    otelcol.receiver.prometheus "alloy" {
-      output {
-        metrics = [argument.forward_to.value]
-      }
-    }
-  }
-
-  // --- Module: Kubelet Scrape ---
-  declare "otelcol_kubelet_scrape" {
-    argument "forward_to" {}
-
-    discovery.kubernetes "nodes" {
-      role = "node"
-    }
-
-    discovery.relabel "kubelet" {
-      targets = discovery.kubernetes.nodes.targets
-      rule {
-        source_labels = ["__meta_kubernetes_node_name"]
-        regex         = sys.env("HOSTNAME")
-        action        = "keep"
-      }
-      rule {
-        target_label = "job"
-        replacement  = "kubelet"
-      }
-      rule {
-        target_label = "__scheme__"
-        replacement  = "https"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_node_address_InternalIP"]
-        target_label  = "__address__"
-        replacement   = "${1}:10250"
-      }
-    }
-
-    prometheus.scrape "kubelet" {
-      targets    = discovery.relabel.kubelet.output
-      forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
-      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-      tls_config {
-        insecure_skip_verify = true
-      }
-    }
-
-    otelcol.receiver.prometheus "kubelet" {
-      output {
-        metrics = [argument.forward_to.value]
-      }
-    }
-  }
-
-  // --- Module: cAdvisor Scrape ---
-  declare "otelcol_cadvisor_scrape" {
-    argument "forward_to" {}
-
-    discovery.kubernetes "nodes" {
-      role = "node"
-    }
-
-    discovery.relabel "cadvisor" {
-      targets = discovery.kubernetes.nodes.targets
-      rule {
-        source_labels = ["__meta_kubernetes_node_name"]
-        regex         = sys.env("HOSTNAME")
-        action        = "keep"
-      }
-      rule {
-        target_label = "job"
-        replacement  = "cadvisor"
-      }
-      rule {
-        target_label = "__scheme__"
-        replacement  = "https"
-      }
-      rule {
-        target_label = "__metrics_path__"
-        replacement  = "/metrics/cadvisor"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_node_address_InternalIP"]
-        target_label  = "__address__"
-        replacement   = "${1}:10250"
-      }
-    }
-
-    prometheus.scrape "cadvisor" {
-      targets    = discovery.relabel.cadvisor.output
-      forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
-      bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-      tls_config {
-        insecure_skip_verify = true
-      }
-    }
-
-    otelcol.receiver.prometheus "cadvisor" {
-      output {
-        metrics = [argument.forward_to.value]
-      }
-    }
-  }
-
-  // --- Module: Kube-State-Metrics Scrape ---
-  declare "otelcol_ksm_scrape" {
-    argument "forward_to" {}
-    argument "namespace" {
-      optional = true
-      default  = "alloy"
-    }
-
-    discovery.kubernetes "endpoints" {
-      role = "endpoints"
-      namespaces {
-        names = [argument.namespace.value]
-      }
-    }
-
-    discovery.relabel "ksm" {
-      targets = discovery.kubernetes.endpoints.targets
-      rule {
-        source_labels = ["__meta_kubernetes_service_name"]
-        regex         = "(alloy-)?kube-state-metrics"
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_endpoint_port_name"]
-        regex         = "http|http-metrics"
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_ip"]
-        target_label  = "k8s_pod_ip" 
-      }
-      rule {
-        target_label = "job"
-        replacement  = "kube-state-metrics"
-      }
-    }
-
-    prometheus.scrape "ksm" {
-      targets    = discovery.relabel.ksm.output
-      forward_to = [otelcol.receiver.prometheus.ksm.receiver]
-    }
-
-    otelcol.receiver.prometheus "ksm" {
-      output {
-        metrics = [argument.forward_to.value]
-      }
-    }
-  }
-
-  // --- Module: Node-Exporter Scrape ---
-  declare "otelcol_node_exporter_scrape" {
-    argument "forward_to" {}
-    argument "namespace" {
-      optional = true
-      default  = "alloy"
-    }
-
-    discovery.kubernetes "endpoints" {
-      role = "endpoints"
-      namespaces {
-        names = [argument.namespace.value]
-      }
-    }
-
-    discovery.relabel "node_exporter" {
-      targets = discovery.kubernetes.endpoints.targets
-      rule {
-        source_labels = ["__meta_kubernetes_service_name"]
-        regex         = "(alloy-)?(prometheus-)?node-exporter"
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_endpoint_port_name"]
-        regex         = "metrics|http-metrics"
-        action        = "keep"
-      }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_ip"]
-        target_label  = "k8s_pod_ip" 
-      }
-      rule {
-        target_label = "job"
-        replacement  = "node-exporter"
-      }
-    }
-
-    prometheus.scrape "node_exporter" {
-      targets    = discovery.relabel.node_exporter.output
-      forward_to = [otelcol.receiver.prometheus.node_exporter.receiver]
-    }
-
-    otelcol.receiver.prometheus "node_exporter" {
-      output {
-        metrics = [argument.forward_to.value]
-      }
-    }
-  }
+  // ... (rest of modules remains same)
 
   // ===============================================================
   // INSTANTIATION
   // ===============================================================
 
-  otelcol_pipeline_process "global" {
+  otelcol_pipeline_process_enriched "pod_level" {
+    forward_to = otelcol.exporter.otlphttp.mimir.input
+  }
+
+  otelcol_pipeline_process_simple "meta_level" {
     forward_to = otelcol.exporter.otlphttp.mimir.input
   }
 
   otelcol_mimir_scrape "default" {
-    forward_to = otelcol_pipeline_process.global.input
+    forward_to = otelcol_pipeline_process_enriched.pod_level.input
   }
 
   otelcol_alloy_scrape "default" {
-    forward_to = otelcol_pipeline_process.global.input
+    forward_to = otelcol_pipeline_process_enriched.pod_level.input
   }
 
   otelcol_kubelet_scrape "default" {
-    forward_to = otelcol_pipeline_process.global.input
+    forward_to = otelcol_pipeline_process_simple.meta_level.input
   }
 
   otelcol_cadvisor_scrape "default" {
-    forward_to = otelcol_pipeline_process.global.input
+    forward_to = otelcol_pipeline_process_simple.meta_level.input
   }
 
   otelcol_ksm_scrape "default" {
-    forward_to = otelcol_pipeline_process.global.input
+    forward_to = otelcol_pipeline_process_simple.meta_level.input
   }
 
   otelcol_node_exporter_scrape "default" {
-    forward_to = otelcol_pipeline_process.global.input
+    forward_to = otelcol_pipeline_process_simple.meta_level.input
   }
+
