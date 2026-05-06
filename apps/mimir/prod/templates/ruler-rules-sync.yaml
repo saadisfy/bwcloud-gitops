@@ -13,6 +13,11 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: mimir-rules-bundle
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mimir
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ruler-sync
 data:
   rules.yaml: |-
 {{- range $path, $_ := $ruleFiles }}
@@ -24,6 +29,11 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: mimir-ruler-rules-sync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mimir
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ruler-sync
   annotations:
 {{- if ($cfg.argocdHook | default true) }}
     argocd.argoproj.io/hook: Sync
@@ -34,6 +44,11 @@ spec:
   backoffLimit: 1
   ttlSecondsAfterFinished: 300
   template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mimir
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: ruler-sync
     spec:
       restartPolicy: OnFailure
       containers:
