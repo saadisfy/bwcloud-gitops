@@ -8,21 +8,18 @@
 {{- end }}
 {{- end }}
 
-{{- range $path, $_ := $ruleFiles }}
-{{- $nameHash := ($path | sha256sum | trunc 8) }}
+{{- if gt (len $ruleFiles) 0 }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ printf "mimir-rules-%s" $nameHash | quote }}
-  annotations:
-    bwcloud.io/source-file: {{ $path | quote }}
+  name: mimir-rules-bundle
 data:
   rules.yaml: |-
+{{- range $path, $_ := $ruleFiles }}
 {{ $.Files.Get $path | indent 4 }}
 ---
 {{- end }}
-
-{{- if gt (len $ruleFiles) 0 }}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -43,60 +40,30 @@ spec:
         - name: mimirtool
           image: "{{ $cfg.image.repository }}:{{ $cfg.image.tag }}"
           imagePullPolicy: {{ $cfg.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - rules
+            - load
+            - --address={{ $cfg.address }}
+            - --id={{ ($cfg.tenantId | default "anonymous") }}
+{{- if $cfg.auth.existingSecret }}
+            - --token=$(MIMIR_TOKEN)
+{{- end }}
+            - /rules/rules.yaml
           env:
-            - name: MIMIR_ADDRESS
-              value: {{ $cfg.address | quote }}
-            - name: MIMIR_TENANT_ID
-              value: {{ ($cfg.tenantId | default "anonymous") | quote }}
 {{- if $cfg.auth.existingSecret }}
             - name: MIMIR_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ $cfg.auth.existingSecret | quote }}
                   key: {{ ($cfg.auth.tokenKey | default "token") | quote }}
-                  optional: true
-            - name: MIMIR_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $cfg.auth.existingSecret | quote }}
-                  key: {{ ($cfg.auth.usernameKey | default "username") | quote }}
-                  optional: true
-            - name: MIMIR_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $cfg.auth.existingSecret | quote }}
-                  key: {{ ($cfg.auth.passwordKey | default "password") | quote }}
-                  optional: true
+                  optional: false
 {{- end }}
-          command:
-            - /bin/sh
-            - -ec
-            - |
-              set -euo pipefail
-              for f in /rules/*.yaml /rules/*.yml; do
-                [ -f "$f" ] || continue
-                echo "Loading ruler rules from $f"
-                if [ -n "${MIMIR_TOKEN:-}" ]; then
-                  mimirtool --address="${MIMIR_ADDRESS}" --id="${MIMIR_TENANT_ID}" --token="${MIMIR_TOKEN}" rules load "$f"
-                elif [ -n "${MIMIR_USERNAME:-}" ] && [ -n "${MIMIR_PASSWORD:-}" ]; then
-                  mimirtool --address="${MIMIR_ADDRESS}" --id="${MIMIR_TENANT_ID}" --user="${MIMIR_USERNAME}" --key="${MIMIR_PASSWORD}" rules load "$f"
-                else
-                  mimirtool --address="${MIMIR_ADDRESS}" --id="${MIMIR_TENANT_ID}" rules load "$f"
-                fi
-              done
           volumeMounts:
             - name: rules
               mountPath: /rules
       volumes:
         - name: rules
-          projected:
-            sources:
-{{- range $path, $_ := $ruleFiles }}
-              - configMap:
-                  name: {{ printf "mimir-rules-%s" ($path | sha256sum | trunc 8) | quote }}
-                  items:
-                    - key: rules.yaml
-                      path: {{ printf "%s.yaml" ($path | sha256sum | trunc 8) | quote }}
-{{- end }}
+          configMap:
+            name: mimir-rules-bundle
 {{- end }}
 {{- end }}
