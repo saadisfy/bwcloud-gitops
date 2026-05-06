@@ -93,8 +93,17 @@ data:
         metadata = ["k8s.namespace.name", "k8s.pod.name", "k8s.node.name", "k8s.deployment.name", "k8s.container.name"]
         deployment_name_from_replicaset = true
       }
-      pod_association { source { from = "resource_attribute" name = "k8s.pod.ip" } }
-      pod_association { source { from = "connection" } }
+      pod_association {
+        source {
+          from = "resource_attribute"
+          name = "k8s.pod.ip"
+        }
+      }
+      pod_association {
+        source {
+          from = "connection"
+        }
+      }
     }
 
     otelcol.processor.transform "promote_pod_ip_enriched" {
@@ -180,10 +189,24 @@ data:
 
       discovery.relabel "alloy" {
         targets = discovery.kubernetes.endpoints.targets
-        rule { source_labels = ["__meta_kubernetes_service_name"]; regex = argument.service_name.value; action = "keep" }
-        rule { source_labels = ["__meta_kubernetes_endpoint_port_name"]; regex = "http-metrics"; action = "keep" }
-        rule { source_labels = ["__meta_kubernetes_pod_ip"]; target_label = "k8s_pod_ip" }
-        rule { target_label = "job"; replacement = "alloy" }
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          regex         = argument.service_name.value
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_endpoint_port_name"]
+          regex         = "http-metrics"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "alloy"
+        }
       }
 
       prometheus.scrape "alloy" {
@@ -202,10 +225,24 @@ data:
       discovery.kubernetes "nodes" { role = "node" }
       discovery.relabel "kubelet" {
         targets = discovery.kubernetes.nodes.targets
-        rule { source_labels = ["__meta_kubernetes_node_name"]; regex = sys.env("HOSTNAME"); action = "keep" }
-        rule { target_label = "job"; replacement = "kubelet" }
-        rule { target_label = "__scheme__"; replacement = "https" }
-        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"]; target_label = "__address__"; replacement = "${1}:10250" }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "kubelet"
+        }
+        rule {
+          target_label = "__scheme__"
+          replacement  = "https"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
+        }
       }
       prometheus.scrape "kubelet" {
         targets    = discovery.relabel.kubelet.output
@@ -224,11 +261,28 @@ data:
       discovery.kubernetes "nodes" { role = "node" }
       discovery.relabel "cadvisor" {
         targets = discovery.kubernetes.nodes.targets
-        rule { source_labels = ["__meta_kubernetes_node_name"]; regex = sys.env("HOSTNAME"); action = "keep" }
-        rule { target_label = "job"; replacement = "cadvisor" }
-        rule { target_label = "__scheme__"; replacement = "https" }
-        rule { target_label = "__metrics_path__"; replacement = "/metrics/cadvisor" }
-        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"]; target_label = "__address__"; replacement = "${1}:10250" }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          regex         = sys.env("HOSTNAME")
+          action        = "keep"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "cadvisor"
+        }
+        rule {
+          target_label = "__scheme__"
+          replacement  = "https"
+        }
+        rule {
+          target_label = "__metrics_path__"
+          replacement  = "/metrics/cadvisor"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
+        }
       }
       prometheus.scrape "cadvisor" {
         targets    = discovery.relabel.cadvisor.output
@@ -251,9 +305,24 @@ data:
       }
       discovery.relabel "ksm" {
         targets = discovery.kubernetes.endpoints.targets
-        rule { source_labels = ["__meta_kubernetes_service_name"]; regex = "(alloy-)?kube-state-metrics"; action = "keep" }
-        rule { source_labels = ["__meta_kubernetes_endpoint_port_name"]; regex = "http|http-metrics"; action = "keep" }
-        rule { target_label = "job"; replacement = "kube-state-metrics" }
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          regex         = "(alloy-)?kube-state-metrics"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_endpoint_port_name"]
+          regex         = "http|http-metrics"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "kube-state-metrics"
+        }
       }
       prometheus.scrape "ksm" {
         targets    = discovery.relabel.ksm.output
@@ -274,9 +343,24 @@ data:
       }
       discovery.relabel "node_exporter" {
         targets = discovery.kubernetes.endpoints.targets
-        rule { source_labels = ["__meta_kubernetes_service_name"]; regex = "(alloy-)?(prometheus-)?node-exporter"; action = "keep" }
-        rule { source_labels = ["__meta_kubernetes_endpoint_port_name"]; regex = "metrics|http-metrics"; action = "keep" }
-        rule { target_label = "job"; replacement = "node-exporter" }
+        rule {
+          source_labels = ["__meta_kubernetes_service_name"]
+          regex         = "(alloy-)?(prometheus-)?node-exporter"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_endpoint_port_name"]
+          regex         = "metrics|http-metrics"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "node-exporter"
+        }
       }
       prometheus.scrape "node_exporter" {
         targets    = discovery.relabel.node_exporter.output
