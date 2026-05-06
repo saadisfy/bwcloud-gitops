@@ -43,13 +43,13 @@ spec:
           command:
             - mimirtool
           args:
+            - rules
+            - load
             - --address={{ $cfg.address }}
             - --id={{ ($cfg.tenantId | default "anonymous") }}
 {{- if $cfg.auth.existingSecret }}
             - --token=$(MIMIR_TOKEN)
 {{- end }}
-            - rules
-            - load
             - /rules/rules.yaml
           env:
 {{- if $cfg.auth.existingSecret }}
