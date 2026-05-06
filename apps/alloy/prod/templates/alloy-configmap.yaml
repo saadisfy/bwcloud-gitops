@@ -45,14 +45,18 @@ data:
     // --- Chain 1: Enriched (for Pod Scrapes) ---
 
     otelcol.processor.batch "enriched" {
-      output { metrics = [otelcol.exporter.otlphttp.mimir.input] }
+      output {
+        metrics = [otelcol.exporter.otlphttp.mimir.input]
+      }
       send_batch_size = 1024
       timeout         = "5s"
     }
 
     otelcol.processor.transform "mirror_enriched" {
       error_mode = "ignore"
-      output { metrics = [otelcol.processor.batch.enriched.input] }
+      output {
+        metrics = [otelcol.processor.batch.enriched.input]
+      }
       metric_statements {
         context = "datapoint"
         statements = [
@@ -77,34 +81,55 @@ data:
       }
       metric_statements {
         context = "resource"
-        statements = [ "delete_key(attributes, \"k8s.pod.ip\")" ]
+        statements = [
+          "delete_key(attributes, \"k8s.pod.ip\")",
+        ]
       }
     }
 
     otelcol.processor.transform "inject_cluster_enriched" {
-      output { metrics = [otelcol.processor.transform.mirror_enriched.input] }
+      output {
+        metrics = [otelcol.processor.transform.mirror_enriched.input]
+      }
       metric_statements {
         context = "resource"
-        statements = [ "set(attributes[\"k8s.cluster.name\"], \"prod-bwcloud\")" ]
+        statements = [
+          "set(attributes[\"k8s.cluster.name\"], \"prod-bwcloud\")",
+        ]
       }
     }
 
     otelcol.processor.k8sattributes "enriched" {
-      output { metrics = [otelcol.processor.transform.inject_cluster_enriched.input] }
+      output {
+        metrics = [otelcol.processor.transform.inject_cluster_enriched.input]
+      }
       extract {
-        metadata = ["k8s.namespace.name", "k8s.pod.name", "k8s.node.name", "k8s.deployment.name", "k8s.container.name"]
+        metadata = [
+          "k8s.namespace.name",
+          "k8s.pod.name",
+          "k8s.node.name",
+          "k8s.deployment.name",
+          "k8s.container.name",
+        ]
         deployment_name_from_replicaset = true
       }
       pod_association {
-        source { from = "resource_attribute" name = "k8s.pod.ip" }
+        source {
+          from = "resource_attribute"
+          name = "k8s.pod.ip"
+        }
       }
       pod_association {
-        source { from = "connection" }
+        source {
+          from = "connection"
+        }
       }
     }
 
     otelcol.processor.transform "promote_pod_ip_enriched" {
-      output { metrics = [otelcol.processor.k8sattributes.enriched.input] }
+      output {
+        metrics = [otelcol.processor.k8sattributes.enriched.input]
+      }
       metric_statements {
         context = "datapoint"
         statements = [
@@ -115,7 +140,9 @@ data:
     }
 
     otelcol.processor.memory_limiter "enriched" {
-      output { metrics = [otelcol.processor.transform.promote_pod_ip_enriched.input] }
+      output {
+        metrics = [otelcol.processor.transform.promote_pod_ip_enriched.input]
+      }
       check_interval  = "1s"
       limit           = "400MiB"
       spike_limit     = "100MiB"
@@ -124,14 +151,18 @@ data:
     // --- Chain 2: Simple (for Meta-Exporters) ---
 
     otelcol.processor.batch "simple" {
-      output { metrics = [otelcol.exporter.otlphttp.mimir.input] }
+      output {
+        metrics = [otelcol.exporter.otlphttp.mimir.input]
+      }
       send_batch_size = 1024
       timeout         = "5s"
     }
 
     otelcol.processor.transform "mirror_simple" {
       error_mode = "ignore"
-      output { metrics = [otelcol.processor.batch.simple.input] }
+      output {
+        metrics = [otelcol.processor.batch.simple.input]
+      }
       metric_statements {
         context = "datapoint"
         statements = [
@@ -146,15 +177,21 @@ data:
     }
 
     otelcol.processor.transform "inject_cluster_simple" {
-      output { metrics = [otelcol.processor.transform.mirror_simple.input] }
+      output {
+        metrics = [otelcol.processor.transform.mirror_simple.input]
+      }
       metric_statements {
         context = "resource"
-        statements = [ "set(attributes[\"k8s.cluster.name\"], \"prod-bwcloud\")" ]
+        statements = [
+          "set(attributes[\"k8s.cluster.name\"], \"prod-bwcloud\")",
+        ]
       }
     }
 
     otelcol.processor.memory_limiter "simple" {
-      output { metrics = [otelcol.processor.transform.inject_cluster_simple.input] }
+      output {
+        metrics = [otelcol.processor.transform.inject_cluster_simple.input]
+      }
       check_interval  = "1s"
       limit           = "400MiB"
       spike_limit     = "100MiB"
@@ -171,18 +208,28 @@ data:
     }
 
     otelcol.receiver.prometheus "servicemonitors" {
-      output { metrics = [otelcol.processor.memory_limiter.enriched.input] }
+      output {
+        metrics = [otelcol.processor.memory_limiter.enriched.input]
+      }
     }
 
     // --- Module: Alloy Scrape ---
     declare "otelcol_alloy_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true default  = "alloy" }
-      argument "service_name" { optional = true default  = "alloy" }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
+      argument "service_name" {
+        optional = true
+        default  = "alloy"
+      }
 
       discovery.kubernetes "endpoints" {
         role = "endpoints"
-        namespaces { names = [argument.namespace.value] }
+        namespaces {
+          names = [argument.namespace.value]
+        }
       }
 
       discovery.relabel "alloy" {
@@ -214,14 +261,18 @@ data:
       }
 
       otelcol.receiver.prometheus "alloy" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
     // --- Module: Kubelet Scrape ---
     declare "otelcol_kubelet_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" { role = "node" }
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
       discovery.relabel "kubelet" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -229,26 +280,42 @@ data:
           regex         = sys.env("HOSTNAME")
           action        = "keep"
         }
-        rule { target_label = "job" replacement = "kubelet" }
-        rule { target_label = "__scheme__" replacement = "https" }
-        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"] target_label = "__address__" replacement = "${1}:10250" }
+        rule {
+          target_label = "job"
+          replacement  = "kubelet"
+        }
+        rule {
+          target_label = "__scheme__"
+          replacement  = "https"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
+        }
       }
       prometheus.scrape "kubelet" {
         targets    = discovery.relabel.kubelet.output
         forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config { insecure_skip_verify = true }
+        tls_config {
+          insecure_skip_verify = true
+        }
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "kubelet" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
     // --- Module: cAdvisor Scrape ---
     declare "otelcol_cadvisor_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" { role = "node" }
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
       discovery.relabel "cadvisor" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -258,31 +325,35 @@ data:
         }
         rule {
           target_label = "job"
-          replacement = "cadvisor"
+          replacement  = "cadvisor"
         }
         rule {
           target_label = "__scheme__"
-          replacement = "https"
+          replacement  = "https"
         }
         rule {
           target_label = "__metrics_path__"
-          replacement = "/metrics/cadvisor"
+          replacement  = "/metrics/cadvisor"
         }
         rule {
           source_labels = ["__meta_kubernetes_node_address_InternalIP"]
-          target_label = "__address__"
-          replacement = "${1}:10250"
+          target_label  = "__address__"
+          replacement   = "${1}:10250"
         }
       }
       prometheus.scrape "cadvisor" {
         targets    = discovery.relabel.cadvisor.output
         forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config { insecure_skip_verify = true }
+        tls_config {
+          insecure_skip_verify = true
+        }
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "cadvisor" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
@@ -291,31 +362,33 @@ data:
       argument "forward_to" {}
       argument "namespace" {
         optional = true
-        default = "alloy"
+        default  = "alloy"
       }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
-        namespaces { names = [argument.namespace.value] }
+        namespaces {
+          names = [argument.namespace.value]
+        }
       }
       discovery.relabel "ksm" {
         targets = discovery.kubernetes.endpoints.targets
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
-          regex = "^alloy-kube-state-metrics$"
-          action = "keep"
+          regex         = "^alloy-kube-state-metrics$"
+          action        = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex = "http|http-metrics"
-          action = "keep"
+          regex         = "http|http-metrics"
+          action        = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_pod_ip"]
-          target_label = "k8s_pod_ip"
+          target_label  = "k8s_pod_ip"
         }
         rule {
           target_label = "job"
-          replacement = "kube-state-metrics"
+          replacement  = "kube-state-metrics"
         }
       }
       prometheus.scrape "ksm" {
@@ -324,7 +397,9 @@ data:
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "ksm" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
@@ -333,23 +408,25 @@ data:
       argument "forward_to" {}
       argument "namespace" {
         optional = true
-        default = "alloy"
+        default  = "alloy"
       }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
-        namespaces { names = [argument.namespace.value] }
+        namespaces {
+          names = [argument.namespace.value]
+        }
       }
       discovery.relabel "node_exporter" {
         targets = discovery.kubernetes.endpoints.targets
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
-          regex = "^node-exporter$"
-          action = "keep"
+          regex         = "^node-exporter$"
+          action        = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex = "metrics|http-metrics"
-          action = "keep"
+          regex         = "metrics|http-metrics"
+          action        = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
@@ -357,7 +434,7 @@ data:
         }
         rule {
           target_label = "job"
-          replacement = "node-exporter"
+          replacement  = "node-exporter"
         }
       }
       prometheus.scrape "node_exporter" {
@@ -366,7 +443,9 @@ data:
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "node_exporter" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
