@@ -32,7 +32,7 @@ queryFrontendIngress:
 rulerRuleSync:
   enabled: true
   # Mimir query-frontend/gateway URL exposing /prometheus API.
-  address: "http://mimir-ruler.mimir.svc.cluster.local:8080"
+  address: "http://mimir-gateway.mimir.svc.cluster.local/prometheus"
   # Tenant / OrgID used for ruler API calls.
   tenantId: "anonymous"
   # Optional auth secret containing token or user/password.
