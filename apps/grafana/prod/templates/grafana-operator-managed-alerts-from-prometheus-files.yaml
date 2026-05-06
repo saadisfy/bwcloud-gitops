@@ -1,4 +1,6 @@
 {{- if (((($.Values).grafanaOperatorCRs | default dict).enabled) | default false) }}
+{{- $alertingCfg := ($.Values.grafanaOperatorCRs.alerting | default dict) }}
+{{- if ($alertingCfg.syncPrometheusRules | default true) }}
 {{- $alertFileGlobs := list "files/**/alerts*.yaml" "files/**/alerts*.yml" }}
 {{- range $glob := $alertFileGlobs }}
 {{- range $path, $_ := $.Files.Glob $glob }}
@@ -106,6 +108,7 @@ spec:
 {{- end }}
 {{- end }}
 ---
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

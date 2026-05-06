@@ -20,9 +20,23 @@ grafana:
         - name: Mimir
           type: prometheus
           access: proxy
+          uid: mimir
           url: http://mimir-gateway.mimir.svc.cluster.local/prometheus
           isDefault: true
           jsonData:
+            httpHeaderName1: X-Scope-OrgID
+            manageAlerts: true
+            alertmanagerUid: mimir-am
+          secureJsonData:
+            httpHeaderValue1: "1"
+        - name: Mimir Alertmanager
+          type: alertmanager
+          uid: mimir-am
+          access: proxy
+          url: http://mimir-alertmanager.mimir.svc.cluster.local:8080
+          jsonData:
+            handleGrafanaManagedAlerts: false
+            implementation: prometheus
             httpHeaderName1: X-Scope-OrgID
           secureJsonData:
             httpHeaderValue1: "1"
