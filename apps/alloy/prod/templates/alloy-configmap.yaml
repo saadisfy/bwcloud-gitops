@@ -96,7 +96,7 @@ data:
         deployment_name_from_replicaset = true
       }
       pod_association {
-        source { from = "resource_attribute"; name = "k8s.pod.ip" }
+        source { from = "resource_attribute" name = "k8s.pod.ip" }
       }
       pod_association {
         source { from = "connection" }
@@ -177,8 +177,8 @@ data:
     // --- Module: Alloy Scrape ---
     declare "otelcol_alloy_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default  = "alloy" }
-      argument "service_name" { optional = true; default  = "alloy" }
+      argument "namespace" { optional = true default  = "alloy" }
+      argument "service_name" { optional = true default  = "alloy" }
 
       discovery.kubernetes "endpoints" {
         role = "endpoints"
@@ -229,9 +229,9 @@ data:
           regex         = sys.env("HOSTNAME")
           action        = "keep"
         }
-        rule { target_label = "job"; replacement = "kubelet" }
-        rule { target_label = "__scheme__"; replacement = "https" }
-        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"]; target_label = "__address__"; replacement = "${1}:10250" }
+        rule { target_label = "job" replacement = "kubelet" }
+        rule { target_label = "__scheme__" replacement = "https" }
+        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"] target_label = "__address__" replacement = "${1}:10250" }
       }
       prometheus.scrape "kubelet" {
         targets    = discovery.relabel.kubelet.output
@@ -256,10 +256,23 @@ data:
           regex         = sys.env("HOSTNAME")
           action        = "keep"
         }
-        rule { target_label = "job"; replacement = "cadvisor" }
-        rule { target_label = "__scheme__"; replacement = "https" }
-        rule { target_label = "__metrics_path__"; replacement = "/metrics/cadvisor" }
-        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"]; target_label = "__address__"; replacement = "${1}:10250" }
+        rule {
+          target_label = "job"
+          replacement = "cadvisor"
+        }
+        rule {
+          target_label = "__scheme__"
+          replacement = "https"
+        }
+        rule {
+          target_label = "__metrics_path__"
+          replacement = "/metrics/cadvisor"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+          target_label = "__address__"
+          replacement = "${1}:10250"
+        }
       }
       prometheus.scrape "cadvisor" {
         targets    = discovery.relabel.cadvisor.output
@@ -276,7 +289,10 @@ data:
     // --- Module: Kube-State-Metrics Scrape ---
     declare "otelcol_ksm_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default = "alloy" }
+      argument "namespace" {
+        optional = true
+        default = "alloy"
+      }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
         namespaces { names = [argument.namespace.value] }
@@ -315,7 +331,10 @@ data:
     // --- Module: Node-Exporter Scrape ---
     declare "otelcol_node_exporter_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default = "alloy" }
+      argument "namespace" {
+        optional = true
+        default = "alloy"
+      }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
         namespaces { names = [argument.namespace.value] }
