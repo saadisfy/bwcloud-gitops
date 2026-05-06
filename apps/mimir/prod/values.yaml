@@ -9,7 +9,7 @@ mimir-distributed:
       ruler_storage:
         backend: local
         local:
-          directory: /data/ruler-storage
+          directory: /data
   ruler:
     enabled: true
     replicas: 1
