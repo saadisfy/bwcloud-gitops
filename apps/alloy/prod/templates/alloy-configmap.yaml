@@ -61,11 +61,13 @@ data:
           "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"pod\"] == nil",
           "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil and attributes[\"container\"] == nil",
           "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil and attributes[\"node\"] == nil",
+          
           "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
           "set(attributes[\"k8s_pod_name\"],       resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"k8s_pod_name\"] == nil",
           "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil and attributes[\"k8s_container_name\"] == nil",
           "set(attributes[\"k8s_node_name\"],      resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil and attributes[\"k8s_node_name\"] == nil",
           "set(attributes[\"k8s_cluster_name\"],   resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil and attributes[\"k8s_cluster_name\"] == nil",
+
           "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
           "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"]) where attributes[\"pod\"] != nil and attributes[\"k8s_pod_name\"] == nil",
           "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil and attributes[\"k8s_container_name\"] == nil",
@@ -94,15 +96,10 @@ data:
         deployment_name_from_replicaset = true
       }
       pod_association {
-        source {
-          from = "resource_attribute"
-          name = "k8s.pod.ip"
-        }
+        source { from = "resource_attribute"; name = "k8s.pod.ip" }
       }
       pod_association {
-        source {
-          from = "connection"
-        }
+        source { from = "connection" }
       }
     }
 
@@ -163,15 +160,6 @@ data:
       spike_limit     = "100MiB"
     }
 
-    // --- Instantiation ---
-    otelcol_pipeline_process_enriched "pod_level" {
-      forward_to = otelcol.exporter.otlphttp.mimir.input
-    }
-
-    otelcol_pipeline_process_simple "meta_level" {
-      forward_to = otelcol.exporter.otlphttp.mimir.input
-    }
-
     // ===============================================================
     // PHASE 1: RECEIVE (Target-Specific Scrapes)
     // ===============================================================
@@ -189,14 +177,8 @@ data:
     // --- Module: Alloy Scrape ---
     declare "otelcol_alloy_scrape" {
       argument "forward_to" {}
-      argument "namespace" {
-        optional = true
-        default  = "alloy"
-      }
-      argument "service_name" {
-        optional = true
-        default  = "alloy"
-      }
+      argument "namespace" { optional = true; default  = "alloy" }
+      argument "service_name" { optional = true; default  = "alloy" }
 
       discovery.kubernetes "endpoints" {
         role = "endpoints"
@@ -239,9 +221,7 @@ data:
     // --- Module: Kubelet Scrape ---
     declare "otelcol_kubelet_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" {
-        role = "node"
-      }
+      discovery.kubernetes "nodes" { role = "node" }
       discovery.relabel "kubelet" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -249,27 +229,15 @@ data:
           regex         = sys.env("HOSTNAME")
           action        = "keep"
         }
-        rule {
-          target_label = "job"
-          replacement  = "kubelet"
-        }
-        rule {
-          target_label = "__scheme__"
-          replacement  = "https"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
-          target_label  = "__address__"
-          replacement   = "${1}:10250"
-        }
+        rule { target_label = "job"; replacement = "kubelet" }
+        rule { target_label = "__scheme__"; replacement = "https" }
+        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"]; target_label = "__address__"; replacement = "${1}:10250" }
       }
       prometheus.scrape "kubelet" {
         targets    = discovery.relabel.kubelet.output
         forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config {
-          insecure_skip_verify = true
-        }
+        tls_config { insecure_skip_verify = true }
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "kubelet" {
@@ -280,9 +248,7 @@ data:
     // --- Module: cAdvisor Scrape ---
     declare "otelcol_cadvisor_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" {
-        role = "node"
-      }
+      discovery.kubernetes "nodes" { role = "node" }
       discovery.relabel "cadvisor" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -290,31 +256,16 @@ data:
           regex         = sys.env("HOSTNAME")
           action        = "keep"
         }
-        rule {
-          target_label = "job"
-          replacement  = "cadvisor"
-        }
-        rule {
-          target_label = "__scheme__"
-          replacement  = "https"
-        }
-        rule {
-          target_label = "__metrics_path__"
-          replacement  = "/metrics/cadvisor"
-        }
-        rule {
-          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
-          target_label  = "__address__"
-          replacement   = "${1}:10250"
-        }
+        rule { target_label = "job"; replacement = "cadvisor" }
+        rule { target_label = "__scheme__"; replacement = "https" }
+        rule { target_label = "__metrics_path__"; replacement = "/metrics/cadvisor" }
+        rule { source_labels = ["__meta_kubernetes_node_address_InternalIP"]; target_label = "__address__"; replacement = "${1}:10250" }
       }
       prometheus.scrape "cadvisor" {
         targets    = discovery.relabel.cadvisor.output
         forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config {
-          insecure_skip_verify = true
-        }
+        tls_config { insecure_skip_verify = true }
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "cadvisor" {
@@ -325,10 +276,7 @@ data:
     // --- Module: Kube-State-Metrics Scrape ---
     declare "otelcol_ksm_scrape" {
       argument "forward_to" {}
-      argument "namespace" {
-        optional = true
-        default  = "alloy"
-      }
+      argument "namespace" { optional = true; default = "alloy" }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
         namespaces { names = [argument.namespace.value] }
@@ -337,21 +285,21 @@ data:
         targets = discovery.kubernetes.endpoints.targets
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
-          regex         = "^alloy-kube-state-metrics$"
-          action        = "keep"
+          regex = "^alloy-kube-state-metrics$"
+          action = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex         = "http|http-metrics"
-          action        = "keep"
+          regex = "http|http-metrics"
+          action = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_pod_ip"]
-          target_label  = "k8s_pod_ip"
+          target_label = "k8s_pod_ip"
         }
         rule {
           target_label = "job"
-          replacement  = "kube-state-metrics"
+          replacement = "kube-state-metrics"
         }
       }
       prometheus.scrape "ksm" {
@@ -367,10 +315,7 @@ data:
     // --- Module: Node-Exporter Scrape ---
     declare "otelcol_node_exporter_scrape" {
       argument "forward_to" {}
-      argument "namespace" {
-        optional = true
-        default  = "alloy"
-      }
+      argument "namespace" { optional = true; default = "alloy" }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
         namespaces { names = [argument.namespace.value] }
@@ -379,13 +324,13 @@ data:
         targets = discovery.kubernetes.endpoints.targets
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
-          regex         = "^node-exporter$"
-          action        = "keep"
+          regex = "^node-exporter$"
+          action = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex         = "metrics|http-metrics"
-          action        = "keep"
+          regex = "metrics|http-metrics"
+          action = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
@@ -393,7 +338,7 @@ data:
         }
         rule {
           target_label = "job"
-          replacement  = "node-exporter"
+          replacement = "node-exporter"
         }
       }
       prometheus.scrape "node_exporter" {
@@ -407,7 +352,7 @@ data:
     }
 
     // ===============================================================
-    // FINAL INSTANTIATION
+    // INSTANTIATION
     // ===============================================================
 
     otelcol_alloy_scrape "default" {
