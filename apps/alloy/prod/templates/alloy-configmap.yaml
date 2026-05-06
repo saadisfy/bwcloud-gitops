@@ -179,12 +179,20 @@ data:
     // --- Module: Alloy Scrape ---
     declare "otelcol_alloy_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default  = "alloy" }
-      argument "service_name" { optional = true; default  = "alloy" }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
+      argument "service_name" {
+        optional = true
+        default  = "alloy"
+      }
 
       discovery.kubernetes "endpoints" {
         role = "endpoints"
-        namespaces { names = [argument.namespace.value] }
+        namespaces {
+          names = [argument.namespace.value]
+        }
       }
 
       discovery.relabel "alloy" {
@@ -215,14 +223,18 @@ data:
       }
 
       otelcol.receiver.prometheus "alloy" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
     // --- Module: Kubelet Scrape ---
     declare "otelcol_kubelet_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" { role = "node" }
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
       discovery.relabel "kubelet" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -248,17 +260,23 @@ data:
         targets    = discovery.relabel.kubelet.output
         forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config { insecure_skip_verify = true }
+        tls_config {
+          insecure_skip_verify = true
+        }
       }
       otelcol.receiver.prometheus "kubelet" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
     // --- Module: cAdvisor Scrape ---
     declare "otelcol_cadvisor_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" { role = "node" }
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
       discovery.relabel "cadvisor" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -288,20 +306,29 @@ data:
         targets    = discovery.relabel.cadvisor.output
         forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config { insecure_skip_verify = true }
+        tls_config {
+          insecure_skip_verify = true
+        }
       }
       otelcol.receiver.prometheus "cadvisor" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
     // --- Module: Kube-State-Metrics Scrape ---
     declare "otelcol_ksm_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default = "alloy" }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
-        namespaces { names = [argument.namespace.value] }
+        namespaces {
+          names = [argument.namespace.value]
+        }
       }
       discovery.relabel "ksm" {
         targets = discovery.kubernetes.endpoints.targets
@@ -329,17 +356,24 @@ data:
         forward_to = [otelcol.receiver.prometheus.ksm.receiver]
       }
       otelcol.receiver.prometheus "ksm" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
     // --- Module: Node-Exporter Scrape ---
     declare "otelcol_node_exporter_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default = "alloy" }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
-        namespaces { names = [argument.namespace.value] }
+        namespaces {
+          names = [argument.namespace.value]
+        }
       }
       discovery.relabel "node_exporter" {
         targets = discovery.kubernetes.endpoints.targets
@@ -367,7 +401,9 @@ data:
         forward_to = [otelcol.receiver.prometheus.node_exporter.receiver]
       }
       otelcol.receiver.prometheus "node_exporter" {
-        output { metrics = [argument.forward_to.value] }
+        output {
+          metrics = [argument.forward_to.value]
+        }
       }
     }
 
