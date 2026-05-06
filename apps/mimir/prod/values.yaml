@@ -16,12 +16,19 @@ mimir-distributed:
     initContainers:
       - name: setup-storage
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /ruler-storage/anonymous && chown -R 10001:10001 /ruler-storage"]
+        command: ["sh", "-c", "mkdir -p /ruler-storage/anonymous/rules"]
         securityContext:
-          runAsUser: 0
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: true
         volumeMounts:
           - name: ruler-storage
             mountPath: /ruler-storage
+
     extraVolumes:
       - name: ruler-storage
         emptyDir: {}
