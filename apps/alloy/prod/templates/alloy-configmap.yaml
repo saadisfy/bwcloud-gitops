@@ -189,8 +189,14 @@ data:
     // --- Module: Alloy Scrape ---
     declare "otelcol_alloy_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default  = "alloy" }
-      argument "service_name" { optional = true; default  = "alloy" }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
+      argument "service_name" {
+        optional = true
+        default  = "alloy"
+      }
 
       discovery.kubernetes "endpoints" {
         role = "endpoints"
@@ -233,7 +239,9 @@ data:
     // --- Module: Kubelet Scrape ---
     declare "otelcol_kubelet_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" { role = "node" }
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
       discovery.relabel "kubelet" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -259,7 +267,9 @@ data:
         targets    = discovery.relabel.kubelet.output
         forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config { insecure_skip_verify = true }
+        tls_config {
+          insecure_skip_verify = true
+        }
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "kubelet" {
@@ -270,7 +280,9 @@ data:
     // --- Module: cAdvisor Scrape ---
     declare "otelcol_cadvisor_scrape" {
       argument "forward_to" {}
-      discovery.kubernetes "nodes" { role = "node" }
+      discovery.kubernetes "nodes" {
+        role = "node"
+      }
       discovery.relabel "cadvisor" {
         targets = discovery.kubernetes.nodes.targets
         rule {
@@ -300,7 +312,9 @@ data:
         targets    = discovery.relabel.cadvisor.output
         forward_to = [otelcol.receiver.prometheus.cadvisor.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-        tls_config { insecure_skip_verify = true }
+        tls_config {
+          insecure_skip_verify = true
+        }
         scrape_interval = "15s"
       }
       otelcol.receiver.prometheus "cadvisor" {
@@ -311,7 +325,10 @@ data:
     // --- Module: Kube-State-Metrics Scrape ---
     declare "otelcol_ksm_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default = "alloy" }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
         namespaces { names = [argument.namespace.value] }
@@ -320,17 +337,21 @@ data:
         targets = discovery.kubernetes.endpoints.targets
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
-          regex = "^alloy-kube-state-metrics$"
-          action = "keep"
+          regex         = "^alloy-kube-state-metrics$"
+          action        = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex = "http|http-metrics"
-          action = "keep"
+          regex         = "http|http-metrics"
+          action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_ip"]
+          target_label  = "k8s_pod_ip"
         }
         rule {
           target_label = "job"
-          replacement = "kube-state-metrics"
+          replacement  = "kube-state-metrics"
         }
       }
       prometheus.scrape "ksm" {
@@ -346,7 +367,10 @@ data:
     // --- Module: Node-Exporter Scrape ---
     declare "otelcol_node_exporter_scrape" {
       argument "forward_to" {}
-      argument "namespace" { optional = true; default = "alloy" }
+      argument "namespace" {
+        optional = true
+        default  = "alloy"
+      }
       discovery.kubernetes "endpoints" {
         role = "endpoints"
         namespaces { names = [argument.namespace.value] }
@@ -355,13 +379,13 @@ data:
         targets = discovery.kubernetes.endpoints.targets
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
-          regex = "^node-exporter$"
-          action = "keep"
+          regex         = "^node-exporter$"
+          action        = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_endpoint_port_name"]
-          regex = "metrics|http-metrics"
-          action = "keep"
+          regex         = "metrics|http-metrics"
+          action        = "keep"
         }
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
@@ -369,7 +393,7 @@ data:
         }
         rule {
           target_label = "job"
-          replacement = "node-exporter"
+          replacement  = "node-exporter"
         }
       }
       prometheus.scrape "node_exporter" {
