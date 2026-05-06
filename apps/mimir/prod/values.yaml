@@ -30,7 +30,7 @@ queryFrontendIngress:
   tlsSecretName: mimir-query-tls
 
 rulerRuleSync:
-  enabled: false
+  enabled: true
   # Mimir query-frontend/gateway URL exposing /prometheus API.
   address: "http://mimir-gateway.mimir.svc.cluster.local/prometheus"
   # Tenant / OrgID used for ruler API calls.
