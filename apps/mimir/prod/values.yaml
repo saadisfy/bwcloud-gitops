@@ -13,6 +13,13 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
+    initContainers:
+      - name: setup-storage
+        image: busybox:latest
+        command: ["sh", "-c", "mkdir -p /ruler-storage/anonymous"]
+        volumeMounts:
+          - name: ruler-storage
+            mountPath: /ruler-storage
     extraVolumes:
       - name: ruler-storage
         emptyDir: {}
@@ -42,7 +49,8 @@ rulerRuleSync:
     usernameKey: "username"
     passwordKey: "password"
   # Hook mode makes Argo CD rerun the sync job on each sync.
-  argocdHook: false
+  argocdHook: true
+
   syncWave: "5"
   image:
     repository: grafana/mimirtool
