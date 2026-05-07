@@ -21,6 +21,8 @@ grafana:
   grafana.ini:
     server:
       root_url: https://grafana.saadisfy.me
+    log:
+      level: debug
     # Local admin login stays enabled as a fallback (do not set disable_login_form).
     auth:
       # No anonymous access; only signed-in users see anything.
