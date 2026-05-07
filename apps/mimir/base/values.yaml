@@ -35,13 +35,6 @@ mimir-distributed:
     structuredConfig:
       alertmanager:
         data_dir: /tmp/alertmanager-data
-        fallback_config: |
-          global:
-            resolve_timeout: 5m
-          route:
-            receiver: default-receiver
-          receivers:
-            - name: default-receiver
       blocks_storage:
         backend: filesystem
         filesystem:
@@ -72,6 +65,13 @@ mimir-distributed:
 
   alertmanager:
     replicas: 1
+    fallbackConfig: |
+      global:
+        resolve_timeout: 5m
+      route:
+        receiver: default-receiver
+      receivers:
+        - name: default-receiver
     persistentVolume:
       enabled: true
       size: 1Gi
