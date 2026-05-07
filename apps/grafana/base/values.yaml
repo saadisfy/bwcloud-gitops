@@ -14,6 +14,20 @@ grafana:
           - 'sleep 25 && grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD" || true'
   # Mimir als Prometheus-Datasource über lokales Netz (Service, kein Ingress)
   datasources:
+    alertmanager.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Mimir Alertmanager
+          type: alertmanager
+          uid: mimir-am
+          access: proxy
+          url: http://mimir-alertmanager.mimir.svc.cluster.local:8080
+          jsonData:
+            handleGrafanaManagedAlerts: false
+            implementation: prometheus
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "1"
     datasources.yaml:
       apiVersion: 1
       datasources:
@@ -26,6 +40,7 @@ grafana:
           jsonData:
             httpHeaderName1: X-Scope-OrgID
             manageAlerts: true
+            alertmanagerUid: mimir-am
           secureJsonData:
             httpHeaderValue1: "1"
   ingress:
