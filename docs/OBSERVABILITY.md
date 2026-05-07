@@ -98,6 +98,8 @@ Man könnte annehmen, dass eine OTel-instrumentierte Java-App bereits alle korre
 
 Grafana Mimir ist der skalierbare TSDB-Backend für die langfristige Speicherung und Abfrage von Prometheus-Metriken.
 
+Für detaillierte Setup-Anweisungen und Fehlerbehebungen (z.B. Ruler), siehe [Mimir Setup Guide](MIMIR.md).
+
 ### 3.1 High-Level Architektur (Mimir)
 
 ```mermaid
