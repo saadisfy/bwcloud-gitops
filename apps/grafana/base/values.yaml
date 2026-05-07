@@ -14,7 +14,7 @@ grafana:
           - 'sleep 25 && grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD" || true'
   # Mimir als Prometheus-Datasource über lokales Netz (Service, kein Ingress)
   datasources:
-    datasources.yaml:
+    alertmanager.yaml:
       apiVersion: 1
       datasources:
         - name: Mimir Alertmanager
@@ -28,6 +28,9 @@ grafana:
             httpHeaderName1: X-Scope-OrgID
           secureJsonData:
             httpHeaderValue1: "1"
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
         - name: Mimir
           type: prometheus
           access: proxy
