@@ -40,7 +40,6 @@ grafana:
           jsonData:
             httpHeaderName1: X-Scope-OrgID
             manageAlerts: true
-            alertmanagerUid: mimir-am
           secureJsonData:
             httpHeaderValue1: "1"
   ingress:
