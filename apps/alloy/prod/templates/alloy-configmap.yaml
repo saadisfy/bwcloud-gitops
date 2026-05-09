@@ -434,6 +434,41 @@ data:
       }
     }
 
+    // --- Module: API Server Scrape ---
+    declare "otelcol_apiserver_scrape" {
+      argument "forward_to" {}
+      discovery.kubernetes "apiserver" {
+        role = "endpoints"
+      }
+      discovery.relabel "apiserver" {
+        targets = discovery.kubernetes.apiserver.targets
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_service_name", "__meta_kubernetes_endpoint_port_name"]
+          regex         = "default;kubernetes;https"
+          action        = "keep"
+        }
+        rule {
+          target_label = "job"
+          replacement  = "kube-apiserver"
+        }
+      }
+      prometheus.scrape "apiserver" {
+        targets    = discovery.relabel.apiserver.output
+        forward_to = [otelcol.receiver.prometheus.apiserver.receiver]
+        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        tls_config {
+          ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+          server_name = "kubernetes"
+        }
+        scrape_interval = "15s"
+      }
+      otelcol.receiver.prometheus "apiserver" {
+        output {
+          metrics = [argument.forward_to.value]
+        }
+      }
+    }
+
     // --- Module: Node-Exporter Scrape ---
     declare "otelcol_node_exporter_scrape" {
       argument "forward_to" {}
@@ -492,5 +527,9 @@ data:
     }
 
     otelcol_node_exporter_scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    otelcol_apiserver_scrape "default" {
       forward_to = otelcol.processor.memory_limiter.simple.input
     }
