@@ -14,12 +14,10 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
-    podAnnotations:
-      reloader.stakater.com/auto: "true"
     initContainers:
       - name: setup-storage
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /data/ruler-storage/1"]
+        command: ["sh", "-c", "mkdir -p /ruler-storage/1"]
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
@@ -30,48 +28,14 @@ mimir-distributed:
           readOnlyRootFilesystem: true
         volumeMounts:
           - name: ruler-storage
-            mountPath: /data/ruler-storage
-      - name: copy-mimirtool
-        image: "grafana/mimirtool:3.0.1"
-        command: ["cp", "/bin/mimirtool", "/utils/mimirtool"]
-        volumeMounts:
-          - name: utils
-            mountPath: /utils
-
-    extraContainers:
-      - name: rules-sync
-        image: busybox:latest
-        command:
-          - sh
-          - -c
-          - |
-            echo "Waiting for ruler API..."
-            until wget -q -O- http://mimir-gateway.mimir.svc.cluster.local/ready; do sleep 5; done
-            echo "API ready, loading rules..."
-            /utils/mimirtool rules load --address=http://mimir-gateway.mimir.svc.cluster.local --id=1 /rules/rules.yaml
-            echo "Rules loaded successfully."
-            sleep infinity
-        volumeMounts:
-          - name: utils
-            mountPath: /utils
-          - name: rules-bundle
-            mountPath: /rules
+            mountPath: /ruler-storage
 
     extraVolumes:
       - name: ruler-storage
         emptyDir: {}
-      - name: rules-bundle
-        configMap:
-          name: mimir-rules-bundle
-      - name: utils
-        emptyDir: {}
     extraVolumeMounts:
       - name: ruler-storage
-        mountPath: /data/ruler-storage
-      - name: rules-bundle
-        mountPath: /rules
-      - name: utils
-        mountPath: /utils
+        mountPath: /ruler-storage
 
 queryFrontendIngress:
   enabled: true
