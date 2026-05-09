@@ -280,6 +280,10 @@ data:
           action        = "keep"
         }
         rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
+        }
+        rule {
           target_label = "job"
           replacement  = "kubelet"
         }
@@ -321,6 +325,10 @@ data:
           source_labels = ["__meta_kubernetes_node_name"]
           regex         = sys.env("HOSTNAME")
           action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
         }
         rule {
           target_label = "job"
@@ -414,6 +422,10 @@ data:
           source_labels = ["__meta_kubernetes_node_name"]
           regex         = sys.env("HOSTNAME")
           action        = "keep"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
         }
         rule {
           source_labels = ["__meta_kubernetes_node_address_InternalIP"]
