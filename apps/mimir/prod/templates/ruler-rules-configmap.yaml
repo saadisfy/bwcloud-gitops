@@ -1,0 +1,31 @@
+{{- $cfg := .Values.rulerRuleSync | default dict }}
+{{- if ($cfg.enabled | default false) }}
+{{- $ruleGlobs := list "files/**/alerts*.yaml" "files/**/alerts*.yml" }}
+{{- $ruleFiles := dict }}
+{{- range $glob := $ruleGlobs }}
+{{- range $path, $_ := $.Files.Glob $glob }}
+{{- $_ = set $ruleFiles $path true }}
+{{- end }}
+{{- end }}
+
+{{- if gt (len $ruleFiles) 0 }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mimir-rules-bundle
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: mimir
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: ruler-sync
+data:
+  rules.yaml: |-
+    groups:
+{{- range $path, $_ := $ruleFiles }}
+{{- $fileContent := $.Files.Get $path | fromYaml }}
+{{- if $fileContent.groups }}
+{{ toYaml $fileContent.groups | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

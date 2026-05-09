@@ -14,6 +14,8 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
     initContainers:
       - name: setup-storage
         image: busybox:latest
@@ -29,13 +31,29 @@ mimir-distributed:
         volumeMounts:
           - name: ruler-storage
             mountPath: /ruler-storage
+      - name: rules-sync
+        image: "grafana/mimirtool:3.0.1"
+        args:
+          - rules
+          - load
+          - --address=http://mimir-gateway.mimir.svc.cluster.local
+          - --id=1
+          - /rules/rules.yaml
+        volumeMounts:
+          - name: rules-bundle
+            mountPath: /rules
 
     extraVolumes:
       - name: ruler-storage
         emptyDir: {}
+      - name: rules-bundle
+        configMap:
+          name: mimir-rules-bundle
     extraVolumeMounts:
       - name: ruler-storage
         mountPath: /ruler-storage
+      - name: rules-bundle
+        mountPath: /rules
 
 queryFrontendIngress:
   enabled: true
