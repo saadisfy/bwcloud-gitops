@@ -9,24 +9,17 @@ mimir-distributed:
         alertmanager_url: "http://mimir-alertmanager-headless.mimir.svc.cluster.local:8080"
       ruler_storage:
         backend: filesystem
-        filesystem:
-          dir: /ruler-storage
+        local:
+          directory: /ruler-storage
   ruler:
     enabled: true
     replicas: 1
     podAnnotations:
       reloader.stakater.com/auto: "true"
     initContainers:
-      - name: setup-rules
+      - name: setup-storage
         image: busybox:latest
-        command:
-          - sh
-          - -c
-          - |
-            mkdir -p /ruler-storage/1/default
-            cp /rules/rules.yaml /ruler-storage/1/default/rules.yaml
-            echo "Current storage structure:"
-            ls -R /ruler-storage
+        command: ["sh", "-c", "mkdir -p /ruler-storage/1"]
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
@@ -38,6 +31,22 @@ mimir-distributed:
         volumeMounts:
           - name: ruler-storage
             mountPath: /ruler-storage
+
+    extraContainers:
+      - name: rules-sync
+        image: "grafana/mimirtool:3.0.1"
+        command:
+          - sh
+          - -c
+          - |
+            # Wait for local ruler API to be ready
+            echo "Waiting for ruler API..."
+            until wget -q -O- http://localhost:8080/ready; do sleep 2; done
+            echo "Ruler API ready, loading rules..."
+            mimirtool rules load --address=http://localhost:8080 --id=1 /rules/rules.yaml
+            echo "Rules loaded successfully. Sleeping forever..."
+            sleep infinity
+        volumeMounts:
           - name: rules-bundle
             mountPath: /rules
 

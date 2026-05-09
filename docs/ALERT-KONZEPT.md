@@ -54,9 +54,9 @@ Im Repo sind zwei getrennte, aber komplementäre Alerting-Pfade angelegt:
 #### Pfad A: Mimir datasource-managed Alerts
 
 - Regeldateien im Prometheus-Format liegen unter `apps/mimir/prod/files/**/alerts*.yaml`.
-- Ein Helm-Template (`ruler-rules-configmap.yaml`) bündelt diese Dateien in einer ConfigMap `mimir-rules-bundle`.
-- Das `mimir-ruler` Deployment nutzt einen **Init-Container** (`setup-rules`), um diese Regeln beim Start direkt in das Filesystem-Backend des Rulers zu kopieren (`/ruler-storage/1/rules.yaml`).
-- **Reloader Support:** Das Deployment ist mit `reloader.stakater.com/auto: "true"` konfiguriert, sodass jede Änderung an der ConfigMap (via Argo CD) einen Neustart des Ruler-Pods und damit eine Neusynchronisation der Regeln auslöst.
+- Diese Dateien werden automatisch in einer zentralen ConfigMap `mimir-rules-bundle` gebündelt.
+- Das `mimir-ruler` Deployment nutzt einen **Sidecar-Container** (`rules-sync`), der das `mimirtool` nutzt, um die Regeln beim Start gegen die lokale Ruler-API zu pushen (`localhost:8080`).
+- **Reloader Support:** Bei jeder Änderung an den Alert-Dateien in Git wird der Ruler-Pod neu gestartet, wodurch der Sidecar die Regeln erneut in Mimir registriert.
 - Der Mimir Ruler evaluiert die Regeln für Tenant `1`.
 - Firing Alerts werden an den Mimir Alertmanager gesendet.
 
@@ -130,17 +130,17 @@ Das Alerting wird logisch in drei Ebenen getrennt:
 
 - `apps/mimir/prod/files/**/alerts*.yaml`
 
-**Provisionierung (Filesystem Seeding):**
+**Provisionierung (Sidecar Sync):**
 
 - Ein Helm-Template (`ruler-rules-configmap.yaml`) sammelt alle passenden Dateien (`alerts.yaml`, `alerts-rules.yaml` etc.) in einer ConfigMap `mimir-rules-bundle`.
 - Das `mimir-ruler` Deployment ist mit `reloader.stakater.com/auto: "true"` annotiert.
-- Der Init-Container `setup-rules` kopiert die gebündelten Regeln (`rules.yaml`) beim Start direkt in das Verzeichnis `/ruler-storage/1/rules.yaml`.
-- Da Mimir für Tenant `1` im Filesystem-Backend konfiguriert ist, lädt der Ruler diese Regeln beim Start automatisch.
+- Der Sidecar-Container `rules-sync` wartet, bis die Ruler-API bereit ist, und führt dann `mimirtool rules load` aus.
+- Da der Sidecar im gleichen Pod wie der Ruler läuft, kann er über `localhost:8080` kommunizieren.
 
 **Vorteile dieses Modells:**
 - **GitOps-konform:** Git ist die einzige Source of Truth.
-- **Einfachheit:** Kein externer API-Sync-Job oder `mimirtool` im laufenden Betrieb nötig.
-- **Robustheit:** Regeln sind sofort beim Pod-Start verfügbar, auch wenn die Mimir-API noch nicht bereit ist.
+- **Robustheit:** Die Regeln werden bei jedem Pod-Start (und damit bei jeder Config-Änderung) frisch registriert.
+- **Transparenz:** Erfolg oder Misserfolg des Syncs sind direkt in den Pod-Logs des Rulers sichtbar.
 
 **Zielsystem:**
 
@@ -489,7 +489,7 @@ Alerting wird wie Anwendungskonfiguration behandelt:
 2. PR mit Query, Labels, Annotationen und Runbook-Kontext erstellen.
 3. Nach Merge synchronisiert Argo CD den Mimir-Release.
 4. Der **Reloader** erkennt die Änderung an der ConfigMap und startet den `mimir-ruler` neu.
-5. Der **Init-Container** lädt die Regeln beim Start automatisch in das Filesystem-Backend.
+5. Der **Sidecar-Container** `rules-sync` lädt die Regeln beim Start automatisch in die Mimir-API.
 6. Regelstatus wird in Grafana (Dropdown: `mimir`) und über Mimir sichtbar.
 
 ### 9.3 Workflow für Grafana-managed Regeln
@@ -518,7 +518,7 @@ Eine Regel gilt erst als produktionsreif, wenn:
 
 - Regeldatei ist syntaktisch gültig.
 - Tenant `1` wird konsistent verwendet.
-- `mimir-ruler` Pod startet sauber durch (Init-Container Logs prüfen).
+- `mimir-ruler` Pod startet sauber durch (Sidecar-Container `rules-sync` Logs prüfen).
 - Regeln sind über die Mimir Rules API (Dropdown in Grafana) sichtbar.
 - Regeln erscheinen in Grafana Alerting (Datenquelle: `mimir`).
 
