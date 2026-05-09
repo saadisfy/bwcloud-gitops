@@ -10,7 +10,7 @@ mimir-distributed:
       ruler_storage:
         backend: filesystem
         filesystem:
-          dir: /ruler-storage
+          dir: /data/ruler-storage
   ruler:
     enabled: true
     replicas: 1
@@ -23,10 +23,10 @@ mimir-distributed:
           - sh
           - -c
           - |
-            mkdir -p /ruler-storage/1/rules
-            cp /rules/rules.yaml /ruler-storage/1/rules/rules.yaml
+            mkdir -p /data/ruler-storage/1/rules
+            cp /rules/rules.yaml /data/ruler-storage/1/rules/rules.yaml
             echo "Current storage structure:"
-            ls -R /ruler-storage
+            ls -R /data/ruler-storage
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
@@ -37,9 +37,17 @@ mimir-distributed:
           readOnlyRootFilesystem: true
         volumeMounts:
           - name: ruler-storage
-            mountPath: /ruler-storage
+            mountPath: /data/ruler-storage
           - name: rules-bundle
             mountPath: /rules
+
+    extraContainers:
+      - name: inspect-storage
+        image: busybox:latest
+        command: ["sh", "-c", "while true; do echo 'Storage content:'; ls -R /data/ruler-storage; sleep 60; done"]
+        volumeMounts:
+          - name: ruler-storage
+            mountPath: /data/ruler-storage
 
     extraVolumes:
       - name: ruler-storage
@@ -49,7 +57,7 @@ mimir-distributed:
           name: mimir-rules-bundle
     extraVolumeMounts:
       - name: ruler-storage
-        mountPath: /ruler-storage
+        mountPath: /data/ruler-storage
       - name: rules-bundle
         mountPath: /rules
 
