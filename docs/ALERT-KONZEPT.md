@@ -134,13 +134,13 @@ Das Alerting wird logisch in drei Ebenen getrennt:
 
 - Ein Helm-Template (`ruler-rules-configmap.yaml`) sammelt alle passenden Dateien (`alerts.yaml`, `alerts-rules.yaml` etc.) in einer ConfigMap `mimir-rules-bundle`.
 - Das `mimir-ruler` Deployment ist mit `reloader.stakater.com/auto: "true"` annotiert.
-- Der Sidecar-Container `rules-sync` wartet, bis die Ruler-API bereit ist, und führt dann `mimirtool rules load` aus.
-- Da der Sidecar im gleichen Pod wie der Ruler läuft, kann er über `localhost:8080` kommunizieren.
+- Ein Sidecar-Container `rules-sync` führt bei jedem Pod-Start `mimirtool rules load` gegen den Mimir-Gateway aus.
+- **Wichtig:** Obwohl Mimir ein Filesystem-Backend nutzt, speichert es die Regeln intern in einer komplexen (Base64-kodierten) Ordnerstruktur. Ein einfaches Kopieren der YAML-Dateien via Init-Container reicht daher nicht aus. Das `mimirtool` stellt sicher, dass die Regeln im korrekten Format in der Mimir-Datenbank registriert werden.
 
 **Vorteile dieses Modells:**
 - **GitOps-konform:** Git ist die einzige Source of Truth.
-- **Robustheit:** Die Regeln werden bei jedem Pod-Start (und damit bei jeder Config-Änderung) frisch registriert.
-- **Transparenz:** Erfolg oder Misserfolg des Syncs sind direkt in den Pod-Logs des Rulers sichtbar.
+- **Robustheit:** Die Regeln werden bei jedem Pod-Start (und damit bei jeder Config-Änderung via Reloader) frisch registriert.
+- **Autonomie:** Das System heilt sich selbst nach Pod-Restarts oder Storage-Wipes (da aktuell `emptyDir` genutzt wird).
 
 **Zielsystem:**
 
