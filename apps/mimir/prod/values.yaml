@@ -17,9 +17,14 @@ mimir-distributed:
     podAnnotations:
       reloader.stakater.com/auto: "true"
     initContainers:
-      - name: setup-storage
+      - name: setup-rules
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /ruler-storage/1"]
+        command:
+          - sh
+          - -c
+          - |
+            mkdir -p /ruler-storage/1
+            cp /rules/rules.yaml /ruler-storage/1/rules.yaml
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
@@ -31,15 +36,6 @@ mimir-distributed:
         volumeMounts:
           - name: ruler-storage
             mountPath: /ruler-storage
-      - name: rules-sync
-        image: "grafana/mimirtool:3.0.1"
-        args:
-          - rules
-          - load
-          - --address=http://mimir-gateway.mimir.svc.cluster.local
-          - --id=1
-          - /rules/rules.yaml
-        volumeMounts:
           - name: rules-bundle
             mountPath: /rules
 
