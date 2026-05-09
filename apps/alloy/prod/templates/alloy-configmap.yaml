@@ -455,10 +455,12 @@ data:
       prometheus.scrape "apiserver" {
         targets    = discovery.relabel.apiserver.output
         forward_to = [otelcol.receiver.prometheus.apiserver.receiver]
+        scheme     = "https"
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           ca_file = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
           server_name = "kubernetes"
+          insecure_skip_verify = true
         }
         scrape_interval = "15s"
       }
