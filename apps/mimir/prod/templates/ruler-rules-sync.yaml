@@ -20,9 +20,12 @@ metadata:
     app.kubernetes.io/component: ruler-sync
 data:
   rules.yaml: |-
+    groups:
 {{- range $path, $_ := $ruleFiles }}
-{{ $.Files.Get $path | indent 4 }}
----
+{{- $fileContent := $.Files.Get $path | fromYaml }}
+{{- if $fileContent.groups }}
+{{ toYaml $fileContent.groups | nindent 6 }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: batch/v1
