@@ -55,7 +55,8 @@ Im Repo sind zwei getrennte, aber komplementäre Alerting-Pfade angelegt:
 
 - Regeldateien im Prometheus-Format liegen unter `apps/mimir/prod/files/**/alerts*.yaml`.
 - Diese Dateien werden automatisch in einer zentralen ConfigMap `mimir-rules-bundle` gebündelt.
-- Das `mimir-ruler` Deployment nutzt einen **Sidecar-Container** (`rules-sync`), der das `mimirtool` nutzt, um die Regeln beim Start gegen die lokale Ruler-API zu pushen (`localhost:8080`).
+- Das `mimir-ruler` Deployment nutzt einen **Sidecar-Container** (`rules-sync`), der das `mimirtool` nutzt, um die Regeln beim Start gegen den Mimir-Gateway zu pushen.
+- **Binary-Copy-Trick:** Da das offizielle `mimirtool`-Image keine Shell besitzt, kopiert ein Init-Container das Binary in ein shared Volume, von wo es der Sidecar (Busybox) ausführt.
 - **Reloader Support:** Bei jeder Änderung an den Alert-Dateien in Git wird der Ruler-Pod neu gestartet, wodurch der Sidecar die Regeln erneut in Mimir registriert.
 - Der Mimir Ruler evaluiert die Regeln für Tenant `1`.
 - Firing Alerts werden an den Mimir Alertmanager gesendet.
