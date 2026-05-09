@@ -20,6 +20,8 @@ alloy:
     # A: Runs one Alloy per node for node-local scraping and simple rollout,
     #    matching the current strategy (gateway later).
     type: daemonset
+    podAnnotations:
+      reloader.stakater.com/auto: "true"
 
   rbac:
     # Q: Why create RBAC?
