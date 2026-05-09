@@ -405,7 +405,7 @@ data:
         targets = discovery.kubernetes.endpoints.targets
         rule {
           source_labels = ["__meta_kubernetes_service_name"]
-          regex         = "^alloy-kube-state-metrics$"
+          regex         = "^(alloy-)?kube-state-metrics$"
           action        = "keep"
         }
         rule {
