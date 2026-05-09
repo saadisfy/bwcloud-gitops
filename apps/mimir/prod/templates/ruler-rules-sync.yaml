@@ -14,6 +14,8 @@ kind: ConfigMap
 metadata:
   name: mimir-rules-bundle
   namespace: {{ .Release.Namespace }}
+  annotations:
+    bwcloud.io/sync-hash: {{ $.Files.Get "files/kubernetes/alerts.yaml" | sha256sum | quote }}
   labels:
     app.kubernetes.io/name: mimir
     app.kubernetes.io/instance: {{ .Release.Name }}
