@@ -51,8 +51,8 @@ mimir-distributed:
           - name: storage
             mountPath: /data
       - name: copy-mimirtool
-        image: "grafana/mimirtool:3.0.1"
-        command: ["cp", "/bin/mimirtool", "/utils/mimirtool"]
+        image: "grafana/mimir:3.0.1"
+        command: ["sh", "-c", "cp /bin/mimirtool /utils/mimirtool"]
         volumeMounts:
           - name: utils
             mountPath: /utils
