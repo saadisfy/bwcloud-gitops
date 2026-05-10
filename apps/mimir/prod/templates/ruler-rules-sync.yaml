@@ -38,18 +38,25 @@ spec:
         app.kubernetes.io/component: ruler-sync
     spec:
       restartPolicy: OnFailure
-      containers:
-        - name: mimirtool
-          image: "grafana/mimirtool:3.0.1"
+      initContainers:
+        - name: wait-for-gateway
+          image: busybox:latest
           command:
-            - /bin/sh
+            - sh
             - -c
             - |
               echo "Waiting for Mimir Gateway..."
               until wget -q -O- http://mimir-gateway.mimir.svc.cluster.local/ready; do sleep 5; done
-              echo "Gateway ready, loading rules..."
-              /bin/mimirtool rules load --address=http://mimir-gateway.mimir.svc.cluster.local --id=1 /rules/rules.yaml
-              echo "Rules loaded successfully."
+              echo "Gateway ready."
+      containers:
+        - name: mimirtool
+          image: "grafana/mimirtool:3.0.1"
+          args:
+            - rules
+            - load
+            - --address=http://mimir-gateway.mimir.svc.cluster.local
+            - --id=1
+            - /rules/rules.yaml
           volumeMounts:
             - name: rules
               mountPath: /rules
