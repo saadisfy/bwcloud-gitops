@@ -22,7 +22,7 @@ mimir-distributed:
     replicas: 1
     persistentVolume:
       enabled: true
-      size: 10Gi
+      size: 5Gi
     resources:
       requests:
         cpu: 200m
@@ -33,9 +33,6 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
-    persistentVolume:
-      enabled: true
-      size: 1Gi
     initContainers:
       - name: setup-storage
         image: busybox:latest

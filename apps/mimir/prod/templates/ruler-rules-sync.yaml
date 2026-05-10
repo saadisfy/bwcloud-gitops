@@ -9,12 +9,13 @@
 {{- end }}
 
 {{- if gt (len $ruleFiles) 0 }}
-{{- /* Calculate checksum of all rule files PLUS Mimir config to force sync on infra changes */ -}}
+{{- /* Calculate checksum of all rule files PLUS Mimir global config to force sync on any change */ -}}
 {{- $allContent := "" }}
 {{- range $path, $_ := $ruleFiles }}
 {{- $allContent = print $allContent ($.Files.Get $path) }}
 {{- end }}
-{{- $checksum := (print $allContent (toYaml .Values.mimir) "v2") | sha256sum | trunc 8 }}
+{{- $mimirConfig := index .Values "mimir-distributed" | default dict | index "mimir" | default dict }}
+{{- $checksum := (print $allContent (toYaml $mimirConfig) "v3") | sha256sum | trunc 8 }}
 
 apiVersion: batch/v1
 kind: Job
@@ -29,7 +30,7 @@ metadata:
     argocd.argoproj.io/sync-options: Replace=true
 spec:
   backoffLimit: 20
-  ttlSecondsAfterFinished: 600
+  ttlSecondsAfterFinished: 300
   template:
     metadata:
       labels:
@@ -38,16 +39,6 @@ spec:
         app.kubernetes.io/component: ruler-sync
     spec:
       restartPolicy: OnFailure
-      initContainers:
-        - name: wait-for-gateway
-          image: busybox:latest
-          command:
-            - sh
-            - -c
-            - |
-              echo "Waiting for Mimir Gateway..."
-              until wget -q -O- http://mimir-gateway.mimir.svc.cluster.local/ready; do sleep 5; done
-              echo "Gateway ready."
       containers:
         - name: mimirtool
           image: "grafana/mimirtool:3.0.1"
@@ -66,3 +57,4 @@ spec:
             name: mimir-rules-bundle
 {{- end }}
 {{- end }}
+
