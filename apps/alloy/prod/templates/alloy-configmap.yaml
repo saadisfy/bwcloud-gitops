@@ -456,9 +456,8 @@ data:
           replacement  = "https"
         }
         rule {
-          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
           target_label  = "__address__"
-          replacement   = "${1}:10257"
+          replacement   = "127.0.0.1:10257"
         }
       }
       prometheus.scrape "controllermanager" {
@@ -499,9 +498,8 @@ data:
           replacement  = "https"
         }
         rule {
-          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
           target_label  = "__address__"
-          replacement   = "${1}:10259"
+          replacement   = "127.0.0.1:10259"
         }
       }
       prometheus.scrape "scheduler" {
@@ -538,9 +536,8 @@ data:
           replacement  = "kube-proxy"
         }
         rule {
-          source_labels = ["__meta_kubernetes_node_address_InternalIP"]
           target_label  = "__address__"
-          replacement   = "${1}:10249"
+          replacement   = "127.0.0.1:10249"
         }
       }
       prometheus.scrape "kubeproxy" {
