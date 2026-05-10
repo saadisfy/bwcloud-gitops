@@ -4,6 +4,12 @@ mimir-distributed:
     structuredConfig:
       # Required: ruler writes temporary/state files at startup.
       # With readOnlyRootFilesystem=true, /tmp is not writable, so we must use /data.
+      blocks_storage:
+        backend: filesystem
+        filesystem:
+          dir: /data/blocks
+      limits:
+        store_gateway_tenant_shard_size: 0
       ruler:
         rule_path: /data/ruler-rules
         alertmanager_url: "http://mimir-alertmanager-headless.mimir.svc.cluster.local:8080"
@@ -11,6 +17,19 @@ mimir-distributed:
         backend: filesystem
         filesystem:
           dir: /data/ruler-storage
+
+  ingester:
+    replicas: 1
+    persistentVolume:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+
   ruler:
     enabled: true
     replicas: 1
