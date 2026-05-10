@@ -56,10 +56,10 @@ alloy:
       # Q: Why these requests/limits?
       # A: Conservative defaults for stable scheduling and memory protection.
       requests:
-        cpu: 200m
+        cpu: 220m
         memory: 512Mi
       limits:
-        cpu: 500m
+        cpu: 550m
         memory: 2Gi
 
     # ConfigMap settings inside the upstream Alloy chart's 'alloy' block
