@@ -14,7 +14,8 @@
 {{- range $path, $_ := $ruleFiles }}
 {{- $allContent = print $allContent ($.Files.Get $path) }}
 {{- end }}
-{{- $mimirConfig := index .Values "mimir-distributed" | default dict | index "mimir" | default dict }}
+{{- $mimirDistrib := index .Values "mimir-distributed" | default dict }}
+{{- $mimirConfig := $mimirDistrib.mimir | default dict }}
 {{- $checksum := (print $allContent (toYaml $mimirConfig) "v3") | sha256sum | trunc 8 }}
 
 apiVersion: batch/v1
