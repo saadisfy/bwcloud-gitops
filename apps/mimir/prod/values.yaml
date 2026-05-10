@@ -50,29 +50,17 @@ mimir-distributed:
         volumeMounts:
           - name: storage
             mountPath: /data
-      - name: copy-mimirtool
-        image: "grafana/mimir:3.0.1"
-        command: ["sh", "-c", "cp /bin/mimirtool /utils/mimirtool"]
-        volumeMounts:
-          - name: utils
-            mountPath: /utils
 
     extraContainers:
       - name: rules-sync
-        image: busybox:latest
-        command:
-          - sh
-          - -c
-          - |
-            echo "Warte auf Ruler API..."
-            until wget -q -O- http://localhost:8080/ready; do sleep 2; done
-            echo "Ruler bereit, lade Regeln..."
-            /utils/mimirtool rules load --address=http://localhost:8080 --id=1 /rules/rules.yaml
-            echo "Regeln erfolgreich geladen. Gehe in den Schlafmodus..."
-            sleep infinity
+        image: "grafana/mimirtool:3.0.1"
+        args:
+          - rules
+          - load
+          - --address=http://localhost:8080
+          - --id=1
+          - /rules/rules.yaml
         volumeMounts:
-          - name: utils
-            mountPath: /utils
           - name: rules-bundle
             mountPath: /rules
 
@@ -80,13 +68,9 @@ mimir-distributed:
       - name: rules-bundle
         configMap:
           name: mimir-rules-bundle
-      - name: utils
-        emptyDir: {}
     extraVolumeMounts:
       - name: rules-bundle
         mountPath: /rules
-      - name: utils
-        mountPath: /utils
 
 
 queryFrontendIngress:
