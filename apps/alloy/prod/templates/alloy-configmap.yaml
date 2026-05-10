@@ -160,8 +160,8 @@ data:
         metrics = [otelcol.processor.transform.promote_pod_ip_enriched.input]
       }
       check_interval  = "1s"
-      limit           = "400MiB"
-      spike_limit     = "100MiB"
+      limit           = "800MiB"
+      spike_limit     = "200MiB"
     }
 
     // --- Chain 2: Simple (for Meta-Exporters) ---
@@ -217,8 +217,8 @@ data:
         metrics = [otelcol.processor.transform.inject_cluster_simple.input]
       }
       check_interval  = "1s"
-      limit           = "400MiB"
-      spike_limit     = "100MiB"
+      limit           = "800MiB"
+      spike_limit     = "200MiB"
     }
 
     // ===============================================================

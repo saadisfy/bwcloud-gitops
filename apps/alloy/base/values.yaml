@@ -21,6 +21,7 @@ alloy:
     #    matching the current strategy (gateway later).
     type: daemonset
     hostNetwork: true
+    dnsPolicy: ClusterFirstWithHostNet
     podAnnotations:
       reloader.stakater.com/auto: "true"
 
@@ -55,10 +56,10 @@ alloy:
       # Q: Why these requests/limits?
       # A: Conservative defaults for stable scheduling and memory protection.
       requests:
-        cpu: 100m
-        memory: 192Mi
-      limits:
+        cpu: 200m
         memory: 512Mi
+      limits:
+        memory: 1Gi
 
     # ConfigMap settings inside the upstream Alloy chart's 'alloy' block
     configMap:
