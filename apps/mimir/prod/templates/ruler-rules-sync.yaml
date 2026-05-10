@@ -16,7 +16,7 @@
 {{- end }}
 {{- $mimirDistrib := index .Values "mimir-distributed" | default dict }}
 {{- $mimirConfig := $mimirDistrib.mimir | default dict }}
-{{- $checksum := (print $allContent (toYaml $mimirConfig) "v4") | sha256sum | trunc 8 }}
+{{- $checksum := (print $allContent (toYaml $mimirConfig) "v5") | sha256sum | trunc 8 }}
 
 apiVersion: batch/v1
 kind: Job

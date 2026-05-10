@@ -1,0 +1,50 @@
+groups:
+  - name: mimir_custom_alerts
+    rules:
+      - alert: MimirPodOOMKilled
+        annotations:
+          message: "Mimir pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled recently."
+          summary: "Pod terminated due to OutOfMemory"
+        expr: |
+          sum by (namespace, pod) (kube_pod_container_status_last_terminated_reason{pod=~"mimir-.*", reason="OOMKilled"}) > 0
+        for: 2m
+        labels:
+          severity: critical
+
+      - alert: MimirHighCpuThrottling
+        annotations:
+          message: "Mimir container {{ $labels.container }} in pod {{ $labels.pod }} is being throttled. {{ printf \"%.2f\" $value }}% of periods are throttled."
+          summary: "CPU Throttling detected"
+        expr: |
+          sum by (namespace, pod, container) (
+            rate(container_cpu_cfs_throttled_periods_total{pod=~"mimir-.*"}[5m])
+            /
+            rate(container_cpu_cfs_periods_total{pod=~"mimir-.*"}[5m])
+          ) * 100 > 20
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: MimirIngestionRateSaturation
+        annotations:
+          message: "Mimir ingestion rate is at {{ printf \"%.2f\" $value }}% of the configured limit."
+          summary: "Ingestion rate approaching limit"
+        expr: |
+          (
+            sum(rate(cortex_distributor_received_samples_total[2m]))
+            /
+            sum(cortex_distributor_ingestion_rate_limit)
+          ) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: MimirIngesterWALReplaySlow
+        annotations:
+          message: "Mimir Ingester {{ $labels.pod }} WAL replay is taking longer than 5 minutes."
+          summary: "Slow WAL replay detected"
+        expr: |
+          cortex_ingester_wal_replay_duration_seconds > 300
+        for: 1m
+        labels:
+          severity: warning
