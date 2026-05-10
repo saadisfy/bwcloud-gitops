@@ -76,8 +76,7 @@ Dieser Pfad ist für teamnahe, UI-getriebene oder iterativ entwickelte Regeln ge
 - Grafana Contact Points sind aktuell nur mit einem Platzhalter-Empfänger (`dummy@example.com`) konfiguriert.
 - Die Root-Notification-Policy in Grafana routet derzeit nur auf einen Default-Receiver.
 - Der Mimir Alertmanager besitzt aktuell nur eine minimale `fallbackConfig` ohne echte produktive Integrationen.
-- für Grafana-exportierte Alert-Regeln sind aktuell keine echten `alert-rules*.yaml` im Repo eingecheckt.
-- Unter `apps/grafana/prod/files/mimir/rules.yaml` existieren Recording Rules, die aktuell nicht durch den Mimir-Sync geladen werden, da der Sync nur `alerts*.yaml` einsammelt.
+- Für Grafana-exportierte Alert-Regeln sind aktuell keine echten `alert-rules*.yaml` im Repo eingecheckt.
 - Das fachliche Alert-Zielbild ist umfangreicher als der aktuell wirklich implementierte Runtime-Zustand.
 
 ---
@@ -130,17 +129,19 @@ Das Alerting wird logisch in drei Ebenen getrennt:
 
 - `apps/mimir/prod/files/**/alerts*.yaml`
 
-**Provisionierung (Checksum-basierter Job):**
+**Provisionierung (Sidecar-Init):**
 
 - Ein Helm-Template (`ruler-rules-configmap.yaml`) bündelt alle passenden Dateien in einer ConfigMap `mimir-rules-bundle`.
-- Ein dynamischer Kubernetes-Job (`mimir-rules-sync-<checksum>`) wird bei jeder Inhaltsänderung der Regeln neu erstellt.
-- Dieser Job nutzt das `mimirtool`, um die Regeln über die Gateway-API (`http://mimir-gateway...`) in Mimir zu registrieren.
-- Da der Job einen eindeutigen Namen pro Regel-Stand hat, stellt Argo CD sicher, dass er bei jeder Änderung zuverlässig ausgeführt wird.
+- **Sidecar-Init Ablauf:**
+    1. Der Init-Container `copy-mimirtool` stellt das `mimirtool`-Binary in einem geteilten Volume bereit.
+    2. Der Sidecar-Container `rules-sync` wartet nach dem Start des Pods auf die lokale API (`localhost:8080/ready`).
+    3. Sobald bereit, werden die Regeln via API registriert.
+- Da dieser Vorgang Teil der Pod-Definition ist, wird er bei **jedem Neustart** des Ruler-Pods automatisch ausgeführt.
 
-**Vorteile dieses Modells:**
-- **GitOps-konform:** Git ist die einzige Source of Truth.
-- **Robustheit:** Der Job wartet auf Erfolg und wird bei Fehlern (z.B. API kurzzeitig nicht erreichbar) automatisch durch Kubernetes retried (`backoffLimit`).
-- **Persistenz:** Auch wenn der Ruler-Pod seine lokalen Daten verliert (aktuell via `emptyDir`), sorgt die Neuregistrierung via API dafür, dass die Regeln in der Mimir-Datenbank aktuell bleiben.
+**Technische Rationale (Warum dieses Modell?):**
+1. **API-Standard:** Mimir nutzt intern eine komplexe, Base64-kodierte Verzeichnisstruktur für Rule-Dateien. Der API-Weg via `mimirtool` ist der offizielle und robusteste Weg.
+2. **Lebenszyklus-Kopplung:** Durch den Sidecar-Ansatz ist der Regel-Sync untrennbar mit dem Pod verbunden. Ein Neustart (egal ob durch Error oder Config-Change) zieht immer einen frischen Sync nach sich.
+3. **GitOps & Reloader:** Änderungen in Git führen über den Reloader zum Pod-Restart, was wiederum den Sidecar-Sync triggert.
 
 **Zielsystem:**
 
