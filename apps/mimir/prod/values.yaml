@@ -33,8 +33,9 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
-    podAnnotations:
-      reloader.stakater.com/auto: "true"
+    persistentVolume:
+      enabled: true
+      size: 1Gi
     initContainers:
       - name: setup-storage
         image: busybox:latest
@@ -51,26 +52,8 @@ mimir-distributed:
           - name: storage
             mountPath: /data
 
-    extraContainers:
-      - name: rules-sync
-        image: "grafana/mimirtool:3.0.1"
-        args:
-          - rules
-          - load
-          - --address=http://localhost:8080
-          - --id=1
-          - /rules/rules.yaml
-        volumeMounts:
-          - name: rules-bundle
-            mountPath: /rules
-
-    extraVolumes:
-      - name: rules-bundle
-        configMap:
-          name: mimir-rules-bundle
-    extraVolumeMounts:
-      - name: rules-bundle
-        mountPath: /rules
+    extraVolumes: []
+    extraVolumeMounts: []
 
 
 queryFrontendIngress:
