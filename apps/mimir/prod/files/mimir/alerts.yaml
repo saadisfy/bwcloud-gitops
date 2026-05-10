@@ -385,6 +385,16 @@ groups:
             severity: warning
     - name: mimir_instance_limits_alerts
       rules:
+        - alert: MimirSamplesDiscarded
+          annotations:
+            message: |
+                Mimir cluster {{ $labels.cluster }} is discarding samples for reason "{{ $labels.reason }}". This indicates that configured limits (series or rate) have been reached.
+            runbook_url: https://grafana.com/docs/mimir/latest/operators-guide/mimir-runbooks/
+          expr: |
+            sum by (cluster, namespace, reason) (rate(cortex_discarded_samples_total{reason!~"sample-out-of-order|duplicate-sample|too-far-behind|too-far-in-future"}[2m])) > 0
+          for: 2m
+          labels:
+            severity: critical
         - alert: MimirIngesterReachingSeriesLimit
           annotations:
             message: |
