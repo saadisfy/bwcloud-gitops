@@ -14,7 +14,7 @@
 {{- range $path, $_ := $ruleFiles }}
 {{- $allContent = print $allContent ($.Files.Get $path) }}
 {{- end }}
-{{- $checksum := (print $allContent (toYaml .Values.mimir)) | sha256sum | trunc 8 }}
+{{- $checksum := (print $allContent (toYaml .Values.mimir) "v2") | sha256sum | trunc 8 }}
 
 apiVersion: batch/v1
 kind: Job
