@@ -9,12 +9,12 @@
 {{- end }}
 
 {{- if gt (len $ruleFiles) 0 }}
-{{- /* Calculate checksum of all rule files to use in Job name */ -}}
+{{- /* Calculate checksum of all rule files PLUS Mimir config to force sync on infra changes */ -}}
 {{- $allContent := "" }}
 {{- range $path, $_ := $ruleFiles }}
 {{- $allContent = print $allContent ($.Files.Get $path) }}
 {{- end }}
-{{- $checksum := $allContent | sha256sum | trunc 8 }}
+{{- $checksum := (print $allContent (toYaml .Values.mimir)) | sha256sum | trunc 8 }}
 
 apiVersion: batch/v1
 kind: Job

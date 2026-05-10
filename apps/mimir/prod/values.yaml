@@ -33,10 +33,13 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
+    persistentVolume:
+      enabled: true
+      size: 1Gi
     initContainers:
       - name: setup-storage
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /ruler-storage/1"]
+        command: ["sh", "-c", "mkdir -p /data/ruler-storage/1"]
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
@@ -46,15 +49,12 @@ mimir-distributed:
               - ALL
           readOnlyRootFilesystem: true
         volumeMounts:
-          - name: ruler-storage
-            mountPath: /ruler-storage
+          - name: storage
+            mountPath: /data
 
-    extraVolumes:
-      - name: ruler-storage
-        emptyDir: {}
-    extraVolumeMounts:
-      - name: ruler-storage
-        mountPath: /ruler-storage
+    extraVolumes: []
+    extraVolumeMounts: []
+
 
 queryFrontendIngress:
   enabled: true
