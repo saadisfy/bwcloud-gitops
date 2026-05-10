@@ -2,6 +2,14 @@
 grafana:
   nameOverride: grafana
   fullnameOverride: grafana
+  podAnnotations:
+    reloader.stakater.com/auto: "true"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
   admin:
     existingSecret: grafana-admin-credentials
     passwordKey: admin-password
@@ -45,6 +53,14 @@ grafana:
       client_secret: $__env{GF_AUTH_GITHUB_CLIENT_SECRET}
 
 # Operator CRs configuration
+grafana-operator:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
 grafanaOperatorCRs:
   enabled: true
   instanceSelector:
