@@ -10,6 +10,8 @@ mimir-distributed:
           dir: /data/blocks
       limits:
         store_gateway_tenant_shard_size: 0
+        ingestion_rate: 20000
+        ingestion_burst_size: 100000
       ruler:
         rule_path: /data/ruler-rules
         alertmanager_url: "http://mimir-alertmanager-headless.mimir.svc.cluster.local:8080"

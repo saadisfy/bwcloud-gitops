@@ -59,7 +59,8 @@ alloy:
         cpu: 200m
         memory: 512Mi
       limits:
-        memory: 1Gi
+        cpu: 500m
+        memory: 2Gi
 
     # ConfigMap settings inside the upstream Alloy chart's 'alloy' block
     configMap:
