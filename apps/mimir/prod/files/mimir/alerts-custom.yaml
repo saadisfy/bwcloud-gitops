@@ -1,29 +1,43 @@
 groups:
   - name: mimir_custom_alerts
     rules:
-      - alert: MimirPodOOMKilled
+      - alert: MimirIngesterFlushQueueHigh
         annotations:
-          message: "Mimir pod {{ $labels.namespace }}/{{ $labels.pod }} was OOMKilled recently."
-          summary: "Pod terminated due to OutOfMemory"
+          message: "Mimir Ingester {{ $labels.pod }} has {{ $value }} series waiting to be flushed. This indicates disk/storage IO pressure."
+          summary: "Ingester flush queue is backing up"
         expr: |
-          sum by (namespace, pod) (kube_pod_container_status_last_terminated_reason{pod=~"mimir-.*", reason="OOMKilled"}) > 0
-        for: 2m
+          sum by (namespace, pod) (cortex_ingester_flush_queues_length) > 5000
+        for: 10m
         labels:
-          severity: critical
+          severity: warning
 
-      - alert: MimirHighCpuThrottling
+      - alert: MimirIngesterAppendLatencyHigh
         annotations:
-          message: "Mimir container {{ $labels.container }} in pod {{ $labels.pod }} is being throttled. {{ printf \"%.2f\" $value }}% of periods are throttled."
-          summary: "CPU Throttling detected"
+          message: "Mimir Ingester {{ $labels.pod }} append latency is high ({{ printf \"%.2f\" $value }}s). WAL performance might be degraded."
+          summary: "Ingester append latency high"
         expr: |
-          sum by (namespace, pod, container) (
-            rate(container_cpu_cfs_throttled_periods_total{pod=~"mimir-.*"}[5m])
+          (
+            sum by (namespace, pod) (rate(cortex_ingester_ingest_duration_seconds_sum[5m]))
             /
-            rate(container_cpu_cfs_periods_total{pod=~"mimir-.*"}[5m])
-          ) * 100 > 20
+            sum by (namespace, pod) (rate(cortex_ingester_ingest_duration_seconds_count[5m]))
+          ) > 0.1
         for: 5m
         labels:
           severity: warning
+
+      - alert: MimirDataLossRatioHigh
+        annotations:
+          message: "Mimir is discarding {{ printf \"%.2f\" $value }}% of incoming samples in namespace {{ $labels.namespace }}."
+          summary: "Significant data loss detected"
+        expr: |
+          (
+            sum by (namespace) (rate(cortex_discarded_samples_total[5m]))
+            /
+            sum by (namespace) (rate(cortex_distributor_received_samples_total[5m]))
+          ) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
 
       - alert: MimirIngestionRateSaturation
         annotations:
@@ -36,15 +50,5 @@ groups:
             sum(cortex_distributor_ingestion_rate_limit)
           ) * 100 > 80
         for: 5m
-        labels:
-          severity: warning
-
-      - alert: MimirIngesterWALReplaySlow
-        annotations:
-          message: "Mimir Ingester {{ $labels.pod }} WAL replay is taking longer than 5 minutes."
-          summary: "Slow WAL replay detected"
-        expr: |
-          cortex_ingester_wal_replay_duration_seconds > 300
-        for: 1m
         labels:
           severity: warning
