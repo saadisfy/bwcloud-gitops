@@ -133,44 +133,7 @@ groups:
           description: "node_cpu_seconds_total nicht vorhanden. Node-Exporter-Scrape ausgefallen."
 ```
 
-### 1.3 Label-Integrität
-
-Fehlende Labels sind schwer zu entdecken, weil Abfragen einfach keine Ergebnisse liefern.
-Diese Alerts feuern, wenn Metriken ohne erwartete Labels ankommen:
-
-**Datei:** `apps/mimir/prod/files/mimir/alerts-label-integrity.yaml`
-
-```yaml
-groups:
-  - name: mimir_label_integrity
-    rules:
-
-      # Pod-Metriken ohne namespace-Label (Enrichment-Pipeline kaputt)
-      - alert: PodMetricsMissingNamespaceLabel
-        expr: |
-          count(container_cpu_usage_seconds_total{namespace=""}) > 0
-          or
-          count(container_cpu_usage_seconds_total) unless count(container_cpu_usage_seconds_total{namespace!=""}) > 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Pod-Metriken ohne namespace-Label"
-          description: "container_cpu_usage_seconds_total hat keine namespace-Labels. K8s-Attribute-Enrichment in Alloy funktioniert nicht."
-
-      # Metriken ohne cluster-Label (inject_cluster fehlgeschlagen)
-      - alert: MetricsMissingClusterLabel
-        expr: |
-          count(up{cluster=""}) > 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Metriken ohne cluster-Label"
-          description: "Metriken kommen ohne cluster-Label an. Resource-Injection in Alloy fehlgeschlagen."
-```
-
-### 1.4 Ruler selbst überwachen
+### 1.3 Ruler selbst überwachen
 
 ```yaml
 # In bestehende alerts-custom.yaml oder eigene Datei ergänzen
@@ -246,32 +209,51 @@ mquery 'alloy_build_info{cluster="prod-bwcloud"}'
 
 ---
 
-### Szenario B: Alloy-Pipeline liefert k8s-Labels
+### Szenario B: Label-Vollständigkeit pro Scrape-Target
 
-Prüft: K8s-Attribute-Enrichment (namespace, pod, node, cluster) funktioniert.
+Prüft einmalig pro Scrape-Quelle ob die erwarteten Labels gesetzt sind.
+Jede Quelle hat andere Labels — deswegen wird jede separat geprüft.
 
 ```bash
-# Stichprobe: eine Container-Metrik mit allen Labels ausgeben
-curl -sf \
-  -H "X-Scope-OrgID: $ORG" \
-  "$MIMIR/prometheus/api/v1/query" \
-  --data-urlencode 'query=container_cpu_usage_seconds_total{namespace="mimir"}' \
-  | jq '[.data.result[0].metric | {namespace, pod, container, node, cluster}]'
+# Hilfsfunktion: prüft ob alle expected_labels in mindestens einem Result vorhanden sind
+check_labels() {
+  local desc=$1; local query=$2; shift 2; local labels=("$@")
+  local result=$(curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+    --data-urlencode "query=$query" | jq -r '.data.result[0].metric // empty')
+  if [[ -z $result ]]; then echo "❌ $desc: keine Daten"; return; fi
+  for label in "${labels[@]}"; do
+    val=$(echo $result | jq -r ".\"$label\" // empty")
+    [[ -z $val ]] && echo "❌ $desc: Label '$label' fehlt" || echo "✅ $desc: $label=$val"
+  done
+}
 
-# Erwartetes Ergebnis (alle Felder müssen nicht-leer sein):
-# [{ "namespace": "mimir", "pod": "mimir-ingester-0",
-#    "container": "ingester", "node": "...", "cluster": "prod-bwcloud" }]
+# cadvisor (kubelet scrape) — muss k8s-Attribute-Enrichment durchlaufen
+check_labels "cadvisor" \
+  'container_cpu_usage_seconds_total{namespace="mimir"}' \
+  namespace pod container node cluster
+
+# kube-state-metrics — keine Pod-IP, kein k8sattributes; muss cluster-Label haben
+check_labels "kube-state-metrics" \
+  'kube_pod_info{namespace="mimir"}' \
+  namespace pod node cluster
+
+# node-exporter — kein namespace/pod, aber node und cluster müssen da sein
+check_labels "node-exporter" \
+  'node_cpu_seconds_total' \
+  node cluster
+
+# alloy self-scrape — cluster muss gesetzt sein
+check_labels "alloy" \
+  'alloy_build_info' \
+  cluster
+
+# mimir self-scrape — namespace und cluster
+check_labels "mimir" \
+  'cortex_request_duration_seconds_sum{namespace="mimir"}' \
+  namespace cluster
 ```
 
-**Checkliste Label-Vollständigkeit:**
-
-| Label | Quelle in Alloy | Erwarteter Wert (Beispiel) |
-|---|---|---|
-| `cluster` | `inject_cluster` Resource-Processor | `prod-bwcloud` |
-| `namespace` | `k8sattributes` → `mirror_legacy_labels` | `mimir`, `alloy`, etc. |
-| `pod` | `k8sattributes` → `mirror_legacy_labels` | `mimir-ingester-0` |
-| `container` | `k8sattributes` → `mirror_legacy_labels` | `ingester` |
-| `node` | `k8sattributes` | `<k8s-node-name>` |
+**Wann ausführen:** Nach jeder Änderung an der Alloy-Pipeline (`config.alloy`), nach Cluster-Updates oder wenn Grafana-Dashboards plötzlich keine Daten mehr zeigen.
 
 ---
 
@@ -444,7 +426,7 @@ echo "Nach Änderung: $AFTER Rule-Groups"
 | Ruler hat Rules geladen | Alert `MimirRulerNoRulesLoaded` | Kontinuierlich |
 | Ruler evaluiert fehlerfrei | Alert `MimirRulerEvaluationFailing` | Kontinuierlich |
 | Ingestion Pfad E2E | Szenario A (curl) | Nach Änderungen |
-| Label-Vollständigkeit | Szenario B (curl + jq) | Nach Alloy-Änderungen |
+| Label-Vollständigkeit pro Scrape-Target | Szenario B (curl, einmalig) | Nach Alloy-Änderungen |
 | Alle Scrape-Quellen aktiv | Szenario C (curl-Schleife) | Nach Alloy-Änderungen |
 | Metrik-Volumen plausibel | Szenario D (curl) | Nach Cluster-Events |
 | Ruler feuert Alerts | Szenario E (curl Prometheus API) | Nach Ruler-Konfigurationsänderungen |
