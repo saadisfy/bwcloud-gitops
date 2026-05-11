@@ -1,8 +1,26 @@
 # Mimir Ruler & Alerting Setup
 
-Dieses Dokument beschreibt die vollständige Konfiguration des Mimir-Rulers,
-wie Alert-Rules verwaltet werden, wie sie in Mimir geladen werden und welche
-Design-Entscheidungen dabei getroffen wurden.
+## Kontext & Zielsetzung
+
+Dieses Dokument beschreibt die vollständige Konfiguration des Mimir-Rulers in einem GitOps-Setup
+(Argo CD + Helm). Es erklärt, wie Prometheus-Alert-Rules und Recording-Rules versioniert in Git
+verwaltet, automatisch in einen Kubernetes-ConfigMap überführt und vom Mimir-Ruler ohne manuelle
+API-Calls geladen werden.
+
+**Stack:**
+- **Mimir** (`grafana/mimir-distributed` Helm Chart v6.0.5) — Metrics-Backend mit eingebautem Ruler und Alertmanager
+- **Argo CD** — GitOps-Operator; rendert Helm und deployed Änderungen bei jedem Push
+- **Stakater Reloader** — überwacht gemountete ConfigMaps/Secrets und startet Pods automatisch neu bei Änderungen
+- **Kubernetes Cluster:** `noctua-k3s`, Namespace `mimir`
+
+**Kern-Design-Entscheidung:**
+Rules leben als plain YAML in Git. Helm aggregiert sie in einen ConfigMap. Der ConfigMap wird
+direkt als Datei in den Ruler-Pod gemountet. Der Mimir `local`-Storage-Backend liest die Datei
+beim Pod-Start — kein Job, kein API-Call, kein externes Tool zur Laufzeit notwendig.
+
+---
+
+## Überblick: Wie kommen Alerts in Mimir?
 
 ---
 
@@ -165,6 +183,69 @@ Der Mimir-Ruler-Container läuft mit `readOnlyRootFilesystem: true` (gesetzt dur
 
 Die `base/values.yaml` setzt `rule_path: /tmp/ruler-rules` (Standard für dev). Die `prod/values.yaml` **überschreibt** diesen Wert auf `/data/ruler-rules`.
 
+### Vollständige Ruler-Konfiguration (`prod/values.yaml`)
+
+Das ist der komplette Ruler-Block wie er in prod deployed wird:
+
+```yaml
+mimir-distributed:
+  mimir:
+    structuredConfig:
+      ruler:
+        rule_path: /data/ruler-rules          # beschreibbares EmptyDir (nicht /tmp!)
+        alertmanager_url: "http://mimir-alertmanager-headless.mimir.svc.cluster.local:8080"
+      ruler_storage:
+        backend: local
+        local:
+          directory: /rules-storage           # → /rules-storage/<tenantId>/<namespace>.yaml
+
+  ruler:
+    enabled: true
+    replicas: 1
+    persistentVolume:
+      enabled: true
+      size: 1Gi
+
+    initContainers:
+      - name: setup-storage
+        image: busybox:latest
+        command: ["sh", "-c", "mkdir -p /data/blocks"]
+        securityContext:
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+        volumeMounts:
+          - name: storage
+            mountPath: /data
+
+    extraVolumes:
+      - name: ruler-rules-storage
+        configMap:
+          name: mimir-rules-bundle
+
+    extraVolumeMounts:
+      - name: ruler-rules-storage
+        mountPath: /rules-storage/1/rules.yaml   # Tenant=1, Namespace=rules
+        subPath: rules.yaml
+        readOnly: true
+```
+
+### Ruler-Limits (`base/values.yaml`)
+
+Folgende Limits gelten global für alle Tenants:
+
+```yaml
+mimir-distributed:
+  mimir:
+    structuredConfig:
+      limits:
+        ruler_max_rules_per_rule_group: 100
+        ruler_max_rule_groups_per_tenant: 100
+```
+
 ---
 
 ## 4. ConfigMap-Mount auf den Ruler-Pod
@@ -277,42 +358,84 @@ ruler:
 
 **Headless Service** (`mimir-alertmanager-headless`) wird verwendet damit der Ruler alle Alertmanager-Instanzen direkt ansprechen kann (bei >1 Replica), ohne durch einen Load-Balancer zu gehen — wichtig für Alertmanager-Clustering.
 
-### Alertmanager-Storage (`base/values.yaml`)
+### Vollständige Alertmanager-Konfiguration
 
 ```yaml
+# base/values.yaml
 mimir-distributed:
   mimir:
     structuredConfig:
       alertmanager:
-        data_dir: /tmp/alertmanager-data    # Alertmanager darf /tmp nutzen (kein readOnly rootfs)
+        data_dir: /tmp/alertmanager-data    # Alertmanager darf /tmp nutzen (kein readOnlyRootFilesystem)
       alertmanager_storage:
         backend: local
         local:
-          path: /data    # PersistentVolume für Alertmanager-State
+          path: /data                       # PersistentVolume für Alertmanager-State (Silences, etc.)
+
+  alertmanager:
+    replicas: 1
+    persistentVolume:
+      enabled: true
+      size: 1Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+    fallbackConfig: |
+      global:
+        resolve_timeout: 5m
+      route:
+        receiver: default-receiver
+      receivers:
+        - name: default-receiver
 ```
 
-Der Alertmanager hat **kein** `readOnlyRootFilesystem` Problem — das betrifft nur den Ruler-Container.
+**Hinweise:**
+- Der Alertmanager hat **kein** `readOnlyRootFilesystem` — `/tmp` ist beschreibbar, daher `data_dir: /tmp/alertmanager-data`.
+- Das PersistentVolume unter `/data` speichert Alertmanager-State (Silences, Inhibitions) persistent über Pod-Restarts hinweg.
+- `fallbackConfig` greift wenn kein Tenant eine eigene Alertmanager-Config hochgeladen hat — empfängt dann alle Alerts ohne Routing (kein Notification-Receiver).
 
-### Alertmanager Fallback-Config (`base/values.yaml`)
+### Alert-Routing einrichten (optional)
+
+Um tatsächliche Notifications (Slack, PagerDuty, E-Mail) zu konfigurieren, muss eine Alertmanager-Config per `mimirtool` hochgeladen werden:
+
+```bash
+# Alertmanager-Config für Tenant 1 hochladen
+mimirtool alertmanager load alertmanager-config.yaml \
+  --address=https://mimir.saadisfy.me \
+  --id=1
+
+# Aktuelle Config anzeigen
+mimirtool alertmanager get \
+  --address=https://mimir.saadisfy.me \
+  --id=1
+```
+
+Beispiel `alertmanager-config.yaml` mit Slack-Integration:
 
 ```yaml
-alertmanager:
-  fallbackConfig: |
-    global:
-      resolve_timeout: 5m
-    route:
-      receiver: default-receiver
-    receivers:
-      - name: default-receiver
+global:
+  resolve_timeout: 5m
+route:
+  receiver: slack-alerts
+  group_by: [alertname, namespace]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+receivers:
+  - name: slack-alerts
+    slack_configs:
+      - api_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+        channel: "#alerts"
+        title: '{{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
 ```
-
-Wenn kein Tenant eine eigene Alertmanager-Config hat, wird diese Fallback-Config verwendet. Alert-Routing (Slack, PagerDuty, etc.) muss separat pro Tenant konfiguriert werden.
 
 ---
 
 ## 8. Neue Alert-Rules hinzufügen
-
-
 
 1. Neue YAML-Datei anlegen: `apps/mimir/prod/files/<kategorie>/alerts-<name>.yaml`
 2. Standard Prometheus-Format verwenden (muss mit `groups:` beginnen)
