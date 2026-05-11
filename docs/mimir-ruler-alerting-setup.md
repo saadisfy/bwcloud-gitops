@@ -118,7 +118,6 @@ data:
 ```yaml
 rulerRuleSync:
   enabled: true
-  argocdHook: false   # kein ArgoCD-Job mehr
 ```
 
 ---
@@ -311,40 +310,9 @@ Wenn kein Tenant eine eigene Alertmanager-Config hat, wird diese Fallback-Config
 
 ---
 
-## 8. Was wurde gegenüber dem alten Ansatz (Job) geändert
+## 8. Neue Alert-Rules hinzufügen
 
-### Alter Ansatz (kaputt)
 
-```
-ArgoCD Sync
-  → rendert Job: mimir-rules-sync-<checksum>
-  → Job startet mimirtool gegen Gateway API
-  → PROBLEM 1: Job-Name fix → "already exists" bei jedem Sync
-  → PROBLEM 2: mimirtool braucht laufenden Ruler (Chicken-and-Egg)
-  → PROBLEM 3: filesystem-Backend ignoriert direktes cp
-```
-
-### Neuer Ansatz (funktioniert)
-
-```
-Git Push
-  → Argo rendert ConfigMap mimir-rules-bundle neu
-  → Reloader erkennt ConfigMap-Änderung
-  → Ruler-Pod Restart
-  → local-Backend liest rules.yaml direkt beim Start
-  → fertig
-```
-
-### Dateien die geändert wurden
-
-| Datei | Änderung |
-|---|---|
-| `apps/mimir/prod/templates/ruler-rules-sync.yaml` | Job-Template entfernt, nur Kommentar |
-| `apps/mimir/prod/values.yaml` | `ruler_storage.backend: local`, `extraVolumeMounts` mit subPath, `rule_path: /data/ruler-rules` |
-
----
-
-## 9. Neue Alert-Rules hinzufügen
 
 1. Neue YAML-Datei anlegen: `apps/mimir/prod/files/<kategorie>/alerts-<name>.yaml`
 2. Standard Prometheus-Format verwenden (muss mit `groups:` beginnen)
