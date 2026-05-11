@@ -129,19 +129,18 @@ Das Alerting wird logisch in drei Ebenen getrennt:
 
 - `apps/mimir/prod/files/**/alerts*.yaml`
 
-**Provisionierung (Sidecar-Init):**
+**Provisionierung (Checksum-basierter Job):**
 
 - Ein Helm-Template (`ruler-rules-configmap.yaml`) bündelt alle passenden Dateien in einer ConfigMap `mimir-rules-bundle`.
-- **Sidecar-Init Ablauf:**
-    1. Der Init-Container `copy-mimirtool` stellt das `mimirtool`-Binary in einem geteilten Volume bereit.
-    2. Der Sidecar-Container `rules-sync` wartet nach dem Start des Pods auf die lokale API (`localhost:8080/ready`).
-    3. Sobald bereit, werden die Regeln via API registriert.
-- Da dieser Vorgang Teil der Pod-Definition ist, wird er bei **jedem Neustart** des Ruler-Pods automatisch ausgeführt.
+- Ein dynamischer Kubernetes-Job (`mimir-rules-sync-<checksum>`) wird bei jeder Änderung neu erstellt.
+- **Double-Checksum Mechanismus:** Der Name des Jobs basiert auf der Checksumme der **Regeldateien PLUS der Mimir-Infrastruktur-Konfiguration**.
+- **Stabilisierter Job-Template:** Um Konflikte mit immutablen Feldern in Kubernetes zu vermeiden (z.B. `spec.selector`), nutzt das Job-Template eine minimalistische Definition. Kubernetes generiert die notwendigen Selektoren automatisch.
+- **Hintergrund:** Da der Mimir Ruler aktuell flüchtigen Speicher (`emptyDir`) nutzt, gehen geladene Regeln bei einem Pod-Neustart verloren. Ein Neustart wird oft durch Infrastruktur-Änderungen (z.B. Memory-Limits) ausgelöst. Durch die Kopplung der Job-Checksumme an die Infrastruktur stellt Argo CD sicher, dass nach jedem potenziellen Neustart des Rulers auch der Sync-Job erneut läuft und die Regeln wieder einspielt.
 
 **Technische Rationale (Warum dieses Modell?):**
 1. **API-Standard:** Mimir nutzt intern eine komplexe, Base64-kodierte Verzeichnisstruktur für Rule-Dateien. Der API-Weg via `mimirtool` ist der offizielle und robusteste Weg.
-2. **Lebenszyklus-Kopplung:** Durch den Sidecar-Ansatz ist der Regel-Sync untrennbar mit dem Pod verbunden. Ein Neustart (egal ob durch Error oder Config-Change) zieht immer einen frischen Sync nach sich.
-3. **GitOps & Reloader:** Änderungen in Git führen über den Reloader zum Pod-Restart, was wiederum den Sidecar-Sync triggert.
+2. **GitOps-Konformität:** Da Kubernetes-Jobs "immutable" sind, ist der Name-Rotation-Ansatz (via Checksum) der einzig zuverlässige Weg in GitOps, um sicherzustellen, dass Logik tatsächlich ausgeführt wird.
+3. **Selbstheilung:** Der Job nutzt Kubernetes-native Retries (`backoffLimit`), um auf die Verfügbarkeit der Mimir-API zu warten, ohne auf Shell-Skripte in distroless Images angewiesen zu sein.
 
 **Zielsystem:**
 
