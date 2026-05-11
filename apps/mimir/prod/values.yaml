@@ -2,8 +2,6 @@
 mimir-distributed:
   mimir:
     structuredConfig:
-      # Required: ruler writes temporary/state files at startup.
-      # With readOnlyRootFilesystem=true, /tmp is not writable, so we must use /data.
       blocks_storage:
         backend: filesystem
         filesystem:
@@ -14,12 +12,18 @@ mimir-distributed:
         ingestion_burst_size: 500000
         max_global_series_per_user: 1500000
       ruler:
-        rule_path: /data/ruler-rules
+        # rule_path: writable temp dir for rule evaluation — /tmp is fine here (not readOnly)
+        rule_path: /tmp/ruler-rules
         alertmanager_url: "http://mimir-alertmanager-headless.mimir.svc.cluster.local:8080"
+      # local backend: read-only, reads standard Prometheus YAML directly from filesystem.
+      # The ConfigMap (mimir-rules-bundle) is mounted via extraVolumeMounts at
+      # /rules-storage/1/rules.yaml (tenantId=1, namespace=rules).
+      # No Job, no initContainer copy, no API call needed.
+      # Stakater Reloader restarts the ruler pod when the ConfigMap changes.
       ruler_storage:
-        backend: filesystem
-        filesystem:
-          dir: /data/ruler-storage
+        backend: local
+        local:
+          directory: /rules-storage
 
   ingester:
     replicas: 1
@@ -42,7 +46,7 @@ mimir-distributed:
     initContainers:
       - name: setup-storage
         image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /data/ruler-storage/1"]
+        command: ["sh", "-c", "mkdir -p /data/blocks"]
         securityContext:
           runAsUser: 10001
           runAsGroup: 10001
@@ -54,38 +58,19 @@ mimir-distributed:
         volumeMounts:
           - name: storage
             mountPath: /data
-      # Copies rules directly into ruler_storage filesystem — no API call needed.
-      # ruler_storage.backend=filesystem means Mimir reads rules from /data/ruler-storage/<tenantId>/ at startup.
-      # This avoids the chicken-and-egg problem (mimirtool API requires the ruler to already be running).
-      - name: sync-ruler-rules
-        image: busybox:latest
-        command:
-          - sh
-          - -c
-          - |
-            mkdir -p /data/ruler-storage/1
-            cp /rules/rules.yaml /data/ruler-storage/1/alertrules.yaml
-            echo "Rules copied to /data/ruler-storage/1/alertrules.yaml"
-        securityContext:
-          runAsUser: 10001
-          runAsGroup: 10001
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
-          readOnlyRootFilesystem: true
-        volumeMounts:
-          - name: storage
-            mountPath: /data
-          - name: ruler-rules
-            mountPath: /rules
-            readOnly: true
 
+    # Mount the mimir-rules-bundle ConfigMap directly into the ruler_storage local directory.
+    # Path: /rules-storage/<tenantId>/<namespace>.yaml  →  /rules-storage/1/rules.yaml
+    # Mimir local backend reads this as tenant=1, namespace=rules on every startup.
     extraVolumes:
-      - name: ruler-rules
+      - name: ruler-rules-storage
         configMap:
           name: mimir-rules-bundle
-    extraVolumeMounts: []
+    extraVolumeMounts:
+      - name: ruler-rules-storage
+        mountPath: /rules-storage/1/rules.yaml
+        subPath: rules.yaml
+        readOnly: true
 
 
 queryFrontendIngress:
@@ -97,21 +82,12 @@ queryFrontendIngress:
   host: mimir-query.saadisfy.me
   tlsSecretName: mimir-query-tls
 
-# rulerRuleSync: enabled=true keeps the mimir-rules-bundle ConfigMap rendered
-# (mounted by the sync-ruler-rules initContainer on the ruler pod).
-# The Argo CD Job approach has been replaced by an initContainer — no more
-# "job already exists" sync errors. Rules are loaded on every ruler restart.
+# rulerRuleSync: enabled=true keeps the mimir-rules-bundle ConfigMap rendered.
+# The ConfigMap is mounted directly into the ruler pod at /rules-storage/1/rules.yaml
+# via ruler.extraVolumeMounts (subPath). No Job, no initContainer copy needed.
+# Stakater Reloader auto-restarts the ruler when the ConfigMap changes (via Git push).
 rulerRuleSync:
   enabled: true
-  # Used only to keep the mimir-rules-bundle ConfigMap rendered.
-  address: "http://mimir-gateway.mimir.svc.cluster.local"
-  tenantId: "1"
-  auth:
-    existingSecret: ""
-    tokenKey: "token"
-    usernameKey: "username"
-    passwordKey: "password"
-  # argocdHook is no longer used — Job template has been removed.
   argocdHook: false
   image:
     repository: grafana/mimirtool
