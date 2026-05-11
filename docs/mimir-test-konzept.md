@@ -202,11 +202,26 @@ groups:
 Diese Szenarien werden manuell ausgeführt — nach Konfigurationsänderungen, nach
 Cluster-Updates oder als regelmäßiger Smoke-Test.
 
-**Voraussetzung:** `mimirtool` installiert, Zugriff auf `https://mimir.saadisfy.me`
+> **Hinweis zu Tools:** `grafana cli` ist ausschließlich für Plugin-Management und
+> ist hier nicht geeignet. Die Szenarien nutzen stattdessen:
+> - **`curl`** — direkt gegen Mimir's Prometheus-kompatible HTTP-API (keine Abhängigkeiten)
+> - **`promtool`** — für lokales Rule-Unit-Testing ohne laufenden Cluster
+> - **`mimirtool`** — optional, wo es wirklich kürzer ist (Rules list, Alertmanager get)
+
+**Basis-Setup:**
 
 ```bash
-export MIMIR_ADDRESS=https://mimir.saadisfy.me
-export MIMIR_TENANT_ID=1
+export MIMIR=https://mimir.saadisfy.me
+export ORG=1   # Tenant-ID
+
+# Hilfsfunktion: PromQL-Query gegen Mimir
+mquery() {
+  curl -sf \
+    -H "X-Scope-OrgID: $ORG" \
+    "$MIMIR/prometheus/api/v1/query" \
+    --data-urlencode "query=$1" \
+    | jq -r '.data.result'
+}
 ```
 
 ---
@@ -216,27 +231,17 @@ export MIMIR_TENANT_ID=1
 Prüft: Daten kommen von Alloy an und sind sofort abfragbar.
 
 ```bash
-# 1. Synthetics Metric pushen (remote_write Format)
-cat <<EOF | curl -s --data-binary @- \
-  -H "X-Scope-OrgID: 1" \
-  -H "Content-Type: application/x-protobuf" \
-  https://mimir.saadisfy.me/api/v1/push
-# (remote_write via mimirtool ist einfacher:)
-EOF
+# 1. Aktuelle Ingestion-Rate abfragen (muss > 0 sein)
+mquery 'sum(rate(cortex_distributor_received_samples_total{cluster="prod-bwcloud"}[2m]))'
+# Erwartetes Ergebnis: ein Wert > 0
 
-# Einfacher: mimirtool remote-write
-mimirtool remote-write \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID \
-  --metric='mimir_e2e_test{test="ingestion",cluster="prod-bwcloud"} 1'
+# 2. Prüfen ob Samples verworfen werden (muss 0 sein)
+mquery 'sum(rate(cortex_discarded_samples_total{cluster="prod-bwcloud"}[5m]))'
+# Erwartetes Ergebnis: 0 oder kein Result
 
-# 2. Metric zurück abfragen (sollte sofort vorhanden sein)
-mimirtool query \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID \
-  'mimir_e2e_test{test="ingestion"}'
-
-# Erwartetes Ergebnis: value=1, Label cluster="prod-bwcloud" vorhanden
+# 3. Alloy meldet sich selbst
+mquery 'alloy_build_info{cluster="prod-bwcloud"}'
+# Erwartetes Ergebnis: mind. 1 Series mit version-Label
 ```
 
 ---
@@ -246,21 +251,16 @@ mimirtool query \
 Prüft: K8s-Attribute-Enrichment (namespace, pod, node, cluster) funktioniert.
 
 ```bash
-# Stichprobe: Container-Metriken mit vollständigen Labels abfragen
-mimirtool query \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID \
-  'container_cpu_usage_seconds_total{namespace="mimir"}' \
-  | jq '.data.result[0].metric | {namespace, pod, container, node, cluster}'
+# Stichprobe: eine Container-Metrik mit allen Labels ausgeben
+curl -sf \
+  -H "X-Scope-OrgID: $ORG" \
+  "$MIMIR/prometheus/api/v1/query" \
+  --data-urlencode 'query=container_cpu_usage_seconds_total{namespace="mimir"}' \
+  | jq '[.data.result[0].metric | {namespace, pod, container, node, cluster}]'
 
-# Erwartetes Ergebnis (alle Labels müssen vorhanden und nicht-leer sein):
-# {
-#   "namespace": "mimir",
-#   "pod": "mimir-ingester-0",
-#   "container": "ingester",
-#   "node": "<node-name>",
-#   "cluster": "prod-bwcloud"
-# }
+# Erwartetes Ergebnis (alle Felder müssen nicht-leer sein):
+# [{ "namespace": "mimir", "pod": "mimir-ingester-0",
+#    "container": "ingester", "node": "...", "cluster": "prod-bwcloud" }]
 ```
 
 **Checkliste Label-Vollständigkeit:**
@@ -280,119 +280,153 @@ mimirtool query \
 Prüft: Alle erwarteten Scrape-Quellen liefern Metriken.
 
 ```bash
-# Für jeden erwarteten "Job" eine Signatur-Metrik abfragen:
-
-JOBS=(
-  "container_cpu_usage_seconds_total"   # cadvisor (kubelet scrape)
-  "kubelet_node_name"                   # kubelet
-  "kube_pod_info"                       # kube-state-metrics
-  "node_cpu_seconds_total"              # node-exporter
-  "alloy_build_info"                    # alloy self-scrape
-  "cortex_request_duration_seconds_sum" # mimir self-scrape
+# Alle Signature-Metriken in einer Schleife prüfen
+declare -A CHECKS=(
+  ["cadvisor"]='container_cpu_usage_seconds_total{cluster="prod-bwcloud"}'
+  ["kubelet"]='kubelet_node_name{cluster="prod-bwcloud"}'
+  ["kube-state-metrics"]='kube_pod_info{cluster="prod-bwcloud"}'
+  ["node-exporter"]='node_cpu_seconds_total{cluster="prod-bwcloud"}'
+  ["alloy-self"]='alloy_build_info{cluster="prod-bwcloud"}'
+  ["mimir-self"]='cortex_request_duration_seconds_sum{cluster="prod-bwcloud"}'
 )
 
-for metric in "${JOBS[@]}"; do
-  result=$(mimirtool query \
-    --address=$MIMIR_ADDRESS \
-    --id=$MIMIR_TENANT_ID \
-    "${metric}{cluster=\"prod-bwcloud\"}" 2>/dev/null | jq '.data.result | length')
-  echo "${metric}: ${result} series"
+for name in "${!CHECKS[@]}"; do
+  count=$(curl -sf \
+    -H "X-Scope-OrgID: $ORG" \
+    "$MIMIR/prometheus/api/v1/query" \
+    --data-urlencode "query=${CHECKS[$name]}" \
+    | jq '.data.result | length')
+  status=$([[ $count -gt 0 ]] && echo "✅" || echo "❌ FEHLT")
+  echo "$status  $name ($count series)"
 done
-
-# Erwartetes Ergebnis: Jede Metrik hat > 0 series
-# 0 series = diese Scrape-Quelle fehlt
 ```
 
 ---
 
 ### Szenario D: Metrik-Volumen plausibel
 
-Prüft: Die Anzahl an aktiven Serien liegt in einem erwarteten Bereich.
-Zu wenig Series = Scrapes fehlen. Zu viele = mögliches Cardinality-Problem.
+Prüft: Series-Anzahl liegt in einem vernünftigen Bereich.
 
 ```bash
-# Gesamte aktive Series für Tenant 1
-mimirtool query \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID \
-  'sum(cortex_ingester_memory_series{cluster="prod-bwcloud"})'
+# Gesamt-Series für Tenant 1
+mquery 'sum(cortex_ingester_memory_series{cluster="prod-bwcloud"})'
 
-# Series-Breakdown nach Namespace (Top-10)
-mimirtool query \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID \
-  'topk(10, count by (namespace) ({namespace!="", cluster="prod-bwcloud"}))'
-
-# Empfehlung: Baseline nach erstem erfolgreichen Deploy festhalten
-# und in Schicht-1-Alert als Schwellwert eintragen (s. AlloyIngestionRateLow)
+# Top-10 Namespaces nach Series-Anzahl
+curl -sf \
+  -H "X-Scope-OrgID: $ORG" \
+  "$MIMIR/prometheus/api/v1/query" \
+  --data-urlencode 'query=topk(10, count by (namespace) ({namespace!="", cluster="prod-bwcloud"}))' \
+  | jq -r '.data.result[] | "\(.metric.namespace): \(.value[1])"' \
+  | sort -t: -k2 -rn
 ```
 
 ---
 
 ### Szenario E: Alert-Evaluation funktioniert (Ruler Smoke-Test)
 
-Prüft: Der Ruler lädt Rules, evaluiert sie und sendet Alerts an den Alertmanager.
+Prüft: Der Ruler lädt Rules, evaluiert sie korrekt.
 
 ```bash
-# 1. Geladene Rules überprüfen
-mimirtool rules list \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID
+# 1. Geladene Rules über Prometheus API abfragen (kein mimirtool nötig)
+curl -sf \
+  -H "X-Scope-OrgID: $ORG" \
+  "$MIMIR/prometheus/api/v1/rules" \
+  | jq '[.data.groups[] | {group: .name, rules: [.rules[].name]}]'
+# Erwartetes Ergebnis: kubernetes-apps, mimir_alerts, mimir_custom_alerts usw. sichtbar
 
-# Erwartetes Ergebnis: Alle Rule-Groups aus files/ sind gelistet
-# (kubernetes-apps, mimir_alerts, mimir_custom_alerts, etc.)
+# 2. Aktuell feuernde Alerts
+curl -sf \
+  -H "X-Scope-OrgID: $ORG" \
+  "$MIMIR/prometheus/api/v1/alerts" \
+  | jq '[.data.alerts[] | select(.state=="firing") | {alert: .labels.alertname, severity: .labels.severity}]'
 
-# 2. Aktuelle Alert-States abfragen (welche Rules sind gerade "pending" oder "firing")
-mimirtool rules list \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID \
-  --output-dir=/tmp/rules-dump
+# 3. Ruler-Evaluation-Fehler prüfen (sollte 0 sein)
+mquery 'sum(rate(cortex_ruler_evaluation_failures_total{cluster="prod-bwcloud"}[5m]))'
+```
 
-# 3. Alertmanager erreichbar und konfiguriert
-mimirtool alertmanager get \
-  --address=$MIMIR_ADDRESS \
-  --id=$MIMIR_TENANT_ID
-# Erwartetes Ergebnis: Config vorhanden (kein 404)
+**Optional: Smoke-Test-Alert der garantiert feuert**
 
-# 4. Test-Alert deployen der garantiert feuert
-# In eine temporäre Datei apps/mimir/prod/files/mimir/alerts-smoketest.yaml:
-cat <<'EOF'
+```bash
+# Temporäre Datei anlegen, committen, nach Verifikation wieder löschen
+cat > apps/mimir/prod/files/mimir/alerts-smoketest.yaml <<'EOF'
 groups:
   - name: smoketest
     rules:
       - alert: RulerSmokeTest
-        expr: vector(1) == 1   # feuert immer
+        expr: vector(1) == 1
         for: 1m
         labels:
           severity: none
           test: "true"
         annotations:
-          summary: "Ruler Smoke-Test — kann nach Verifikation gelöscht werden"
+          summary: "Ruler Smoke-Test — nach Verifikation löschen"
 EOF
-# → committen, warten bis Reloader neu startet, dann in Alertmanager UI prüfen
-# → danach Datei wieder löschen
+# → committen → warten bis Reloader neustarts → Alert in Schritt 2 sichtbar?
+# → danach: git rm apps/mimir/prod/files/mimir/alerts-smoketest.yaml && git commit && git push
 ```
 
 ---
 
-### Szenario F: Mimir Ruler Config-Reload verifizieren
+### Szenario F: Rule-Unit-Tests lokal (ohne Cluster)
 
-Prüft: Wenn sich Rules in Git ändern, landen sie auch wirklich im Ruler.
+Prüft: Alert-Expressions sind syntaktisch korrekt und feuern bei den richtigen Werten.
+Dafür wird `promtool` verwendet — kein laufender Cluster nötig.
 
 ```bash
-# Vor einer Rule-Änderung: Anzahl Rules merken
-BEFORE=$(mimirtool rules list --address=$MIMIR_ADDRESS --id=$MIMIR_TENANT_ID | wc -l)
+# promtool ist Teil des Prometheus-Binaries
+# Installation: brew install prometheus  (oder direkt von https://github.com/prometheus/prometheus/releases)
 
-# → Neue Rule zur Datei hinzufügen, committen, pushen
+# Unit-Test Datei anlegen:
+cat > /tmp/test-mimir-alerts.yaml <<'EOF'
+rule_files:
+  - /path/to/apps/mimir/prod/files/mimir/alerts-custom.yaml
 
-# Warten bis Reloader den Pod neu gestartet hat (~60-90s)
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'cortex_ingester_flush_queues_length{namespace="mimir", pod="ingester-0"}'
+        values: '0 0 0 0 6000 6000 6000 6000 6000 6000'  # steigt nach 4min über 5000
+
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: MimirIngesterFlushQueueHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: mimir
+              pod: ingester-0
+            exp_annotations:
+              message: "Mimir Ingester ingester-0 has 6000 series waiting..."
+EOF
+
+promtool test rules /tmp/test-mimir-alerts.yaml
+# Erwartetes Ergebnis: "SUCCESS: 1 tests passed"
+```
+
+---
+
+### Szenario G: Mimir Ruler Config-Reload verifizieren
+
+Prüft: Nach einem Git-Push landen neue Rules tatsächlich im Ruler.
+
+```bash
+# Vor Änderung: Anzahl Rule-Groups merken
+BEFORE=$(curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/rules" \
+  | jq '.data.groups | length')
+
+echo "Vor Änderung: $BEFORE Rule-Groups"
+
+# → Neue Rule-Datei committen und pushen
+
+# Warten bis Reloader den Pod neu gestartet hat
 kubectl rollout status deployment/mimir-ruler -n mimir --timeout=120s
 
-# Nach dem Restart: Anzahl Rules prüfen
-AFTER=$(mimirtool rules list --address=$MIMIR_ADDRESS --id=$MIMIR_TENANT_ID | wc -l)
+# Nach Restart prüfen
+AFTER=$(curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/rules" \
+  | jq '.data.groups | length')
 
-echo "Vorher: $BEFORE Zeilen, Nachher: $AFTER Zeilen"
-# AFTER > BEFORE = neue Rule wurde aufgenommen
+echo "Nach Änderung: $AFTER Rule-Groups"
+[[ $AFTER -gt $BEFORE ]] && echo "✅ Neue Rules geladen" || echo "❌ Keine Änderung erkannt"
 ```
 
 ---
@@ -409,9 +443,10 @@ echo "Vorher: $BEFORE Zeilen, Nachher: $AFTER Zeilen"
 | k8s-Labels vorhanden | Alerts `*MissingLabel` | Kontinuierlich |
 | Ruler hat Rules geladen | Alert `MimirRulerNoRulesLoaded` | Kontinuierlich |
 | Ruler evaluiert fehlerfrei | Alert `MimirRulerEvaluationFailing` | Kontinuierlich |
-| Ingestion Pfad E2E | Szenario A | Nach Änderungen |
-| Label-Vollständigkeit | Szenario B | Nach Alloy-Änderungen |
-| Alle Scrape-Quellen aktiv | Szenario C | Nach Alloy-Änderungen |
-| Metrik-Volumen plausibel | Szenario D | Nach Cluster-Events |
-| Ruler feuert Alerts | Szenario E | Nach Ruler-Konfigurationsänderungen |
-| Config-Reload funktioniert | Szenario F | Nach Rule-Änderungen |
+| Ingestion Pfad E2E | Szenario A (curl) | Nach Änderungen |
+| Label-Vollständigkeit | Szenario B (curl + jq) | Nach Alloy-Änderungen |
+| Alle Scrape-Quellen aktiv | Szenario C (curl-Schleife) | Nach Alloy-Änderungen |
+| Metrik-Volumen plausibel | Szenario D (curl) | Nach Cluster-Events |
+| Ruler feuert Alerts | Szenario E (curl Prometheus API) | Nach Ruler-Konfigurationsänderungen |
+| Rule-Expressions korrekt | Szenario F (promtool) | Lokal, vor jedem Commit |
+| Config-Reload funktioniert | Szenario G (curl + kubectl) | Nach Rule-Änderungen |
