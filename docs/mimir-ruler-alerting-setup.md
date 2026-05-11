@@ -7,11 +7,7 @@ Dieses Dokument beschreibt die vollständige Konfiguration des Mimir-Rulers in e
 verwaltet, automatisch in einen Kubernetes-ConfigMap überführt und vom Mimir-Ruler ohne manuelle
 API-Calls geladen werden.
 
-**Stack:**
-- **Mimir** (`grafana/mimir-distributed` Helm Chart v6.0.5) — Metrics-Backend mit eingebautem Ruler und Alertmanager
-- **Argo CD** — GitOps-Operator; rendert Helm und deployed Änderungen bei jedem Push
-- **Stakater Reloader** — überwacht gemountete ConfigMaps/Secrets und startet Pods automatisch neu bei Änderungen
-- **Kubernetes Cluster:** `noctua-k3s`, Namespace `mimir`
+**Voraussetzungen:** `mimir-distributed` wird über Argo CD deployed und Stakater Reloader ist im Cluster vorhanden — damit ist ConfigMap-basiertes Reloading automatisch verfügbar.
 
 **Kern-Design-Entscheidung:**
 Rules leben als plain YAML in Git. Helm aggregiert sie in einen ConfigMap. Der ConfigMap wird
