@@ -54,8 +54,37 @@ mimir-distributed:
         volumeMounts:
           - name: storage
             mountPath: /data
+      # Copies rules directly into ruler_storage filesystem — no API call needed.
+      # ruler_storage.backend=filesystem means Mimir reads rules from /data/ruler-storage/<tenantId>/ at startup.
+      # This avoids the chicken-and-egg problem (mimirtool API requires the ruler to already be running).
+      - name: sync-ruler-rules
+        image: busybox:latest
+        command:
+          - sh
+          - -c
+          - |
+            mkdir -p /data/ruler-storage/1
+            cp /rules/rules.yaml /data/ruler-storage/1/alertrules.yaml
+            echo "Rules copied to /data/ruler-storage/1/alertrules.yaml"
+        securityContext:
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+          - name: storage
+            mountPath: /data
+          - name: ruler-rules
+            mountPath: /rules
+            readOnly: true
 
-    extraVolumes: []
+    extraVolumes:
+      - name: ruler-rules
+        configMap:
+          name: mimir-rules-bundle
     extraVolumeMounts: []
 
 
@@ -68,22 +97,22 @@ queryFrontendIngress:
   host: mimir-query.saadisfy.me
   tlsSecretName: mimir-query-tls
 
+# rulerRuleSync: enabled=true keeps the mimir-rules-bundle ConfigMap rendered
+# (mounted by the sync-ruler-rules initContainer on the ruler pod).
+# The Argo CD Job approach has been replaced by an initContainer — no more
+# "job already exists" sync errors. Rules are loaded on every ruler restart.
 rulerRuleSync:
   enabled: true
-  # Mimir query-frontend/gateway URL exposing /prometheus API.
+  # Used only to keep the mimir-rules-bundle ConfigMap rendered.
   address: "http://mimir-gateway.mimir.svc.cluster.local"
-  # Tenant / OrgID used for ruler API calls.
   tenantId: "1"
-  # Optional auth secret containing token or user/password.
   auth:
     existingSecret: ""
     tokenKey: "token"
     usernameKey: "username"
     passwordKey: "password"
-  # Hook mode makes Argo CD rerun the sync job on each sync.
-  argocdHook: true
-
-  syncWave: "5"
+  # argocdHook is no longer used — Job template has been removed.
+  argocdHook: false
   image:
     repository: grafana/mimirtool
     tag: "3.0.1"

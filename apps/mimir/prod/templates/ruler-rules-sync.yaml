@@ -1,52 +1,6 @@
-{{- $cfg := .Values.rulerRuleSync | default dict }}
-{{- if ($cfg.enabled | default false) }}
-{{- $ruleGlobs := list "files/**/alerts*.yaml" "files/**/alerts*.yml" }}
-{{- $ruleFiles := dict }}
-{{- range $glob := $ruleGlobs }}
-{{- range $path, $_ := $.Files.Glob $glob }}
-{{- $_ = set $ruleFiles $path true }}
-{{- end }}
-{{- end }}
-
-{{- if gt (len $ruleFiles) 0 }}
-{{- /* Calculate checksum of all rule files PLUS Mimir global config to force sync on any change */ -}}
-{{- $allContent := "" }}
-{{- range $path, $_ := $ruleFiles }}
-{{- $allContent = print $allContent ($.Files.Get $path) }}
-{{- end }}
-{{- $mimirDistrib := index .Values "mimir-distributed" | default dict }}
-{{- $mimirConfig := $mimirDistrib.mimir | default dict }}
-{{- $checksum := (print $allContent (toYaml $mimirConfig) "v7") | sha256sum | trunc 8 }}
-
-apiVersion: batch/v1
-kind: Job
-metadata:
-  name: mimir-rules-sync-{{ $checksum }}
-  namespace: {{ .Release.Namespace }}
-  annotations:
-    argocd.argoproj.io/sync-options: Replace=true
-spec:
-  backoffLimit: 20
-  ttlSecondsAfterFinished: 300
-  template:
-    spec:
-      restartPolicy: OnFailure
-      containers:
-        - name: mimirtool
-          image: "grafana/mimirtool:3.0.1"
-          args:
-            - rules
-            - load
-            - --address=http://mimir-gateway.mimir.svc.cluster.local
-            - --id=1
-            - /rules/rules.yaml
-          volumeMounts:
-            - name: rules
-              mountPath: /rules
-      volumes:
-        - name: rules
-          configMap:
-            name: mimir-rules-bundle
-{{- end }}
-{{- end }}
-
+{{- /* ruler-rules-sync: Job removed.
+     Rules are now loaded via the sync-ruler-rules initContainer on the ruler pod,
+     which runs mimirtool rules load every time the ruler starts or restarts.
+     The mimir-rules-bundle ConfigMap (ruler-rules-configmap.yaml) is still rendered
+     and mounted by that initContainer.
+*/ -}}
