@@ -336,6 +336,38 @@ curl -sf -H "X-Scope-OrgID: ${ORG_ID}" \
 
 **Akzeptanzkriterium:** Queue-Auslastung unter 80% der Kapazität.
 
+#### TC-ALLOY-005: Metrik-Typ-Metadaten korrekt
+
+> **Hintergrund (Muster aus `grafana/alloy` k8s-Tests):**  
+> Alloys `deps/mimir.go` enthält `QueryMetadata()` — eine Assertion die prüft ob Metriken in
+> Mimirs `/api/v1/metadata` mit korrektem `type` (counter/gauge/histogram) registriert sind.
+> Das fängt Konfigurationsfehler wie falsches `honor_labels`, Metric-Renaming in `config.alloy`
+> oder falsche OTLP-Konvertierung — Dinge die Scrape-Coverage-Tests (TC-INT-004) nicht sehen.
+> **Wir testen damit unsere `config.alloy`, nicht Alloy als Applikation.**
+
+```bash
+# Prüft ob key metrics den erwarteten Typ haben
+# (counter statt gauge würde auf Konvertierungsfehler hinweisen)
+declare -A EXPECTED_TYPES=(
+  ["container_cpu_usage_seconds_total"]="counter"
+  ["node_cpu_seconds_total"]="counter"
+  ["kube_pod_info"]="gauge"
+  ["alloy_build_info"]="gauge"
+  ["cortex_request_duration_seconds_sum"]="counter"
+)
+for metric in "${!EXPECTED_TYPES[@]}"; do
+  expected="${EXPECTED_TYPES[$metric]}"
+  actual=$(curl -sf -H "X-Scope-OrgID: ${ORG_ID}" \
+    "${MIMIR_URL}/prometheus/api/v1/metadata?metric=${metric}" \
+    | jq -r ".data.\"${metric}\"[0].type // empty")
+  [[ "$actual" == "$expected" ]] \
+    && echo "✅ $metric: type=$actual" \
+    || echo "❌ $metric: erwartet=$expected, tatsächlich=${actual:-nicht vorhanden}"
+done
+```
+
+**Akzeptanzkriterium:** Alle geprüften Metriken haben den erwarteten Typ in Mimirs Metadata-Endpoint.
+
 **Checkliste Alloy:**
 
 | ID | Check | Erwartetes Ergebnis |
@@ -344,6 +376,7 @@ curl -sf -H "X-Scope-OrgID: ${ORG_ID}" \
 | TC-ALLOY-002 | `alloy_build_info` in Mimir | version-Label gesetzt |
 | TC-ALLOY-003 | Keine ERROR-Logs | 0 unerwartete Fehler-Zeilen |
 | TC-ALLOY-004 | Queue nicht voll | < 80% Kapazität |
+| TC-ALLOY-005 | Metrik-Typ-Metadaten korrekt | type=counter/gauge wie erwartet |
 
 ---
 
@@ -547,6 +580,52 @@ AFTER=$(curl -sf -H "X-Scope-OrgID: ${ORG_ID}" \
 ```
 
 **Akzeptanzkriterium:** Neue Rules werden nach GitOps-Sync in Mimir geladen.
+
+### 8.8 Alertmanager-Config entspricht erwarteter Config
+
+#### TC-INT-008: Alertmanager-Config-Validierung
+
+> **Hintergrund (Muster aus `grafana/alloy` k8s-Tests):**  
+> Alloys `deps/mimir.go` enthält `CheckAlertsConfig()` — vergleicht Mimirs tatsächliche
+> Alertmanager-Config (`/api/v1/alerts`) mit einer erwarteten Datei.  
+> Wir nutzen dasselbe Prinzip, um nach einem GitOps-Push zu prüfen ob unsere
+> `alertmanager_config` (aus `apps/mimir/base/values.yaml`) korrekt in Mimir geladen wurde.
+> **Wir testen unsere Konfiguration, nicht Alloy als Applikation.**
+
+```bash
+# Mimirs aktuelle Alertmanager-Config abrufen und gegen erwartete Struktur prüfen
+curl -sf -H "X-Scope-OrgID: ${ORG_ID}" \
+  "${MIMIR_URL}/alertmanager/api/v2/status" \
+  | jq -e '.
+    | .cluster.status != null
+    and (.uptime != null)
+  '
+# Prüft grundlegende Struktur
+
+# Für tiefere Validierung: Receiver-Namen aus unserer values.yaml prüfen
+# (anpassen an tatsächliche Receiver-Namen)
+curl -sf -H "X-Scope-OrgID: ${ORG_ID}" \
+  "${MIMIR_URL}/alertmanager/api/v2/status" \
+  | jq -e '[.config.receivers[].name] | contains(["default-receiver"])'
+```
+
+Alternativ mit gespeicherter erwarteter Ausgabe (exakter Vergleich):
+
+```bash
+# Erwartete Config einmalig speichern:
+curl -sf -H "X-Scope-OrgID: ${ORG_ID}" \
+  "${MIMIR_URL}/alertmanager/api/v1/alerts" \
+  > apps/mimir/tests/expected_alertmanager_config.json
+
+# Bei jedem Test vergleichen:
+ACTUAL=$(curl -sf -H "X-Scope-OrgID: ${ORG_ID}" "${MIMIR_URL}/alertmanager/api/v1/alerts")
+EXPECTED=$(cat apps/mimir/tests/expected_alertmanager_config.json)
+[[ "$ACTUAL" == "$EXPECTED" ]] \
+  && echo "✅ Alertmanager-Config entspricht erwartetem Stand" \
+  || echo "❌ Alertmanager-Config weicht ab"
+```
+
+**Akzeptanzkriterium:** Mimirs Alertmanager-Config enthält die erwarteten Receiver und entspricht der in `values.yaml` definierten Konfiguration.
 
 ---
 
@@ -911,6 +990,7 @@ mimirtool loadgen \
 | TC-ALLOY-002 | 2 | Alloy | Metriken in Mimir vorhanden | Ja |
 | TC-ALLOY-003 | 2 | Alloy | Keine kritischen Logs | Ja |
 | TC-ALLOY-004 | 2 | Alloy | Queue nicht voll | Ja |
+| TC-ALLOY-005 | 2 | Alloy | Metrik-Typ-Metadaten korrekt | Ja |
 | TC-GRAFANA-001 | 2 | Grafana | Health API | Ja |
 | TC-GRAFANA-002 | 2 | Grafana | Datasource vorhanden | Ja |
 | TC-GRAFANA-003 | 2 | Grafana | Datasource Health | Ja |
@@ -922,6 +1002,7 @@ mimirtool loadgen \
 | TC-INT-005 | 3 | Ruler/AM | Smoke-Test-Alert | Teilweise |
 | TC-INT-006 | 3 | Grafana/Mimir | Datasource Proxy | Ja |
 | TC-INT-007 | 3 | GitOps/Ruler | Config-Reload | Teilweise |
+| TC-INT-008 | 3 | Mimir/Config | Alertmanager-Config-Validierung | Ja |
 | TC-E2E-001 | 4 | Gesamt | Metrik-Durchlauf | Manuell |
 | TC-E2E-002 | 4 | Grafana | Login/SSO | Manuell |
 | TC-E2E-003 | 4 | Alerting | Alert-Lifecycle | Manuell |
