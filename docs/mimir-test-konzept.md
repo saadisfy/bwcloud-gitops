@@ -26,35 +26,56 @@ Prüfen ob die Kernfunktionen der Observability-Pipeline korrekt arbeiten.
 
 Prüfen ob die Plattform unter Last stabil bleibt und Schwellwerte nicht überschritten werden.
 
-**Tool: k6** (`brew install k6`)
+**Tool: Offizielles Mimir k6-Skript** — Grafana pflegt in ihrem eigenen Repository ein vollständiges
+Load-Test-Skript speziell für Mimir: [`operations/k6/load-testing-with-k6.js`](https://github.com/grafana/mimir/blob/main/operations/k6/load-testing-with-k6.js).
+Kein eigenes Skript schreiben nötig.
 
-Testszenarien:
-- **Ingestion-Last**: hohe Sample-Rate über Remote-Write in Mimir pushen, Latenz und Fehlerrate messen
-- **Query-Last**: parallele PromQL-Abfragen gegen den Query-Frontend, P99-Latenz messen
-- **Cardinality-Stress**: hohe Label-Kardinalität erzeugen, Ingester-Speicherverbrauch beobachten
+Das Skript deckt bereits ab:
+- **Write-Path**: Remote-Write mit konfigurierbarer Series-Anzahl, Scrape-Intervall, HA-Replikation
+- **Read-Path**: Range Queries und Instant Queries mit realistischer Kardinalitätsverteilung (low/high)
+- **Thresholds**: SLA-Checks eingebaut (99.9% writes succeed, avg query < 2s, 99.9% reads succeed)
 
-```javascript
-// k6 Beispiel: Ingestion-Last via Remote-Write
-import http from 'k6/http';
-import { check } from 'k6';
+**Pre-requisites:**
 
-export const options = {
-  vus: 10,
-  duration: '2m',
-};
+```bash
+# xk6 installieren (k6 Build-Tool für Extensions)
+go install go.k6.io/xk6/cmd/xk6@latest
 
-export default function () {
-  // Remote-Write Protobuf-Payload (vereinfacht via Snappy-komprimiertes Binary)
-  // In der Praxis: k6-prometheus-remote-write Extension verwenden
-  // https://github.com/grafana/xk6-remote-write
-  const res = http.post('https://mimir.saadisfy.me/api/v1/push', payload, {
-    headers: { 'X-Scope-OrgID': '1', 'Content-Type': 'application/x-protobuf' },
-  });
-  check(res, { 'status 204': (r) => r.status === 204 });
-}
+# k6 mit Prometheus Remote-Write Extension bauen
+xk6 build --with github.com/grafana/xk6-client-prometheus-remote@latest
 ```
 
-**Empfohlene Erweiterung:** [`xk6-remote-write`](https://github.com/grafana/xk6-remote-write) — k6-Extension speziell für Prometheus Remote-Write.
+**Kleiner Smoke-Test gegen das Setup:**
+
+```bash
+# Skript aus dem Mimir-Repo holen
+curl -O https://raw.githubusercontent.com/grafana/mimir/main/operations/k6/load-testing-with-k6.js
+
+# Kleiner Test: 1 Write-Request/s, 1 Read-Request/s, 5 Minuten
+./k6 run load-testing-with-k6.js \
+  -e K6_WRITE_HOSTNAME="mimir.saadisfy.me" \
+  -e K6_READ_HOSTNAME="mimir.saadisfy.me" \
+  -e K6_SCHEME="https" \
+  -e K6_WRITE_TENANT_ID="1" \
+  -e K6_READ_TENANT_ID="1" \
+  -e K6_WRITE_REQUEST_RATE="1" \
+  -e K6_WRITE_SERIES_PER_REQUEST="100" \
+  -e K6_READ_REQUEST_RATE="1" \
+  -e K6_DURATION_MIN="5"
+```
+
+**Relevante Env-Variablen des Skripts:**
+
+| Variable | Default | Beschreibung |
+|---|---|---|
+| `K6_WRITE_HOSTNAME` | — | Mimir Write-Pfad (Gateway/Distributor) |
+| `K6_READ_HOSTNAME` | — | Mimir Read-Pfad (Query-Frontend) |
+| `K6_WRITE_REQUEST_RATE` | 1 | Remote-Write Requests/Scrape-Intervall |
+| `K6_WRITE_SERIES_PER_REQUEST` | 1000 | Series pro Request |
+| `K6_READ_REQUEST_RATE` | 1 | Queries/s |
+| `K6_DURATION_MIN` | 720 | Testdauer in Minuten |
+| `K6_WRITE_TENANT_ID` | '' | X-Scope-OrgID für Writes |
+| `K6_READ_TENANT_ID` | '' | X-Scope-OrgID für Reads |
 
 ### 1.3 Ressourcentests
 
@@ -100,7 +121,7 @@ curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
 |---|---|---|
 | `curl` + `jq` | Funktionale E2E-Tests gegen Mimir-API | Überall vorhanden |
 | `promtool` | Lokale Rule-Unit-Tests (ohne Cluster) | `brew install prometheus` |
-| `k6` + `xk6-remote-write` | Performance-/Lasttests | `brew install k6` + Extension build |
+| `k6` + offizielles Mimir-Skript | Performance-/Lasttests (Write + Read Path) | `go install go.k6.io/xk6/cmd/xk6@latest` + `xk6 build --with github.com/grafana/xk6-client-prometheus-remote@latest` |
 | `kubectl` | Pod-Status, Rollout-Verifikation, Logs | Cluster-Zugriff nötig |
 | Grafana UI | Visuelle Verifikation von Dashboards und Alert-States | `https://grafana.saadisfy.me` |
 | Mimir Prometheus API | Programmatische Abfragen, Rules/Alerts-Endpunkte | `https://mimir.saadisfy.me/prometheus` |
@@ -192,7 +213,7 @@ kubectl get configmap mimir-rules-bundle -n mimir -o jsonpath='{.data.rules\.yam
 
 | Tool | Notwendig für | Bewertung |
 |---|---|---|
-| **k6 + xk6-remote-write** | Performance-Tests (Ingestion-Last, Query-Last) | ✅ empfohlen |
+| **k6 + offizielles Mimir-Skript** | Performance-Tests (Ingestion-Last, Query-Last) | ✅ empfohlen — kein eigenes Skript schreiben |
 | **Testcustomer-App** | Realistische Applikations-Metriken (statt synthetischer Daten) | ⚠️ optional, erhöht Realismus in Int |
 | **Lasttreiber (allgemein)** | CPU/RAM-Last auf Nodes erzeugen um Ressourcen-Alerts zu triggern | ⚠️ optional für Ressourcentests |
 | **Alertmanager Webhook-Receiver** | Verifikation dass Alerts tatsächlich zugestellt werden | ✅ empfohlen für Int-UAT |
@@ -245,7 +266,7 @@ Fokus: **Akzeptanz, Last, End-to-End-Realismus**
 |---|---|---|---|
 | Alle Dev-Tests bestanden | Funktional | siehe Dev | Voraussetzung |
 | Query-Latenz unter Last | Performance | k6 | P99 < 2s bei 20 parallelen Queries |
-| Ingestion-Stabilität unter Last | Performance | k6 + xk6-remote-write | Fehlerrate < 0.1% bei 10k samples/s |
+| Ingestion-Stabilität unter Last | Performance | k6 + offizielles Mimir-Skript | Fehlerrate < 0.1% bei 10k samples/s |
 | Cardinality-Limit greift korrekt | Performance/Funktional | k6 | HTTP 429 bei Überschreitung |
 | Alerts erscheinen in Grafana UI | Funktional (UAT) | Grafana UI | Manuell: Alert-Tab zeigt aktive Alerts |
 | Alert wird an Alertmanager zugestellt | Funktional (UAT) | Webhook-Receiver | Manuell: Webhook empfängt Payload |
@@ -264,7 +285,7 @@ Fokus: **Akzeptanz, Last, End-to-End-Realismus**
 | Scrape-Coverage Alerts | `apps/mimir/prod/files/mimir/alerts-scrape-coverage.yaml` | ⚠️ noch anlegen |
 | Pipeline-Health Alerts | `apps/mimir/prod/files/mimir/alerts-pipeline-health.yaml` | ⚠️ noch anlegen |
 | promtool Unit-Test Dateien | `apps/mimir/tests/` | ⚠️ noch anlegen |
-| k6 Performance-Test Skripte | `apps/mimir/tests/k6/` | ⚠️ noch anlegen |
+| k6 Performance-Test Skript | `operations/k6/` im [grafana/mimir](https://github.com/grafana/mimir/blob/main/operations/k6/load-testing-with-k6.js) Repo | ✅ vorhanden (extern) |
 | Test-Setup Schaubild | — | 📋 TODO |
 
 ---
