@@ -214,11 +214,57 @@ kubectl get configmap mimir-rules-bundle -n mimir -o jsonpath='{.data.rules\.yam
 | Tool | Notwendig für | Bewertung |
 |---|---|---|
 | **k6 + offizielles Mimir-Skript** | Performance-Tests (Ingestion-Last, Query-Last) | ✅ empfohlen — kein eigenes Skript schreiben |
-| **Testcustomer-App** | Realistische Applikations-Metriken (statt synthetischer Daten) | ⚠️ optional, erhöht Realismus in Int |
-| **Lasttreiber (allgemein)** | CPU/RAM-Last auf Nodes erzeugen um Ressourcen-Alerts zu triggern | ⚠️ optional für Ressourcentests |
+| **`mimirtool loadgen`** | Einfachere Ingestion-Last ohne k6-Setup | ✅ Alternative zu k6, in `mimirtool` eingebaut |
+| **Mimir Continuous Test** | Dauerhafter Write-Read-Smoke-Test im laufenden Cluster | ✅ empfohlen für Int |
+| **`promtool`** | Lokale Rule-Unit-Tests | ✅ empfohlen, kein Cluster nötig |
+| **Testcustomer-App** | Realistische Applikations-Metriken | ⚠️ optional, erhöht Realismus in Int |
 | **Alertmanager Webhook-Receiver** | Verifikation dass Alerts tatsächlich zugestellt werden | ✅ empfohlen für Int-UAT |
 
-**Alertmanager Webhook-Receiver für Tests** (einfachste Option):
+### `mimirtool loadgen` — Alternative zu k6 für Ingestion-Last
+
+Direkt in `mimirtool` eingebaut, kein Extra-Setup:
+
+```bash
+# Ingestion-Last: 1000 aktive Series, alle 15s gepusht
+mimirtool loadgen \
+  --write-url=https://mimir.saadisfy.me/api/v1/push \
+  --active-series=1000 \
+  --scrape-interval=15s \
+  --tenant-id=1
+
+# Mit Query-Last kombiniert
+mimirtool loadgen \
+  --write-url=https://mimir.saadisfy.me/api/v1/push \
+  --query-url=https://mimir.saadisfy.me/prometheus \
+  --active-series=1000 \
+  --tenant-id=1
+```
+
+Quelle: [`pkg/mimirtool/commands/loadgen.go`](https://github.com/grafana/mimir/blob/main/pkg/mimirtool/commands/loadgen.go) im Mimir-Repo.
+
+### Mimir Continuous Test — dauerhafter Smoke-Test im Cluster
+
+Mimir hat einen eigenen `continuous-test`-Target der permanent Write-Read-Zyklen durchführt
+und Metriken über Erfolg/Fehler exposed. Referenz: [`operations/mimir/continuous-test.libsonnet`](https://github.com/grafana/mimir/blob/main/operations/mimir/continuous-test.libsonnet).
+
+Funktioniert als Deployment im Cluster:
+
+```yaml
+# Konzept (Helm-Werte oder separates Deployment):
+# target: continuous-test
+# tests.write-endpoint: https://mimir.saadisfy.me/api/v1/push
+# tests.read-endpoint: https://mimir.saadisfy.me/prometheus
+# tests.tenant-id: "1"
+# tests.write-read-series-test.num-series: 1000
+# tests.write-read-series-test.max-query-age: 48h
+```
+
+Gibt Metriken wie `mimir_continuous_test_writes_total`, `mimir_continuous_test_reads_total`,
+`mimir_continuous_test_query_result_checks_failed_total` aus — direkt alertbar.
+
+**Vorteil gegenüber manuellen E2E-Tests:** läuft permanent, erkennt auch intermittierende Probleme.
+
+### Alertmanager Webhook-Receiver für Tests (einfachste Option)
 
 ```bash
 # Temporären Webhook-Listener starten (empfängt alle gefeuerten Alerts)
@@ -231,6 +277,24 @@ kubectl run webhook-test --image=mendhak/http-https-echo -n mimir \
 #     webhook_configs:
 #       - url: http://webhook-test.mimir.svc.cluster.local:8080
 ```
+
+### Alloy: Docker-Integration-Tests als Vorbild
+
+Das Alloy-Repo hat unter [`integration-tests/docker/`](https://github.com/grafana/alloy/tree/main/integration-tests/docker) eine vollständige
+Test-Infrastruktur mit `common.MimirMetricsTest()` Helper:
+
+```go
+// Beispiel aus dem Alloy-Repo: prüft dass bestimmte Metriken in Mimir ankommen
+func TestScrapePromMetricsToOtlp(t *testing.T) {
+    common.MimirMetricsTest(t, common.PromDefaultMetrics,
+        common.PromDefaultNativeHistogramMetrics, "scrape_prom_metrics_to_otlp")
+}
+```
+
+Das Pattern: Alloy-Konfiguration starten → Metriken scrapen lassen → gegen Mimir-API prüfen ob
+die erwarteten Metriken ankommen. Für uns relevant als Vorlage für **Scrape-Coverage-Tests** (Szenario C).
+Alloy definiert dabei `common.PromDefaultMetrics` als Liste der Signatur-Metriken die immer vorhanden sein müssen —
+analog zu unserer Scrape-Coverage Schleife, aber als wiederverwendbare Konstante.
 
 ---
 
