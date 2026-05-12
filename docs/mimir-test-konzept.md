@@ -1,12 +1,382 @@
-# Mimir Konfigurationstest-Konzept
+# Mimir Observability — Testkonzept
 
-Dieses Dokument beschreibt, wie die Korrektheit der Mimir-Konfiguration kontinuierlich
-überwacht und gezielt verifiziert wird — sowohl durch dauerhaft aktive Alerts als auch
-durch manuelle End-to-End-Szenarien.
+Dieses Dokument beschreibt das Testkonzept für die Mimir-basierte Observability-Plattform.
+Es definiert Testarten, benötigte Tools, Datenversorgung, Stage-Zuordnung und Akzeptanzkriterien.
 
 ---
 
-## Zwei Schichten
+## 1. Testarten
+
+### 1.1 Funktionale Tests
+
+Prüfen ob die Kernfunktionen der Observability-Pipeline korrekt arbeiten.
+
+**Unterarten:**
+
+| Testart | Beschreibung | Beispiele |
+|---|---|---|
+| **Ingestion-Tests** | Metriken kommen vollständig und korrekt in Mimir an | Ingestion-Rate > 0, keine Samples verworfen |
+| **Label-Vollständigkeit** | Erwartete Labels pro Scrape-Target sind gesetzt | `namespace`, `pod`, `cluster` auf cadvisor-Metriken |
+| **Scrape-Coverage** | Alle definierten Scrape-Targets liefern Daten | Signatur-Metrik pro Target > 0 series |
+| **Alert-Evaluation** | Ruler lädt Rules und evaluiert korrekt | Rules-API liefert alle Gruppen, keine Eval-Fehler |
+| **Config-Reload** | Änderungen in Git landen nach Push im Ruler | Rule-Group-Count steigt nach Reloader-Restart |
+| **Alertmanager-Routing** | Gefeuerte Alerts erreichen den Alertmanager | Smoke-Test-Alert erscheint in `/api/v1/alerts` |
+
+### 1.2 Performance-Tests
+
+Prüfen ob die Plattform unter Last stabil bleibt und Schwellwerte nicht überschritten werden.
+
+**Tool: k6** (`brew install k6`)
+
+Testszenarien:
+- **Ingestion-Last**: hohe Sample-Rate über Remote-Write in Mimir pushen, Latenz und Fehlerrate messen
+- **Query-Last**: parallele PromQL-Abfragen gegen den Query-Frontend, P99-Latenz messen
+- **Cardinality-Stress**: hohe Label-Kardinalität erzeugen, Ingester-Speicherverbrauch beobachten
+
+```javascript
+// k6 Beispiel: Ingestion-Last via Remote-Write
+import http from 'k6/http';
+import { check } from 'k6';
+
+export const options = {
+  vus: 10,
+  duration: '2m',
+};
+
+export default function () {
+  // Remote-Write Protobuf-Payload (vereinfacht via Snappy-komprimiertes Binary)
+  // In der Praxis: k6-prometheus-remote-write Extension verwenden
+  // https://github.com/grafana/xk6-remote-write
+  const res = http.post('https://mimir.saadisfy.me/api/v1/push', payload, {
+    headers: { 'X-Scope-OrgID': '1', 'Content-Type': 'application/x-protobuf' },
+  });
+  check(res, { 'status 204': (r) => r.status === 204 });
+}
+```
+
+**Empfohlene Erweiterung:** [`xk6-remote-write`](https://github.com/grafana/xk6-remote-write) — k6-Extension speziell für Prometheus Remote-Write.
+
+### 1.3 Ressourcentests
+
+Prüfen ob Pods innerhalb ihrer definierten Limits laufen und keine Memory-Leaks oder CPU-Spikes auftreten.
+
+Gemessen via Mimir-eigene Metriken (kein externes Tool nötig):
+
+```bash
+export MIMIR=https://mimir.saadisfy.me; export ORG=1
+
+# Memory-Auslastung pro Mimir-Komponente (% des Limits)
+curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+  --data-urlencode 'query=
+    container_memory_working_set_bytes{namespace="mimir"}
+    / on(pod, container)
+    kube_pod_container_resource_limits{namespace="mimir", resource="memory"}
+  ' | jq -r '.data.result[] | "\(.metric.container): \((.value[1] | tonumber * 100 | round))%"'
+
+# CPU-Throttling (> 25% = Limit zu knapp)
+curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+  --data-urlencode 'query=
+    rate(container_cpu_cfs_throttled_seconds_total{namespace="mimir"}[5m])
+    / rate(container_cpu_cfs_periods_total{namespace="mimir"}[5m]) > 0.25
+  ' | jq -r '.data.result[] | "\(.metric.container): \(.value[1])"'
+```
+
+---
+
+## 2. Testdaten, Tools und Anbindungen
+
+### 2.1 Testdaten
+
+| Datenquelle | Beschreibung | Verfügbar in |
+|---|---|---|
+| **Live-Cluster-Metriken** | Echter Scrape via Alloy (cadvisor, kubelet, KSM, node-exporter) | Dev, Int |
+| **Synthetische Metriken** | Via `k6 xk6-remote-write` generiert — definierte Kardinalität, Labels | Dev, Int |
+| **Historische Metriken** | Aus Mimir-Blocks (PV) für Query-Tests | Int |
+| **Smoke-Test-Alert** | `vector(1) == 1` Rule — feuert garantiert, zeitlich begrenzt einsetzen | Dev, Int |
+
+### 2.2 Tools
+
+| Tool | Zweck | Installation |
+|---|---|---|
+| `curl` + `jq` | Funktionale E2E-Tests gegen Mimir-API | Überall vorhanden |
+| `promtool` | Lokale Rule-Unit-Tests (ohne Cluster) | `brew install prometheus` |
+| `k6` + `xk6-remote-write` | Performance-/Lasttests | `brew install k6` + Extension build |
+| `kubectl` | Pod-Status, Rollout-Verifikation, Logs | Cluster-Zugriff nötig |
+| Grafana UI | Visuelle Verifikation von Dashboards und Alert-States | `https://grafana.saadisfy.me` |
+| Mimir Prometheus API | Programmatische Abfragen, Rules/Alerts-Endpunkte | `https://mimir.saadisfy.me/prometheus` |
+
+### 2.3 Anbindungen
+
+```
+Test-Maschine (lokal / CI)
+  │
+  ├── curl/k6 → https://mimir.saadisfy.me     (Gateway, Ingestion + Query)
+  ├── kubectl  → noctua-k3s                    (Pod-Status, Logs)
+  └── Grafana  → https://grafana.saadisfy.me   (visuelle Verifikation)
+
+Mimir-intern:
+  Alloy (DaemonSet) → Distributor:8080 (OTLP/HTTP) → Ingester → Ruler ← ConfigMap-Mount
+```
+
+---
+
+## 3. Datenversorgung für Observability Dev & Int
+
+### Dev-Stage
+
+- **Quelle:** Live-Metriken vom `noctua-k3s`-Cluster via Alloy
+- **Umfang:** Alle definierten Scrape-Targets (cadvisor, kubelet, KSM, node-exporter, Alloy-self, Mimir-self)
+- **Tenant:** `1` (einziger Tenant)
+- **Retention:** 24h (Compactor-Einstellung in `base/values.yaml`)
+- **Synthetische Daten:** können jederzeit via k6 oder curl remote-write gepusht werden
+
+### Int-Stage
+
+- **Quelle:** identisch zu Dev (gleicher Cluster), ggf. separater Namespace oder Tenant
+- **Zusatz:** historische Daten aus vorherigen Test-Runs für Query-Lasttests nutzbar
+- **UAT-Anforderung:** Reale Produktions-ähnliche Last, kein synthetischer Traffic allein
+
+> **Offen:** Separater Mimir-Tenant oder separater Namespace für Int noch nicht definiert.
+> Aktuell läuft alles unter Tenant `1`. Für echte Stage-Trennung: eigener Tenant (z.B. `2`) oder
+> separate Mimir-Instanz empfohlen.
+
+---
+
+## 4. Setup und Umgebungsaufbau
+
+### 4.1 Voraussetzungen
+
+```bash
+# 1. Cluster-Zugriff prüfen
+kubectl get pods -n mimir
+
+# 2. Mimir Gateway erreichbar
+curl -sf -H "X-Scope-OrgID: 1" https://mimir.saadisfy.me/prometheus/api/v1/labels | jq .status
+
+# 3. Tools installieren
+brew install prometheus   # enthält promtool
+brew install k6
+brew install jq
+```
+
+### 4.2 Basis-Umgebungsvariablen (für alle Tests)
+
+```bash
+export MIMIR=https://mimir.saadisfy.me
+export ORG=1
+
+# Hilfsfunktion für schnelle PromQL-Abfragen
+mquery() {
+  curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+    --data-urlencode "query=$1" | jq -r '.data.result'
+}
+```
+
+### 4.3 Mimir Ruler-Konfiguration verifizieren (vor Teststart)
+
+```bash
+# Rules geladen?
+curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/rules" \
+  | jq '[.data.groups[] | .name]'
+
+# Ruler-Pod läuft?
+kubectl get pods -n mimir -l app.kubernetes.io/component=ruler
+
+# ConfigMap korrekt befüllt?
+kubectl get configmap mimir-rules-bundle -n mimir -o jsonpath='{.data.rules\.yaml}' | head -20
+```
+
+---
+
+## 5. Zusätzliche Tools
+
+| Tool | Notwendig für | Bewertung |
+|---|---|---|
+| **k6 + xk6-remote-write** | Performance-Tests (Ingestion-Last, Query-Last) | ✅ empfohlen |
+| **Testcustomer-App** | Realistische Applikations-Metriken (statt synthetischer Daten) | ⚠️ optional, erhöht Realismus in Int |
+| **Lasttreiber (allgemein)** | CPU/RAM-Last auf Nodes erzeugen um Ressourcen-Alerts zu triggern | ⚠️ optional für Ressourcentests |
+| **Alertmanager Webhook-Receiver** | Verifikation dass Alerts tatsächlich zugestellt werden | ✅ empfohlen für Int-UAT |
+
+**Alertmanager Webhook-Receiver für Tests** (einfachste Option):
+
+```bash
+# Temporären Webhook-Listener starten (empfängt alle gefeuerten Alerts)
+kubectl run webhook-test --image=mendhak/http-https-echo -n mimir \
+  --port=8080 --expose
+
+# In Alertmanager-Config eintragen:
+# receivers:
+#   - name: webhook-test
+#     webhook_configs:
+#       - url: http://webhook-test.mimir.svc.cluster.local:8080
+```
+
+---
+
+## 6. Zuordnung von Tests zur Stage
+
+### 6.1 Dev — Was wird hier getestet?
+
+Fokus: **Funktionalität und Konfigurationskorrektheit**
+
+| Test | Testart | Tool | Automatisierbar? |
+|---|---|---|---|
+| Alert-Expressions syntaktisch korrekt | Funktional (Unit) | `promtool test rules` | ✅ Ja (pre-commit / CI) |
+| Ingestion-Pfad E2E | Funktional | `curl` | ✅ Ja |
+| Label-Vollständigkeit pro Scrape-Target | Funktional | `curl` + `jq` | ✅ Ja |
+| Alle Scrape-Quellen aktiv | Funktional | `curl`-Schleife | ✅ Ja |
+| Ruler lädt Rules nach Git-Push | Funktional | `curl` + `kubectl` | ⚠️ Semi (manuell triggern) |
+| Ruler-Smoke-Test (vector(1)==1) | Funktional | Git-Commit + `curl` | ⚠️ Manuell |
+| Memory/CPU innerhalb Limits | Ressource | `curl` (Mimir-Metriken) | ✅ Ja |
+
+**Kontinuierliche Überwachung in Dev (Schicht 1 Alerts):**
+- `AlloyIngestionStopped` — Ingestion vollständig ausgefallen
+- `AlloyIngestionRateLow` — Rate unter Schwellwert
+- `MimirDistributorHighErrorRate` — Samples werden verworfen
+- `AlloyScrapeMissing` — Alloy meldet sich nicht mehr
+- `KubeletMetricsMissing`, `KubeStateMetricsMissing`, `NodeExporterMetricsMissing`
+- `MimirRulerNoRulesLoaded`, `MimirRulerEvaluationFailing`
+
+### 6.2 Int — Was wird im Rahmen des UATs getestet?
+
+Fokus: **Akzeptanz, Last, End-to-End-Realismus**
+
+| Test | Testart | Tool | Kriterium |
+|---|---|---|---|
+| Alle Dev-Tests bestanden | Funktional | siehe Dev | Voraussetzung |
+| Query-Latenz unter Last | Performance | k6 | P99 < 2s bei 20 parallelen Queries |
+| Ingestion-Stabilität unter Last | Performance | k6 + xk6-remote-write | Fehlerrate < 0.1% bei 10k samples/s |
+| Cardinality-Limit greift korrekt | Performance/Funktional | k6 | HTTP 429 bei Überschreitung |
+| Alerts erscheinen in Grafana UI | Funktional (UAT) | Grafana UI | Manuell: Alert-Tab zeigt aktive Alerts |
+| Alert wird an Alertmanager zugestellt | Funktional (UAT) | Webhook-Receiver | Manuell: Webhook empfängt Payload |
+| Dashboard zeigt Realdaten korrekt | Funktional (UAT) | Grafana UI | Manuell: Panels ohne `No data` |
+| Ressourcen stabil nach 1h Dauerlast | Ressource | `curl` + k6 | Kein OOMKill, kein CrashLoop |
+
+---
+
+## 7. Artefakte und Dokumente
+
+| Artefakt | Speicherort | Status |
+|---|---|---|
+| Testkonzept (dieses Dokument) | `docs/mimir-test-konzept.md` | ✅ vorhanden |
+| Ruler & Alerting Setup Dokumentation | `docs/mimir-ruler-alerting-setup.md` | ✅ vorhanden |
+| Alert-Rules (Schicht 1) | `apps/mimir/prod/files/mimir/alerts-*.yaml` | ✅ vorhanden |
+| Scrape-Coverage Alerts | `apps/mimir/prod/files/mimir/alerts-scrape-coverage.yaml` | ⚠️ noch anlegen |
+| Pipeline-Health Alerts | `apps/mimir/prod/files/mimir/alerts-pipeline-health.yaml` | ⚠️ noch anlegen |
+| promtool Unit-Test Dateien | `apps/mimir/tests/` | ⚠️ noch anlegen |
+| k6 Performance-Test Skripte | `apps/mimir/tests/k6/` | ⚠️ noch anlegen |
+| Test-Setup Schaubild | — | 📋 TODO |
+
+---
+
+## 8. Akzeptanzkriterien
+
+- [x] Testarten sind definiert (Funktional, Performance, Ressourcen)
+- [x] Benötigte Tools sind identifiziert und dokumentiert
+- [x] Datenversorgung für Dev und Int ist beschrieben
+- [x] Setup und Umgebungsaufbau ist dokumentiert
+- [x] Tests sind den Stages zugeordnet (Dev vs. Int/UAT)
+- [x] Artefakte/Dokumente sind aufgelistet
+- [ ] **TODO: Schaubild zum Test-Setup** — zeigt Datenfluss von Testdaten über Alloy/k6 in Mimir, Query-Pfad zurück zu curl/Grafana, und Alert-Pfad zu Alertmanager
+- [ ] Scrape-Coverage und Pipeline-Health Alert-Dateien anlegen (`apps/mimir/prod/files/mimir/`)
+- [ ] promtool Unit-Tests anlegen (`apps/mimir/tests/`)
+- [ ] k6-Skripte anlegen (`apps/mimir/tests/k6/`)
+
+---
+
+## Anhang: Funktionale E2E-Szenarien (Referenz-Kommandos)
+
+### Setup
+
+```bash
+export MIMIR=https://mimir.saadisfy.me
+export ORG=1
+mquery() {
+  curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+    --data-urlencode "query=$1" | jq -r '.data.result'
+}
+```
+
+### A: Ingestion-Pfad
+
+```bash
+mquery 'sum(rate(cortex_distributor_received_samples_total{cluster="prod-bwcloud"}[2m]))'
+mquery 'sum(rate(cortex_discarded_samples_total{cluster="prod-bwcloud"}[5m]))'
+mquery 'alloy_build_info{cluster="prod-bwcloud"}'
+```
+
+### B: Label-Vollständigkeit pro Scrape-Target
+
+```bash
+check_labels() {
+  local desc=$1; local query=$2; shift 2; local labels=("$@")
+  local result=$(curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+    --data-urlencode "query=$query" | jq -r '.data.result[0].metric // empty')
+  if [[ -z $result ]]; then echo "❌ $desc: keine Daten"; return; fi
+  for label in "${labels[@]}"; do
+    val=$(echo $result | jq -r ".\"$label\" // empty")
+    [[ -z $val ]] && echo "❌ $desc: Label '$label' fehlt" || echo "✅ $desc: $label=$val"
+  done
+}
+check_labels "cadvisor"           'container_cpu_usage_seconds_total{namespace="mimir"}' namespace pod container node cluster
+check_labels "kube-state-metrics" 'kube_pod_info{namespace="mimir"}'                    namespace pod node cluster
+check_labels "node-exporter"      'node_cpu_seconds_total'                               node cluster
+check_labels "alloy"              'alloy_build_info'                                     cluster
+check_labels "mimir"              'cortex_request_duration_seconds_sum{namespace="mimir"}' namespace cluster
+```
+
+### C: Scrape-Coverage
+
+```bash
+declare -A CHECKS=(
+  ["cadvisor"]='container_cpu_usage_seconds_total{cluster="prod-bwcloud"}'
+  ["kubelet"]='kubelet_node_name{cluster="prod-bwcloud"}'
+  ["kube-state-metrics"]='kube_pod_info{cluster="prod-bwcloud"}'
+  ["node-exporter"]='node_cpu_seconds_total{cluster="prod-bwcloud"}'
+  ["alloy-self"]='alloy_build_info{cluster="prod-bwcloud"}'
+  ["mimir-self"]='cortex_request_duration_seconds_sum{cluster="prod-bwcloud"}'
+)
+for name in "${!CHECKS[@]}"; do
+  count=$(curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+    --data-urlencode "query=${CHECKS[$name]}" | jq '.data.result | length')
+  echo "$([[ $count -gt 0 ]] && echo ✅ || echo ❌)  $name ($count series)"
+done
+```
+
+### D: Metrik-Volumen
+
+```bash
+mquery 'sum(cortex_ingester_memory_series{cluster="prod-bwcloud"})'
+curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/query" \
+  --data-urlencode 'query=topk(10, count by (namespace) ({namespace!="", cluster="prod-bwcloud"}))' \
+  | jq -r '.data.result[] | "\(.metric.namespace): \(.value[1])"' | sort -t: -k2 -rn
+```
+
+### E: Ruler Smoke-Test
+
+```bash
+curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/rules" \
+  | jq '[.data.groups[] | {group: .name, rules: [.rules[].name]}]'
+curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/alerts" \
+  | jq '[.data.alerts[] | select(.state=="firing") | {alert: .labels.alertname, severity: .labels.severity}]'
+```
+
+### F: Rule Unit-Tests (lokal)
+
+```bash
+promtool test rules /path/to/apps/mimir/tests/<test-file>.yaml
+```
+
+### G: Config-Reload verifizieren
+
+```bash
+BEFORE=$(curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/rules" | jq '.data.groups | length')
+# → committen & pushen
+kubectl rollout status deployment/mimir-ruler -n mimir --timeout=120s
+AFTER=$(curl -sf -H "X-Scope-OrgID: $ORG" "$MIMIR/prometheus/api/v1/rules" | jq '.data.groups | length')
+[[ $AFTER -gt $BEFORE ]] && echo "✅ Neue Rules geladen" || echo "❌ Keine Änderung"
+```
+
 
 ```
 ┌─────────────────────────────────────────────────────────┐
