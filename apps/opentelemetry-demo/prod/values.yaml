@@ -8,3 +8,10 @@ opentelemetry-demo:
     enabled: false
   grafana:
     enabled: false
+  components:
+    kafka:
+      enabled: false
+    llm:
+      enabled: false
+    load-generator:
+      enabled: false
