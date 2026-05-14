@@ -20,6 +20,7 @@ This is a modern GitOps repository managing a complete Observability and CD stac
 | **Kargo** | Multi-Stage Promotion | [kargo.saadisfy.me](https://kargo.saadisfy.me) |
 | **Mimir** | Long-term Metric Storage | [mimir.saadisfy.me](https://mimir.saadisfy.me) |
 | **Alloy** | Telemetry Collection | (Internal Cluster DaemonSet) |
+| **OpenTelemetry Demo** | Microservices demo workload | [opentelemetry-demo.saadisfy.me](http://opentelemetry-demo.saadisfy.me) |
 
 ## 🔐 Security & GitOps Decoupling
 

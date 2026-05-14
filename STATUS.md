@@ -29,6 +29,7 @@ bwcloud-gitops/
 │   ├── kargo/              # nur prod (OCI-Chart)
 │   ├── mimir/              # dev, int, prod
 │   ├── otel-operator/      # dev, int, prod + prod-cr/ (Collector + Instrumentation CRs)
+│   ├── opentelemetry-demo/  # base + prod (Wrapper für OpenTelemetry Demo)
 │   └── spring-petclinic/   # dev, int, prod (Custom-Chart + Templates)
 ├── appsets/                # ApplicationSets (werden von Root-Application gesynct)
 ├── 0day-deployment-manifests/  # Root-Application, Repo-Secret (Beispiel)
@@ -45,7 +46,7 @@ bwcloud-gitops/
 
 ## Apps und Stages
 
-**Aktuell:** Über ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, Spring Petclinic). Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`. Argo CD Application-Namen ohne Stage (z. B. `grafana`, `mimir`); „prod“ erscheint weder im Application- noch im Deployment-Namen.
+**Aktuell:** Über ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, OpenTelemetry Demo, Spring Petclinic). Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`. Argo CD Application-Namen ohne Stage (z. B. `grafana`, `mimir`); „prod“ erscheint weder im Application- noch im Deployment-Namen.
 
 | App | Chart-Typ | Deployed | Namespace (prod) |
 |-----|-----------|----------|------------------|
@@ -53,6 +54,7 @@ bwcloud-gitops/
 | grafana | Wrapper (grafana) | prod | grafana |
 | reloader | Wrapper (stakater/reloader) | prod | reloader |
 | otel-operator | Wrapper (opentelemetry-operator) + CRs | prod | otel-operator |
+| opentelemetry-demo | Wrapper (opentelemetry-demo) | prod | opentelemetry-demo |
 | mimir | Wrapper (mimir-distributed) | prod | mimir |
 | spring-petclinic | Custom | prod | spring-petclinic |
 | kargo | Wrapper (OCI) | prod | kargo |
@@ -79,6 +81,7 @@ Alle URLs unter **\*.saadisfy.me**. DNS für diese Hosts auf die Ingress-/Cluste
 | Grafana | https://grafana.saadisfy.me | cert-manager (grafana-tls) |
 | Mimir | https://mimir.saadisfy.me | cert-manager (mimir-tls) |
 | Spring Petclinic | http://spring-petclinic.saadisfy.me | nein (`ingress.tls: false`) |
+| OpenTelemetry Demo | http://opentelemetry-demo.saadisfy.me | nein |
 
 - **Ingress-Controller:** nginx  
 - **Cert-Manager:** ClusterIssuer `letsencrypt-prod`  

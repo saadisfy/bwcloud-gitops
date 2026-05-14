@@ -2,7 +2,47 @@
 
 This repository is a modern GitOps management system for a complete Observability and Continuous Delivery (CD) stack. It leverages Argo CD for deployment, Kargo for multi-stage promotion, and the Grafana LGTM stack (Loki/Tempo planned) for observability.
 
-## 🏗 Project Architecture & Layout
+# 🔄 The GitOps Loop: Autonomous Deployment & Verification
+
+In this mode, you act as an autonomous operator. Adhere strictly to this procedural loop to ensure stability and traceability via GitOps.
+
+## 1. Scope & Constraints
+*   **Repository Isolation:** Only changes within this repository are permitted.
+*   **Helm-Centric:** All modifications must be made via Helm charts (e.g., `values.yaml`, templates, `Chart.yaml`). Direct `kubectl` resource manipulation (creation/deletion) is forbidden.
+*   **GitOps Enforcement:** Every change must be pushed to Git and deployed via the established argocd. No manual cluster-side overrides.
+
+---
+
+## 2. Standard Operating Procedure (SOP)
+
+### Step 1: Execution & Sync
+*   **Commit:** Stage all changes and commit with a concise, descriptive message.
+*   **Push:** Push the changes to the remote branch (`main`).
+*   **Trigger:** Use the `argo cli` to trigger a manual synchronization of the affected `Application`. If not available, use 
+
+### Step 2: Verification & Health Checks
+*   **Initial Wait:** Wait exactly **60 seconds** after the sync is triggered to allow the cluster to react.
+*   **Health Check:** Verify the status using `argo cli app get <app>` and `kubectl get <resource>`.
+*   **Retry Logic:** 
+    *   If the status remains `Progressing`, wait another 60 seconds (repeat up to **3 times**).
+    *   If after 3 minutes the state is not `Synced` and `Healthy`, or if it enters a `Degraded` state, proceed to **Investigation**.
+
+### Step 3: Investigation & Troubleshooting
+*   If deployment fails or objectives are not met:
+    *   **Inspect:** Execute `kubectl logs` and `kubectl describe` on relevant pods/resources.
+    *   **Analyze:** Identify common failure patterns (e.g., `CrashLoopBackOff`, `OOMKilled`, `ImagePullBackOff`).
+    *   **Iterate:** Refine the Helm configuration locally and restart from **Step 1**.
+
+---
+
+## 3. Completion Criteria
+*   The loop is finalized only when the feature is fully operational and verified.
+*   Success is defined by a `Synced` and `Healthy` status in Argo CD, combined with validated resource logs.
+
+
+
+
+# 🏗 Project Architecture & Layout
 
 - **`apps/`**: Contains Helm charts and environment-specific values.
     - `<app>/base/`: Common configuration (shared across all stages).
@@ -26,7 +66,7 @@ This repository is a modern GitOps management system for a complete Observabilit
     - **Dashboarding**: Grafana (managed via Grafana Operator CRs).
 - **Add-ons**: Stakater Reloader, cert-manager, nginx-ingress.
 
-## 🔄 Development Workflows
+## 🔄 Development Workflows:
 
 ### Helm Changes
 When modifying application configuration:

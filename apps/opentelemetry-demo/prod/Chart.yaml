@@ -1,0 +1,8 @@
+apiVersion: v2
+name: opentelemetry-demo-wrapper
+description: Wrapper for OpenTelemetry Demo Helm chart
+version: 0.1.0
+dependencies:
+  - name: opentelemetry-demo
+    version: "0.40.7"
+    repository: https://open-telemetry.github.io/opentelemetry-helm-charts

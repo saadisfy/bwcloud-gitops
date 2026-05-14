@@ -1,0 +1,2 @@
+# OpenTelemetry Demo prod overrides
+opentelemetry-demo: {}
