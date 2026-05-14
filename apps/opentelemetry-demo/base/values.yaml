@@ -1,12 +1,10 @@
 # OpenTelemetry Demo - base values
 # Full demo stack enabled (chart defaults).
 opentelemetry-demo:
-  default:
-    podAnnotations:
-      reloader.stakater.com/auto: "true"
-
   components:
     frontend-proxy:
+      podAnnotations:
+        reloader.stakater.com/auto: "true"
       ingress:
         enabled: true
         ingressClassName: nginx
