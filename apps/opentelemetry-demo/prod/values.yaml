@@ -1,2 +1,10 @@
 # OpenTelemetry Demo prod overrides
-opentelemetry-demo: {}
+opentelemetry-demo:
+  opentelemetry-collector:
+    enabled: false
+  jaeger:
+    enabled: false
+  opensearch:
+    enabled: false
+  grafana:
+    enabled: false
