@@ -21,6 +21,7 @@ This is a modern GitOps repository managing a complete Observability and CD stac
 | **Mimir** | Long-term Metric Storage | [mimir.saadisfy.me](https://mimir.saadisfy.me) |
 | **Alloy** | Telemetry Collection | (Internal Cluster DaemonSet) |
 | **OpenTelemetry Demo** | Microservices demo workload | [opentelemetry-demo.saadisfy.me](http://opentelemetry-demo.saadisfy.me) |
+| **Cluster Priority** | PriorityClass objects for critical control-plane apps | (Internal Cluster Resources) |
 
 ## 🔐 Security & GitOps Decoupling
 

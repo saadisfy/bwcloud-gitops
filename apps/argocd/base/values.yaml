@@ -2,6 +2,8 @@
 # Override in apps/argocd/<stage>/values.yaml per stage
 
 argo-cd:
+  global:
+    priorityClassName: argocd-critical
   # Server and repo config - tune per stage if needed
   server:
     replicas: 1

@@ -24,6 +24,7 @@ bwcloud-gitops/
 ├── .gitignore              # u.a. 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
 ├── apps/                   # App-spezifische Helm-Charts und Values
 │   ├── argocd/             # nur prod
+│   ├── cluster-priority/   # prod (PriorityClass Ressourcen)
 │   ├── grafana/            # dev, int, prod
 │   ├── reloader/           # base + prod (stakater/reloader)
 │   ├── kargo/              # nur prod (OCI-Chart)
@@ -51,6 +52,7 @@ bwcloud-gitops/
 | App | Chart-Typ | Deployed | Namespace (prod) |
 |-----|-----------|----------|------------------|
 | argocd | Wrapper (argo-cd) | prod | argocd |
+| cluster-priority | Raw Manifeste (PriorityClass) | prod | kube-system |
 | grafana | Wrapper (grafana) | prod | grafana |
 | reloader | Wrapper (stakater/reloader) | prod | reloader |
 | otel-operator | Wrapper (opentelemetry-operator) + CRs | prod | otel-operator |

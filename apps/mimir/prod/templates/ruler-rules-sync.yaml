@@ -1,6 +1,0 @@
-{{- /* ruler-rules-sync: Job removed.
-     Rules are now loaded via the sync-ruler-rules initContainer on the ruler pod,
-     which runs mimirtool rules load every time the ruler starts or restarts.
-     The mimir-rules-bundle ConfigMap (ruler-rules-configmap.yaml) is still rendered
-     and mounted by that initContainer.
-*/ -}}

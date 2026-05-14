@@ -36,8 +36,5 @@ spec:
             - /data/ADMIN_ACCOUNT_PASSWORD_HASH
             - /data/ADMIN_ACCOUNT_TOKEN_SIGNING_KEY
       syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
         syncOptions:
           - CreateNamespace=true

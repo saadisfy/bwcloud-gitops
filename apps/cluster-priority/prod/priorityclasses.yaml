@@ -1,0 +1,17 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: argocd-critical
+value: 900000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "High priority for Argo CD control-plane workloads on single-node clusters."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: metallb-critical
+value: 850000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: "High priority for MetalLB controller and speaker workloads."
