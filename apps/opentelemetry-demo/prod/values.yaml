@@ -10,7 +10,7 @@ opentelemetry-demo:
     enabled: false
   components:
     kafka:
-      enabled: false
+      enabled: true
     llm:
       enabled: false
     load-generator:
