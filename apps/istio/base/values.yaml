@@ -1,0 +1,12 @@
+# Istio base values
+# Deploy control plane only. No namespace is labeled for sidecar injection yet.
+base:
+  global:
+    istioNamespace: istio-system
+  defaultRevision: default
+
+istiod:
+  global:
+    istioNamespace: istio-system
+  sidecarInjectorWebhook:
+    enableNamespacesByDefault: false

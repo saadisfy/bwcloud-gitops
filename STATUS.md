@@ -29,6 +29,7 @@ bwcloud-gitops/
 │   ├── reloader/           # base + prod (stakater/reloader)
 │   ├── kargo/              # nur prod (OCI-Chart)
 │   ├── mimir/              # dev, int, prod
+│   ├── istio/              # base + prod (Istio base + istiod, ohne Mesh-Enforcement)
 │   ├── otel-operator/      # dev, int, prod + prod-cr/ (Collector + Instrumentation CRs)
 │   ├── opentelemetry-demo/  # base + prod (Wrapper für OpenTelemetry Demo)
 │   └── spring-petclinic/   # dev, int, prod (Custom-Chart + Templates)
@@ -47,7 +48,7 @@ bwcloud-gitops/
 
 ## Apps und Stages
 
-**Aktuell:** Über ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, otel-operator, OpenTelemetry Demo, Spring Petclinic). Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`. Argo CD Application-Namen ohne Stage (z. B. `grafana`, `mimir`); „prod“ erscheint weder im Application- noch im Deployment-Namen.
+**Aktuell:** Über ApplicationSets wird **nur prod** jeder App deployed (Grafana, Mimir, Istio, otel-operator, OpenTelemetry Demo, Spring Petclinic). Code für dev/int bleibt in `apps/<app>/dev` und `apps/<app>/int`. Argo CD Application-Namen ohne Stage (z. B. `grafana`, `mimir`); „prod“ erscheint weder im Application- noch im Deployment-Namen.
 
 | App | Chart-Typ | Deployed | Namespace (prod) |
 |-----|-----------|----------|------------------|
@@ -55,6 +56,7 @@ bwcloud-gitops/
 | cluster-priority | Raw Manifeste (PriorityClass) | prod | kube-system |
 | grafana | Wrapper (grafana) | prod | grafana |
 | reloader | Wrapper (stakater/reloader) | prod | reloader |
+| istio | Wrapper (istio base + istiod) | prod | istio-system |
 | otel-operator | Wrapper (opentelemetry-operator) + CRs | prod | otel-operator |
 | opentelemetry-demo | Wrapper (opentelemetry-demo) | prod | opentelemetry-demo |
 | mimir | Wrapper (mimir-distributed) | prod | mimir |

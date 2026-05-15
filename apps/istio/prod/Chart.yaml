@@ -1,0 +1,11 @@
+apiVersion: v2
+name: istio-wrapper
+description: Wrapper for Istio base and istiod charts
+version: 0.1.0
+dependencies:
+  - name: base
+    version: "1.29.2"
+    repository: https://istio-release.storage.googleapis.com/charts
+  - name: istiod
+    version: "1.29.2"
+    repository: https://istio-release.storage.googleapis.com/charts

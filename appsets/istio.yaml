@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: istio
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - stage: prod
+            namespace: istio-system
+  template:
+    metadata:
+      name: istio
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: 'apps/istio/{{stage}}'
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true

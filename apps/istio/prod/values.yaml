@@ -1,0 +1,3 @@
+# Istio prod overrides
+base: {}
+istiod: {}
