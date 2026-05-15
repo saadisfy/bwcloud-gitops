@@ -8,5 +8,7 @@ base:
 istiod:
   global:
     istioNamespace: istio-system
+  base:
+    validationFailurePolicy: Fail
   sidecarInjectorWebhook:
     enableNamespacesByDefault: false
