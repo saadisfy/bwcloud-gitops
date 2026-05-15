@@ -1,0 +1,21 @@
+# Root Application for Azure OBS: manages ApplicationSets under appsets/azure-obs
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+    targetRevision: main
+    path: appsets/azure-obs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

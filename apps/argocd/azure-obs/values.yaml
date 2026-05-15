@@ -1,0 +1,15 @@
+# Azure OBS stage overrides
+argo-cd:
+  global:
+    domain: az-argocd.saadisfy.me
+  server:
+    ingress:
+      hosts:
+        - az-argocd.saadisfy.me
+      tls:
+        - secretName: argocd-tls
+          hosts:
+            - az-argocd.saadisfy.me
+  configs:
+    cm:
+      url: https://az-argocd.saadisfy.me

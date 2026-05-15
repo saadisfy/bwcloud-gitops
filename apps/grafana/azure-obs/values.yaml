@@ -1,0 +1,17 @@
+# Azure OBS stage overrides
+grafana:
+  ingress:
+    hosts:
+      - az-grafana.saadisfy.me
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - az-grafana.saadisfy.me
+  grafana.ini:
+    server:
+      root_url: https://az-grafana.saadisfy.me
+
+grafanaOperatorCRs:
+  instance:
+    external:
+      url: https://az-grafana.saadisfy.me

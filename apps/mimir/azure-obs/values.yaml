@@ -1,0 +1,16 @@
+# Azure OBS stage overrides
+mimir-distributed:
+  gateway:
+    ingress:
+      hosts:
+        - host: az-mimir.saadisfy.me
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - secretName: mimir-tls
+          hosts:
+            - az-mimir.saadisfy.me
+
+queryFrontendIngress:
+  host: az-mimir-query.saadisfy.me

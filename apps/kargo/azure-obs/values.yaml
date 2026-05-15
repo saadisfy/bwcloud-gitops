@@ -1,0 +1,4 @@
+# Azure OBS stage overrides
+kargo:
+  api:
+    host: az-kargo.saadisfy.me

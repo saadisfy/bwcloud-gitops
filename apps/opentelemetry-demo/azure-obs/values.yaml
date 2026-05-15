@@ -1,0 +1,11 @@
+# Azure OBS stage overrides
+opentelemetry-demo:
+  components:
+    frontend-proxy:
+      ingress:
+        hosts:
+          - host: az-opentelemetry-demo.saadisfy.me
+            paths:
+              - path: /
+                pathType: Prefix
+                port: 8080
