@@ -1,37 +1,40 @@
+# Kargo: only prod
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: grafana
+  name: kargo
   namespace: argocd
 spec:
-  # Nur prod deployed
   generators:
     - list:
         elements:
-          - stage: prod
-            name: grafana
-            namespace: grafana
+          - stage: noctua
+            namespace: kargo
   template:
     metadata:
-      name: '{{name}}'
+      name: kargo
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: 'apps/grafana/{{stage}}'
+        path: apps/kargo/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
-          skipCrds: false
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{namespace}}'
+        namespace: kargo
+      # Secret kargo-api: Admin password hash and signing key are managed outside of Git.
+      ignoreDifferences:
+        - group: ""
+          kind: Secret
+          name: kargo-api
+          namespace: kargo
+          jsonPointers:
+            - /data/ADMIN_ACCOUNT_PASSWORD_HASH
+            - /data/ADMIN_ACCOUNT_TOKEN_SIGNING_KEY
       syncPolicy:
         syncOptions:
           - CreateNamespace=true
-          - ServerSideApply=true
-        managedNamespaceMetadata:
-          labels:
-            argocd.argoproj.io/managed-by: argocd

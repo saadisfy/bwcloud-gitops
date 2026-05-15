@@ -1,23 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: reloader
+  name: otel-operator
   namespace: argocd
 spec:
+  # Nur prod deployed; dev/int Code bleibt in apps/otel-operator/{dev,int}
   generators:
     - list:
         elements:
-          - stage: prod
-            namespace: reloader
+          - stage: noctua
+            namespace: otel-operator
   template:
     metadata:
-      name: reloader
+      name: otel-operator
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: 'apps/reloader/{{stage}}'
+        path: 'apps/otel-operator/{{stage}}'
         helm:
           valueFiles:
             - ../base/values.yaml

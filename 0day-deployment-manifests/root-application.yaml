@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://github.com/saadisfy/bwcloud-gitops.git
     targetRevision: main
-    path: appsets
+    path: appsets/noctua
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

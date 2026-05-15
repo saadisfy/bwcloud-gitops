@@ -1,4 +1,4 @@
-# Root Application for Azure OBS: manages ApplicationSets under appsets/azure-obs
+# Root Application for Azure OBS: manages ApplicationSets under appsets/az-obs
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -9,7 +9,7 @@ spec:
   source:
     repoURL: https://github.com/saadisfy/bwcloud-gitops.git
     targetRevision: main
-    path: appsets/azure-obs
+    path: appsets/az-obs
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

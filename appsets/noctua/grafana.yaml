@@ -1,14 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: cluster-priority
+  name: grafana
   namespace: argocd
 spec:
+  # Nur prod deployed
   generators:
     - list:
         elements:
-          - name: cluster-priority
-            namespace: kube-system
+          - stage: noctua
+            name: grafana
+            namespace: grafana
   template:
     metadata:
       name: '{{name}}'
@@ -17,15 +19,19 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/cluster-priority/prod
-        directory:
-          recurse: true
+        path: 'apps/grafana/{{stage}}'
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+          skipCrds: false
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
       syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
         syncOptions:
           - CreateNamespace=true
+          - ServerSideApply=true
+        managedNamespaceMetadata:
+          labels:
+            argocd.argoproj.io/managed-by: argocd

@@ -18,12 +18,12 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/argocd/prod
+        path: apps/argocd/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
-            - ../azure-obs/values.yaml
+            - ../az-obs/values.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: argocd
@@ -61,7 +61,7 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/cluster-priority/prod
+        path: apps/cluster-priority/noctua
         directory:
           recurse: true
       destination:
@@ -92,7 +92,7 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/reloader/prod
+        path: apps/reloader/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
@@ -122,7 +122,7 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/istio/prod
+        path: apps/istio/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
@@ -165,12 +165,12 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/mimir/prod
+        path: apps/mimir/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
-            - ../azure-obs/values.yaml
+            - ../az-obs/values.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
@@ -198,7 +198,7 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/alloy/prod
+        path: apps/alloy/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
@@ -228,12 +228,12 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/grafana/prod
+        path: apps/grafana/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
-            - ../azure-obs/values.yaml
+            - ../az-obs/values.yaml
           skipCrds: false
       destination:
         server: https://kubernetes.default.svc
@@ -264,7 +264,7 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/otel-operator/prod
+        path: apps/otel-operator/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
@@ -294,12 +294,12 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/opentelemetry-demo/prod
+        path: apps/opentelemetry-demo/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
-            - ../azure-obs/values.yaml
+            - ../az-obs/values.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
@@ -325,12 +325,12 @@ spec:
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/kargo/prod
+        path: apps/kargo/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
-            - ../azure-obs/values.yaml
+            - ../az-obs/values.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: kargo

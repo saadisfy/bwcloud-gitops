@@ -1,42 +1,30 @@
-# ArgoCD self-managed: only prod
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: argocd
+  name: reloader
   namespace: argocd
 spec:
   generators:
     - list:
         elements:
-          - stage: prod
-            namespace: argocd
+          - stage: noctua
+            namespace: reloader
   template:
     metadata:
-      name: argocd
+      name: reloader
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/argocd/prod
+        path: 'apps/reloader/{{stage}}'
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
       destination:
         server: https://kubernetes.default.svc
-        namespace: argocd
-      ignoreDifferences:
-        - group: ""
-          kind: Secret
-          name: argocd-secret
-          namespace: argocd
-          jsonPointers:
-            - /data/admin.password
-            - /data/admin.passwordMtime
+        namespace: '{{namespace}}'
       syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
         syncOptions:
           - CreateNamespace=true

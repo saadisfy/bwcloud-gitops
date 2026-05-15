@@ -1,31 +1,42 @@
+# ArgoCD self-managed: only prod
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: spring-petclinic
+  name: argocd
   namespace: argocd
 spec:
-  # Nur prod deployed; dev/int Code bleibt in apps/spring-petclinic/{dev,int}
   generators:
     - list:
         elements:
-          - stage: prod
-            namespace: spring-petclinic
+          - stage: noctua
+            namespace: argocd
   template:
     metadata:
-      name: spring-petclinic
+      name: argocd
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: 'apps/spring-petclinic/{{stage}}'
+        path: apps/argocd/noctua
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
       destination:
         server: https://kubernetes.default.svc
-        namespace: '{{namespace}}'
+        namespace: argocd
+      ignoreDifferences:
+        - group: ""
+          kind: Secret
+          name: argocd-secret
+          namespace: argocd
+          jsonPointers:
+            - /data/admin.password
+            - /data/admin.passwordMtime
       syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
         syncOptions:
           - CreateNamespace=true

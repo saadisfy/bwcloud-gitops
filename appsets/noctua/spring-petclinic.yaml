@@ -1,23 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: opentelemetry-demo
+  name: spring-petclinic
   namespace: argocd
 spec:
+  # Nur prod deployed; dev/int Code bleibt in apps/spring-petclinic/{dev,int}
   generators:
     - list:
         elements:
-          - stage: prod
-            namespace: opentelemetry-demo
+          - stage: noctua
+            namespace: spring-petclinic
   template:
     metadata:
-      name: opentelemetry-demo
+      name: spring-petclinic
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: 'apps/opentelemetry-demo/{{stage}}'
+        path: 'apps/spring-petclinic/{{stage}}'
         helm:
           valueFiles:
             - ../base/values.yaml

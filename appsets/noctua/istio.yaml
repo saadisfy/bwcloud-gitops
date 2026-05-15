@@ -7,7 +7,7 @@ spec:
   generators:
     - list:
         elements:
-          - stage: prod
+          - stage: noctua
             namespace: istio-system
   template:
     metadata:

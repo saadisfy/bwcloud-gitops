@@ -1,24 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: alloy
+  name: mimir
   namespace: argocd
 spec:
-  # Nur prod deployed
+  # Nur prod deployed; dev/int Code bleibt in apps/mimir/{dev,int}
   generators:
     - list:
         elements:
-          - stage: prod
-            namespace: alloy
+          - stage: noctua
+            namespace: mimir
   template:
     metadata:
-      name: alloy
+      name: mimir
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: 'apps/alloy/{{stage}}'
+        path: 'apps/mimir/{{stage}}'
         helm:
           valueFiles:
             - ../base/values.yaml
@@ -29,3 +29,5 @@ spec:
       syncPolicy:
         syncOptions:
           - CreateNamespace=true
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true

@@ -1,40 +1,30 @@
-# Kargo: only prod
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: kargo
+  name: opentelemetry-demo
   namespace: argocd
 spec:
   generators:
     - list:
         elements:
-          - stage: prod
-            namespace: kargo
+          - stage: noctua
+            namespace: opentelemetry-demo
   template:
     metadata:
-      name: kargo
+      name: opentelemetry-demo
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: apps/kargo/prod
+        path: 'apps/opentelemetry-demo/{{stage}}'
         helm:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
       destination:
         server: https://kubernetes.default.svc
-        namespace: kargo
-      # Secret kargo-api: Admin password hash and signing key are managed outside of Git.
-      ignoreDifferences:
-        - group: ""
-          kind: Secret
-          name: kargo-api
-          namespace: kargo
-          jsonPointers:
-            - /data/ADMIN_ACCOUNT_PASSWORD_HASH
-            - /data/ADMIN_ACCOUNT_TOKEN_SIGNING_KEY
+        namespace: '{{namespace}}'
       syncPolicy:
         syncOptions:
           - CreateNamespace=true

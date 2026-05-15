@@ -1,24 +1,24 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: otel-operator
+  name: alloy
   namespace: argocd
 spec:
-  # Nur prod deployed; dev/int Code bleibt in apps/otel-operator/{dev,int}
+  # Nur prod deployed
   generators:
     - list:
         elements:
-          - stage: prod
-            namespace: otel-operator
+          - stage: noctua
+            namespace: alloy
   template:
     metadata:
-      name: otel-operator
+      name: alloy
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: 'apps/otel-operator/{{stage}}'
+        path: 'apps/alloy/{{stage}}'
         helm:
           valueFiles:
             - ../base/values.yaml
