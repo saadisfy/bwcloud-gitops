@@ -11,6 +11,16 @@ mimir-distributed:
         - secretName: mimir-tls
           hosts:
             - az-mimir.saadisfy.me
+  ingester:
+    resources:
+      requests:
+        cpu: 400m
+        memory: 4Gi
+      limits:
+        cpu: 400m
+        memory: 4Gi
+    zoneAwareReplication:
+      enabled: true
 
 queryFrontendIngress:
   host: az-mimir-query.saadisfy.me
