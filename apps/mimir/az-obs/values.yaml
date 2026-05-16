@@ -1,5 +1,13 @@
 # Azure OBS stage overrides
 mimir-distributed:
+  distributor:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        cpu: 200m
+        memory: 1Gi
   gateway:
     ingress:
       hosts:
