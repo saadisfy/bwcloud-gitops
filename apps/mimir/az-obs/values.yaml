@@ -22,11 +22,11 @@ mimir-distributed:
   ingester:
     resources:
       requests:
-        cpu: 400m
-        memory: 4Gi
+        cpu: 300m
+        memory: 3Gi
       limits:
-        cpu: 400m
-        memory: 4Gi
+        cpu: 300m
+        memory: 3Gi
     zoneAwareReplication:
       enabled: true
 
