@@ -1,14 +1,19 @@
 # Tempo az-obs values
-# Keep empty to use upstream chart defaults.
+# We keep Tempo mostly default-first. These overrides are only to make
+# TraceQL metrics queries in Grafana work (e.g. `{...} | rate() by(...)`).
 tempo-distributed:
   traces:
     otlp:
       grpc:
         enabled: true
+  # Metrics generator is required for TraceQL metrics query execution.
+  # Without it, Tempo returns "error finding generators: empty ring".
   metricsGenerator:
     enabled: true
   overrides:
     defaults:
       metrics_generator:
+        # local-blocks processor is required by TraceQL metrics.
+        # Without it, TraceQL metrics queries fail.
         processors:
           - local-blocks
