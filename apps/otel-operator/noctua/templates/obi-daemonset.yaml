@@ -1,0 +1,50 @@
+{{- if .Values.obi.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: obi
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: obi
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: obi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: obi
+    spec:
+      hostPID: true
+      serviceAccountName: obi
+      containers:
+        - name: obi
+          image: "{{ .Values.obi.image.repository }}:{{ .Values.obi.image.tag }}"
+          imagePullPolicy: {{ .Values.obi.image.pullPolicy }}
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: true
+          env:
+            - name: OTEL_EBPF_AUTO_TARGET_EXE
+              value: {{ .Values.obi.autoTargetExe | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.obi.otlpEndpoint | quote }}
+            - name: OTEL_EBPF_KUBE_METADATA_ENABLE
+              value: {{ .Values.obi.kubeMetadataEnable | quote }}
+          volumeMounts:
+            - name: var-run-obi
+              mountPath: /var/run/obi
+            - name: cgroup
+              mountPath: /sys/fs/cgroup
+      volumes:
+        - name: var-run-obi
+          emptyDir: {}
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+{{- end }}

@@ -1,2 +1,12 @@
 # OpenTelemetry Operator prod overrides
 opentelemetry-operator: {}
+
+obi:
+  enabled: true
+  image:
+    repository: otel/ebpf-instrument
+    tag: v0.9.0
+    pullPolicy: IfNotPresent
+  otlpEndpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4318
+  autoTargetExe: "*"
+  kubeMetadataEnable: "true"
