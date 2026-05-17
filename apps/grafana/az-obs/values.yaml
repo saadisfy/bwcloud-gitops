@@ -10,6 +10,22 @@ grafana:
   grafana.ini:
     server:
       root_url: https://az-grafana.saadisfy.me
+  datasources:
+    tempo-datasource.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Tempo
+          uid: tempo
+          type: tempo
+          access: proxy
+          url: http://tempo-query-frontend.tempo.svc.cluster.local:3200
+          jsonData:
+            tracesToMetrics:
+              datasourceUid: mimir
+            serviceMap:
+              datasourceUid: mimir
+            nodeGraph:
+              enabled: true
 
 grafanaOperatorCRs:
   instance:
