@@ -1,3 +1,6 @@
 # istio azure obs overrides
 kiali-server:
   enabled: true
+  # Keep this stable so ArgoCD stays Synced; chart default is randAlphaNum(32).
+  login_token:
+    signing_key: "REPLACE_SIGNING_KEY"

@@ -43,6 +43,7 @@ spec:
           name: istio-sidecar-injector
           jqPathExpressions:
             - .webhooks[]?.clientConfig.caBundle
+            - .webhooks[]?.failurePolicy
       syncPolicy:
         syncOptions:
           - CreateNamespace=true
