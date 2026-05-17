@@ -1,2 +1,3 @@
 # istio azure obs overrides
----
+kiali-server:
+  enabled: true

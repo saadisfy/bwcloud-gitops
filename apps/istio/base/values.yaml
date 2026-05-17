@@ -12,3 +12,6 @@ istiod:
     validationFailurePolicy: Fail
   sidecarInjectorWebhook:
     enableNamespacesByDefault: false
+
+kiali-server:
+  enabled: false

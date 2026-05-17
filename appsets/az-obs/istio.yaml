@@ -21,6 +21,7 @@ spec:
           valueFiles:
             - ../base/values.yaml
             - values.yaml
+            - ../az-obs/values.yaml
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
