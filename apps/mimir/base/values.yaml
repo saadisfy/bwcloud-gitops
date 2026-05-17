@@ -44,9 +44,9 @@ mimir-distributed:
         ruler_max_rules_per_rule_group: 100
         ruler_max_rule_groups_per_tenant: 100
       alertmanager_storage:
-        backend: local
-        local:
-          path: /data
+        backend: filesystem
+        filesystem:
+          dir: /data/alertmanager
       compactor:
         data_dir: /data/compactor
       ingest_storage:
