@@ -44,6 +44,10 @@ spec:
           jqPathExpressions:
             - .webhooks[]?.clientConfig.caBundle
             - .webhooks[]?.failurePolicy
+            - .webhooks[]?.matchPolicy
+            - .webhooks[]?.timeoutSeconds
+            - .webhooks[]?.rules[]?.scope
+            - .webhooks[]?.namespaceSelector.matchExpressions
       syncPolicy:
         syncOptions:
           - CreateNamespace=true
