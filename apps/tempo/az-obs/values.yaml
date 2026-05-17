@@ -5,3 +5,10 @@ tempo-distributed:
     otlp:
       grpc:
         enabled: true
+  metricsGenerator:
+    enabled: true
+  overrides:
+    defaults:
+      metrics_generator:
+        processors:
+          - local-blocks
