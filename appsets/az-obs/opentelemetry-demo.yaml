@@ -28,8 +28,3 @@ spec:
       syncPolicy:
         syncOptions:
           - CreateNamespace=true
-          - ServerSideApply=true
-        managedNamespaceMetadata:
-          labels:
-            argocd.argoproj.io/managed-by: argocd
-            istio.io/rev: default

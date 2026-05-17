@@ -1,0 +1,10 @@
+{{- if .Values.mesh.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    istio.io/rev: {{ .Values.mesh.revision | default "default" | quote }}
+{{- end }}

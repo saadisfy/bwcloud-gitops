@@ -1,10 +1,14 @@
 # Azure OBS stage overrides
+mesh:
+  enabled: true
+  revision: default
+
 opentelemetry-demo:
   default:
     envOverrides:
       # Forces a rollout so new pods get Istio sidecars after namespace mesh labeling.
       - name: OTEL_DEMO_MESH
-        value: "enabled"
+        value: "enabled-with-istio"
   opentelemetry-collector:
     enabled: true
     mode: deployment
