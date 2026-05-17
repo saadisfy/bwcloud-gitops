@@ -4,3 +4,13 @@ kiali-server:
   # Keep this stable so ArgoCD stays Synced; chart default is randAlphaNum(32).
   login_token:
     signing_key: "REPLACE_SIGNING_KEY"
+  external_services:
+    prometheus:
+      enabled: true
+      # OTel demo Prometheus service running in this cluster.
+      url: "http://prometheus.opentelemetry-demo.svc.cluster.local:9090"
+    grafana:
+      enabled: true
+      # Internal service URL for Kiali backend checks/links.
+      in_cluster_url: "http://grafana.grafana.svc.cluster.local"
+      url: "http://grafana.grafana.svc.cluster.local"
