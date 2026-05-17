@@ -15,3 +15,13 @@ kiali-server:
       internal_url: "http://grafana.grafana.svc.cluster.local"
       # Browser links should use the external Grafana URL.
       external_url: "https://az-grafana.saadisfy.me"
+    tracing:
+      enabled: true
+      provider: "tempo"
+      # Query frontend HTTP endpoint for Tempo provider.
+      internal_url: "http://tempo-query-frontend.tempo.svc.cluster.local:3200"
+      use_grpc: false
+      # Links from Kiali should open in external Grafana Tempo UI.
+      external_url: "https://az-grafana.saadisfy.me"
+      tempo_config:
+        datasource_uid: "tempo"
