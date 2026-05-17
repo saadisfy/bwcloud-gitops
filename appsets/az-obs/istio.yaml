@@ -38,6 +38,11 @@ spec:
           jqPathExpressions:
             - .webhooks[]?.clientConfig.caBundle
             - .webhooks[]?.failurePolicy
+        - group: admissionregistration.k8s.io
+          kind: MutatingWebhookConfiguration
+          name: istio-sidecar-injector
+          jqPathExpressions:
+            - .webhooks[]?.clientConfig.caBundle
       syncPolicy:
         syncOptions:
           - CreateNamespace=true
