@@ -2,10 +2,6 @@
 mimir-distributed:
   mimir:
     structuredConfig:
-      blocks_storage:
-        backend: filesystem
-        filesystem:
-          dir: /data/blocks
       limits:
         store_gateway_tenant_shard_size: 0
         ingestion_rate: 100000
@@ -45,21 +41,6 @@ mimir-distributed:
     persistentVolume:
       enabled: true
       size: 1Gi
-    initContainers:
-      - name: setup-storage
-        image: busybox:latest
-        command: ["sh", "-c", "mkdir -p /data/blocks"]
-        securityContext:
-          runAsUser: 10001
-          runAsGroup: 10001
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-              - ALL
-          readOnlyRootFilesystem: true
-        volumeMounts:
-          - name: storage
-            mountPath: /data
 
     # Mount the mimir-rules-bundle ConfigMap directly into the ruler_storage local directory.
     # Path: /rules-storage/<tenantId>/<namespace>.yaml  →  /rules-storage/1/rules.yaml

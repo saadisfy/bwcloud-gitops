@@ -14,7 +14,6 @@ mimir-distributed:
         app.kubernetes.io/part-of: mimir
       clusterLabel: prod-bwcloud
   gateway:
-    enabledNonEnterprise: true
     replicas: 1
     ingress:
       enabled: true
@@ -65,13 +64,6 @@ mimir-distributed:
 
   alertmanager:
     replicas: 1
-    fallbackConfig: |
-      global:
-        resolve_timeout: 5m
-      route:
-        receiver: default-receiver
-      receivers:
-        - name: default-receiver
     persistentVolume:
       enabled: true
       size: 1Gi
@@ -151,23 +143,4 @@ mimir-distributed:
       enabled: false
 
   ruler:
-    enabled: false
-
-  chunks-cache:
-    enabled: false
-  index-cache:
-    enabled: false
-  metadata-cache:
-    enabled: false
-  results-cache:
-    enabled: false
-
-  minio:
-    enabled: false
-    resources:
-      requests:
-        cpu: 50m
-        memory: 128Mi
-
-  kafka:
     enabled: false
