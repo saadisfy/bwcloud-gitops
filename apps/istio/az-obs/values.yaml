@@ -11,6 +11,7 @@ kiali-server:
       url: "http://prometheus.opentelemetry-demo.svc.cluster.local:9090"
     grafana:
       enabled: true
-      # Internal service URL for Kiali backend checks/links.
-      in_cluster_url: "http://grafana.grafana.svc.cluster.local"
-      url: "http://grafana.grafana.svc.cluster.local"
+      # Kiali backend uses internal_url from inside the cluster.
+      internal_url: "http://grafana.grafana.svc.cluster.local"
+      # Browser links should use the external Grafana URL.
+      external_url: "https://az-grafana.saadisfy.me"
