@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kargo
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - namespace: kargo
+  template:
+    metadata:
+      name: kargo
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: apps/kargo/noctua
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+            - ../az-obs/values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: kargo
+      ignoreDifferences:
+        - group: ""
+          kind: Secret
+          name: kargo-api
+          namespace: kargo
+          jsonPointers:
+            - /data/ADMIN_ACCOUNT_PASSWORD_HASH
+            - /data/ADMIN_ACCOUNT_TOKEN_SIGNING_KEY
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true

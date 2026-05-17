@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kargo-projects
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: kargo-projects
+            namespace: kargo-projects
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: apps/kargo-projects
+        directory:
+          recurse: true
+          exclude: '{**/*stage-dev.yaml,**/*stage-int.yaml}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true

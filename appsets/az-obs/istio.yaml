@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: istio
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - namespace: istio-system
+  template:
+    metadata:
+      name: istio
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: apps/istio/noctua
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      ignoreDifferences:
+        - group: admissionregistration.k8s.io
+          kind: ValidatingWebhookConfiguration
+          name: istio-validator-istio-system
+          jqPathExpressions:
+            - .webhooks[]?.clientConfig.caBundle
+            - .webhooks[]?.failurePolicy
+        - group: admissionregistration.k8s.io
+          kind: ValidatingWebhookConfiguration
+          name: istiod-default-validator
+          jqPathExpressions:
+            - .webhooks[]?.clientConfig.caBundle
+            - .webhooks[]?.failurePolicy
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true

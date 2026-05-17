@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: grafana
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - namespace: grafana
+  template:
+    metadata:
+      name: grafana
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: apps/grafana/noctua
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+            - ../az-obs/values.yaml
+          skipCrds: false
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+        managedNamespaceMetadata:
+          labels:
+            argocd.argoproj.io/managed-by: argocd
