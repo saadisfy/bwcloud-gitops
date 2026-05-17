@@ -1,3 +1,7 @@
 # Tempo az-obs values
 # Keep empty to use upstream chart defaults.
-{}
+tempo-distributed:
+  traces:
+    otlp:
+      grpc:
+        enabled: true

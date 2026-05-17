@@ -1,5 +1,20 @@
 # Azure OBS stage overrides
 opentelemetry-demo:
+  opentelemetry-collector:
+    enabled: true
+    mode: deployment
+    config:
+      exporters:
+        otlp/tempo:
+          endpoint: tempo-distributor.tempo.svc.cluster.local:4317
+          tls:
+            insecure: true
+      service:
+        pipelines:
+          traces:
+            exporters: [otlp/tempo, debug, spanmetrics]
+          logs:
+            exporters: [debug]
   components:
     frontend-proxy:
       ingress:
