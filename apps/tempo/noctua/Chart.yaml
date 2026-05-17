@@ -1,0 +1,8 @@
+apiVersion: v2
+name: tempo-wrapper
+description: Wrapper for Grafana Tempo distributed Helm chart
+version: 0.1.0
+dependencies:
+  - name: tempo-distributed
+    version: "1.61.2"
+    repository: https://grafana.github.io/helm-charts

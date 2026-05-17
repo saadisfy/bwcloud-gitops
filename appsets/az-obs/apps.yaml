@@ -186,6 +186,37 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
+  name: tempo
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - namespace: tempo
+  template:
+    metadata:
+      name: tempo
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: apps/tempo/noctua
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+            - ../az-obs/values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
   name: otel-operator
   namespace: argocd
 spec:
