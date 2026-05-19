@@ -655,5 +655,4 @@ data:
     otelcol_kubeproxy_scrape "default" {
       forward_to = otelcol.processor.memory_limiter.simple.input
     }
-miter.simple.input
-    }
+
