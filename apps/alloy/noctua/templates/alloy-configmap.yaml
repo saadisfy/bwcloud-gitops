@@ -61,19 +61,14 @@ data:
       metric_statements {
         context = "datapoint"
         statements = [
-          // 1. Map OTel Resource Attributes to legacy Prometheus labels for dashboard compatibility
+          // 1. Map OTel Resource Attributes to legacy Prometheus labels for dashboard compatibility.
+          // Note: Mimir automatically converts Resource Attributes like 'k8s.namespace.name' 
+          // to labels like 'k8s_namespace_name', so we only add the short versions here.
           "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
           "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
           "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
           "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
           "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
-
-          // 2. Map to underscore format (k8s_*) only if specifically needed by legacy queries
-          "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
-          "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil",
-          "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil",
-          "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil",
-          "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"])   where attributes[\"cluster\"] != nil",
         ]
       }
       metric_statements {
