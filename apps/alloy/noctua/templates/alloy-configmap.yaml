@@ -61,26 +61,19 @@ data:
       metric_statements {
         context = "datapoint"
         statements = [
-          // 1. Mirror from Resource Attributes (populated by k8sattributes) to Datapoint Attributes
+          // 1. Map OTel Resource Attributes to legacy Prometheus labels for dashboard compatibility
           "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
           "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
           "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
           "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
           "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
 
-          // 2. Mirror between underscore and plain formats for broad compatibility
+          // 2. Map to underscore format (k8s_*) only if specifically needed by legacy queries
           "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
           "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil",
           "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil",
           "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil",
           "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"])   where attributes[\"cluster\"] != nil",
-          
-          // 3. Back-mirror (if only underscores are present)
-          "set(attributes[\"namespace\"], attributes[\"k8s_namespace_name\"]) where attributes[\"k8s_namespace_name\"] != nil and attributes[\"namespace\"] == nil",
-          "set(attributes[\"pod\"],       attributes[\"k8s_pod_name\"])       where attributes[\"k8s_pod_name\"] != nil and attributes[\"pod\"] == nil",
-          "set(attributes[\"container\"], attributes[\"k8s_container_name\"]) where attributes[\"k8s_container_name\"] != nil and attributes[\"container\"] == nil",
-          "set(attributes[\"node\"],      attributes[\"k8s_node_name\"])      where attributes[\"k8s_node_name\"] != nil and attributes[\"node\"] == nil",
-          "set(attributes[\"cluster\"],   attributes[\"k8s_cluster_name\"])   where attributes[\"k8s_cluster_name\"] != nil and attributes[\"cluster\"] == nil",
         ]
       }
       metric_statements {
@@ -149,10 +142,11 @@ data:
       metric_statements {
         context = "datapoint"
         statements = [
+          // Promote scrape-time labels to resource attributes so k8sattributes can use them
           "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
           "set(resource.attributes[\"k8s.pod.name\"], attributes[\"pod\"]) where attributes[\"pod\"] != nil",
           "set(resource.attributes[\"k8s.namespace.name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
-          "delete_key(attributes, \"k8s_pod_ip\") where attributes[\"k8s_pod_ip\"] != nil",
+          "delete_key(attributes, \"k8s_pod_ip\")",
         ]
       }
     }
@@ -183,16 +177,11 @@ data:
       metric_statements {
         context = "datapoint"
         statements = [
-          // 1. Mirror from Resource Attributes (like cluster)
+          // Map OTel Resource Attributes to short legacy labels.
+          // Mimir handles 'k8s_cluster_name' etc. automatically via Resource-to-Label mapping.
           "set(attributes[\"cluster\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
-          "set(attributes[\"k8s_cluster_name\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
 
-          // 2. Sync between underscore and plain formats (important for KSM metrics)
-          "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
-          "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil",
-          "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil",
-          "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil",
-
+          // Ensure sync for KSM-style labels (if they exist as datapoint attributes)
           "set(attributes[\"namespace\"], attributes[\"k8s_namespace_name\"]) where attributes[\"k8s_namespace_name\"] != nil and attributes[\"namespace\"] == nil",
           "set(attributes[\"pod\"],       attributes[\"k8s_pod_name\"])       where attributes[\"k8s_pod_name\"] != nil and attributes[\"pod\"] == nil",
           "set(attributes[\"container\"], attributes[\"k8s_container_name\"]) where attributes[\"k8s_container_name\"] != nil and attributes[\"container\"] == nil",
@@ -670,4 +659,6 @@ data:
 
     otelcol_kubeproxy_scrape "default" {
       forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+miter.simple.input
     }
