@@ -92,3 +92,5 @@ prometheus-node-exporter:
       # Q: Why disable monitor here?
       # A: Prevents parallel scrape paths when Alloy is the single scraper.
       enabled: false
+
+enableMirroring: false

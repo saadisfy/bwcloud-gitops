@@ -43,198 +43,112 @@ data:
     // PHASE 2: PROCESS (Central Enrichment & Label Mapping)
     // ===============================================================
 
-    // --- Chain 1: Enriched (for Pod Scrapes) ---
+    // --- Pipeline: Dual-Semantics (Enrichment & Legacy Label Mirroring) ---
+    declare "otelcol_pipeline_dual_semantics" {
+      argument "forward_to" {}
+      argument "enable_k8s_enrichment" {
+        optional = true
+        default  = true
+      }
 
-    otelcol.processor.batch "enriched" {
-      output {
-        metrics = [otelcol.exporter.otlphttp.mimir.input]
+      // 6. Batching (Optimized for Mimir)
+      otelcol.processor.batch "default" {
+        output { metrics = [argument.forward_to.value] }
+        send_batch_size = 8192
+        timeout         = "10s"
       }
-      send_batch_size = 1024
-      timeout         = "5s"
-    }
 
-    otelcol.processor.transform "mirror_enriched" {
-      error_mode = "ignore"
-      output {
-        metrics = [otelcol.processor.batch.enriched.input]
-      }
-      metric_statements {
-        context = "datapoint"
-        statements = [
-          "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
-          "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
-          "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
-          "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
-          "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
-          "set(attributes[\"pod_ip\"],    resource.attributes[\"k8s.pod.ip\"])         where resource.attributes[\"k8s.pod.ip\"] != nil",
+      // 5. Dual-Semantics Mirroring (Resource -> Datapoint)
+      otelcol.processor.transform "mirror_dual_semantics" {
+        error_mode = "ignore"
+        output { metrics = [otelcol.processor.batch.default.input] }
+        
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            {{- if .Values.enableMirroring }}
+            // Map OTel Resource Attributes to BOTH legacy and OTel-style Datapoint Labels
+            "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
+            "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
+            "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
+            "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
+            "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
 
-          "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
-          "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil",
-          "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil",
-          "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil",
-          "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"])   where attributes[\"cluster\"] != nil",
-          "set(attributes[\"k8s_pod_ip\"],         attributes[\"pod_ip\"])    where attributes[\"pod_ip\"] != nil",
+            // Explicitly set k8s_* labels on the datapoint to ensure they exist regardless of backend behavior
+            "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
+            "set(attributes[\"k8s_pod_name\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
+            "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
+            "set(attributes[\"k8s_node_name\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
+            "set(attributes[\"k8s_cluster_name\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
+            {{- else }}
+            // Only ensure basic connectivity (minimal labels)
+            "set(attributes[\"cluster\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
+            {{- end }}
+          ]
+        }
 
-          "set(attributes[\"namespace\"], attributes[\"k8s_namespace_name\"]) where attributes[\"k8s_namespace_name\"] != nil and attributes[\"namespace\"] == nil",
-          "set(attributes[\"pod\"],       attributes[\"k8s_pod_name\"])       where attributes[\"k8s_pod_name\"] != nil and attributes[\"pod\"] == nil",
-          "set(attributes[\"container\"], attributes[\"k8s_container_name\"]) where attributes[\"k8s_container_name\"] != nil and attributes[\"container\"] == nil",
-          "set(attributes[\"node\"],      attributes[\"k8s_node_name\"])      where attributes[\"k8s_node_name\"] != nil and attributes[\"node\"] == nil",
-          "set(attributes[\"cluster\"],   attributes[\"k8s_cluster_name\"])   where attributes[\"k8s_cluster_name\"] != nil and attributes[\"cluster\"] == nil",
-          "set(attributes[\"pod_ip\"],    attributes[\"k8s_pod_ip\"])         where attributes[\"k8s_pod_ip\"] != nil and attributes[\"pod_ip\"] == nil",
-        ]
-      }
-      metric_statements {
-        context = "resource"
-        statements = [
-          "delete_key(attributes, \"k8s.pod.ip\")",
-        ]
-      }
-    }
-
-    otelcol.processor.transform "inject_cluster_enriched" {
-      output {
-        metrics = [otelcol.processor.transform.mirror_enriched.input]
-      }
-      metric_statements {
-        context = "resource"
-        statements = [
-          "set(attributes[\"k8s.cluster.name\"], \"prod-bwcloud\")",
-        ]
-      }
-    }
-
-    otelcol.processor.k8sattributes "enriched" {
-      output {
-        metrics = [otelcol.processor.transform.inject_cluster_enriched.input]
-      }
-      extract {
-        metadata = [
-          "k8s.namespace.name",
-          "k8s.pod.name",
-          "k8s.node.name",
-          "k8s.deployment.name",
-          "k8s.container.name",
-        ]
-        deployment_name_from_replicaset = true
-      }
-      pod_association {
-        source {
-          from = "resource_attribute"
-          name = "k8s.pod.ip"
+        metric_statements {
+          context = "resource"
+          statements = [
+            "delete_key(attributes, \"k8s.pod.ip\")",
+          ]
         }
       }
-      pod_association {
-        source {
-          from = "resource_attribute"
-          name = "k8s.pod.name"
+
+      // 4. Inject Cluster Name
+      otelcol.processor.resource "inject_cluster" {
+        output { metrics = [otelcol.processor.transform.mirror_dual_semantics.input] }
+        attributes {
+          action = "insert"
+          key    = "k8s.cluster.name"
+          value  = "prod-bwcloud"
         }
       }
-      pod_association {
-        source {
-          from = "resource_attribute"
-          name = "k8s.namespace.name"
+
+      // 3. K8s Attributes Enrichment (Conditional)
+      otelcol.processor.k8sattributes "enrich" {
+        output { metrics = [otelcol.processor.resource.inject_cluster.input] }
+        extract {
+          metadata = ["k8s.namespace.name", "k8s.pod.name", "k8s.node.name", "k8s.deployment.name", "k8s.container.name"]
+          deployment_name_from_replicaset = true
+        }
+        pod_association {
+          source { from = "resource_attribute" name = "k8s.pod.ip" }
+        }
+        pod_association {
+          source { from = "connection" }
         }
       }
-      pod_association {
-        source {
-          from = "connection"
+
+      // 2. Promote Pod IP/Meta to Resource Level (for k8sattributes)
+      otelcol.processor.transform "promote_meta" {
+        output {
+          metrics = [
+            argument.enable_k8s_enrichment.value ? otelcol.processor.k8sattributes.enrich.input : otelcol.processor.resource.inject_cluster.input,
+          ]
+        }
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
+            "set(resource.attributes[\"k8s.pod.name\"], attributes[\"pod\"]) where attributes[\"pod\"] != nil",
+            "set(resource.attributes[\"k8s.namespace.name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
+            "delete_key(attributes, \"k8s_pod_ip\")",
+          ]
         }
       }
-    }
 
-    otelcol.processor.transform "promote_pod_ip_enriched" {
-      output {
-        metrics = [otelcol.processor.k8sattributes.enriched.input]
+      // 1. Memory Limiter (OOM Protection) - Optimized for high-power node
+      otelcol.processor.memory_limiter "default" {
+        output { metrics = [otelcol.processor.transform.promote_meta.input] }
+        check_interval  = "1s"
+        limit           = "1000MiB"
+        spike_limit     = "200MiB"
       }
-      metric_statements {
-        context = "datapoint"
-        statements = [
-          "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
-          "set(resource.attributes[\"k8s.pod.name\"], attributes[\"pod\"]) where attributes[\"pod\"] != nil",
-          "set(resource.attributes[\"k8s.namespace.name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
-          "delete_key(attributes, \"k8s_pod_ip\")",
-        ]
-      }
-    }
 
-    // ==========================================================
-    // GLOBAL FILTER DROP (Export Time - Performance intensive)
-    // ==========================================================
-    otelcol.processor.filter "global_drop" {
-      error_mode = "ignore"
-      metrics {
-        datapoint = [
-          // Example: Drop any metric with a specific label value globally
-          // "attributes[\"some_noisy_label\"] == \"true\"",
-        ]
+      export "input" {
+        value = otelcol.processor.memory_limiter.default.input
       }
-      output {
-        metrics = [otelcol.processor.transform.promote_pod_ip_enriched.input]
-      }
-    }
-
-    otelcol.processor.memory_limiter "enriched" {
-      output {
-        metrics = [otelcol.processor.filter.global_drop.input]
-      }
-      check_interval  = "1s"
-      limit           = "1500MiB"
-      spike_limit     = "300MiB"
-    }
-
-    // --- Chain 2: Simple (for Meta-Exporters) ---
-
-    otelcol.processor.batch "simple" {
-      output {
-        metrics = [otelcol.exporter.otlphttp.mimir.input]
-      }
-      send_batch_size = 1024
-      timeout         = "5s"
-    }
-
-    otelcol.processor.transform "mirror_simple" {
-      error_mode = "ignore"
-      output {
-        metrics = [otelcol.processor.batch.simple.input]
-      }
-      metric_statements {
-        context = "datapoint"
-        statements = [
-          "set(attributes[\"cluster\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
-          "set(attributes[\"k8s_cluster_name\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
-
-          "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
-          "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil",
-          "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil",
-          "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil",
-
-          "set(attributes[\"namespace\"], attributes[\"k8s_namespace_name\"]) where attributes[\"k8s_namespace_name\"] != nil and attributes[\"namespace\"] == nil",
-          "set(attributes[\"pod\"],       attributes[\"k8s_pod_name\"])       where attributes[\"k8s_pod_name\"] != nil and attributes[\"pod\"] == nil",
-          "set(attributes[\"container\"], attributes[\"k8s_container_name\"]) where attributes[\"k8s_container_name\"] != nil and attributes[\"container\"] == nil",
-          "set(attributes[\"node\"],      attributes[\"k8s_node_name\"])      where attributes[\"k8s_node_name\"] != nil and attributes[\"node\"] == nil",
-        ]
-      }
-    }
-
-    otelcol.processor.transform "inject_cluster_simple" {
-      output {
-        metrics = [otelcol.processor.transform.mirror_simple.input]
-      }
-      metric_statements {
-        context = "resource"
-        statements = [
-          "set(attributes[\"k8s.cluster.name\"], \"prod-bwcloud\")",
-        ]
-      }
-    }
-
-    otelcol.processor.memory_limiter "simple" {
-      output {
-        metrics = [otelcol.processor.transform.inject_cluster_simple.input]
-      }
-      check_interval  = "1s"
-      limit           = "1500MiB"
-      spike_limit     = "300MiB"
     }
 
     // ===============================================================
@@ -248,7 +162,7 @@ data:
 
     otelcol.receiver.prometheus "servicemonitors" {
       output {
-        metrics = [otelcol.processor.memory_limiter.enriched.input]
+        metrics = [otelcol_pipeline_dual_semantics.pod_level.input]
       }
     }
 
@@ -269,40 +183,50 @@ data:
     // INSTANTIATION
     // ===============================================================
 
+    otelcol_pipeline_dual_semantics "pod_level" {
+      forward_to = otelcol.exporter.otlphttp.mimir.input
+      enable_k8s_enrichment = true
+    }
+
+    otelcol_pipeline_dual_semantics "meta_level" {
+      forward_to = otelcol.exporter.otlphttp.mimir.input
+      enable_k8s_enrichment = false
+    }
+
     alloy_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.enriched.input
+      forward_to = otelcol_pipeline_dual_semantics.pod_level.input
     }
 
     kubelet_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
     cadvisor_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
     ksm_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
     node_exporter_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
     apiserver_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
     controllermanager_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
     scheduler_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
     kubeproxy_scrape.scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
+      forward_to = otelcol_pipeline_dual_semantics.meta_level.input
     }
 
   alloy_scrape.alloy: |-

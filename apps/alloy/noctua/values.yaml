@@ -5,3 +5,5 @@
 alloy:
   controller:
     type: daemonset
+
+enableMirroring: true

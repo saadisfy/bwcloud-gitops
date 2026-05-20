@@ -1,75 +1,91 @@
 # Alloy Implementation Guide
 
-This document describes the concrete implementation of Grafana Alloy in our cluster, specifically focused on metric collection and labeling consistency.
+This document describes the concrete implementation of Grafana Alloy in our cluster, specifically focused on the **"Dual-Semantics" architecture** for metrics collection and labeling consistency.
 
-## 1. How to collect metrics of my Kubernetes
+## 1. Architectural Concept: Dual-Semantics
 
-To collect metrics effectively and ensure they are compatible with both modern OTel-based dashboards and legacy Prometheus dashboards, we follow a strict multi-chain processing strategy.
+To bridge the gap between modern OpenTelemetry (OTel) standards and legacy Prometheus ecosystems, we employ a **Dual-Semantics** strategy. Every metric point ingested by our system is enriched to carry two sets of metadata:
 
-### 1.1 Scrape Strategy
+1.  **OTel Resource Attributes**: Attributes scoped to the entity producing the telemetry (e.g., `k8s.pod.name`). Mimir automatically maps these to labels like `k8s_pod_name` during ingestion.
+2.  **Prometheus Datapoint Labels**: Legacy labels (e.g., `pod`, `namespace`, `container`) attached directly to the sample. This ensures 100% compatibility with upstream Grafana dashboards and existing Prometheus alert rules.
 
-We use a unified scrape interval of **15 seconds**. This is a trade-off between storage costs in Mimir and the resolution required for accurate `rate()` and `increase()` calculations in Grafana, especially for short-lived spikes.
+## 2. The Processing Pipeline
 
-### 1.2 Target Categorization
+All metrics flow through a centralized OTel-native pipeline implemented in the `otelcol_pipeline_dual_semantics` module.
 
-Every new scrape target must be assigned to one of two processing chains:
+### 2.1 Pipeline Stages (Execution Order)
 
-#### A. Pod-Level Targets (The "Enriched" Path)
-Use this for applications or services that only expose their own internal metrics (e.g., Mimir components, Alloy itself, or your custom Java apps).
+The module ensures a strict processing order to maximize efficiency and data integrity:
 
-*   **Discovery**: `role = "pod"` or `role = "endpoints"`.
-*   **Mandatory Relabeling**: You MUST capture the target's IP:
-    ```alloy
+1.  **Memory Limiter**: The first line of defense. It prevents Out-Of-Memory (OOM) situations by dropping data if memory usage exceeds the defined threshold (e.g., 1000MiB).
+2.  **Metadata Promotion**: Scrape-time labels (like `k8s_pod_ip` or manually set `pod` labels) are promoted to **Resource Attributes**. This is a technical requirement for the `k8sattributes` processor to perform the metadata lookup.
+3.  **K8s Enrichment**: The `k8sattributes` processor uses the promoted IP or name to fetch full metadata from the Kubernetes API (Deployment name, ReplicaSet, etc.) and attaches it as Resource Attributes.
+4.  **Cluster Injection**: A global `k8s.cluster.name` (hardcoded as `prod-bwcloud`) is injected into the resource context.
+5.  **Dual-Semantics Mirroring**: Values from the enriched Resource Attributes (e.g., `k8s.namespace.name`) are copied back to Datapoint Attributes (Labels: `namespace`, `pod`, `container`, `node`, `cluster`).
+6.  **Batching**: Metrics are grouped into large batches (Size: `8192` samples, Timeout: `10s`) to optimize network I/O and minimize the ingestion overhead on Mimir.
+
+## 3. Implementation Patterns
+
+### 3.1 Chain Selection
+
+We distinguish between two primary ingestion paths, both utilizing the same core module but with different configurations:
+
+| Chain | Target Type | Enrichment | Usage |
+| :--- | :--- | :--- | :--- |
+| `pod_level` | Applications / Services | **Enabled** | For apps that only know about themselves (e.g. Mimir, Alloy, Java Apps). Requires `k8s_pod_ip`. |
+| `meta_level` | Infrastructure Exporters | **Disabled** | For KSM, Node-Exporter, Kubelet. Prevents "Identity-Overwrite" bugs where KSM metrics would get Pod labels of the KSM pod. |
+
+### 3.2 Scrape Module Pattern
+
+Every scraper must follow the `declare` module pattern to maintain modularity and capture the necessary metadata for enrichment:
+
+```alloy
+declare "otelcol_my_app_scrape" {
+  argument "forward_to" {}
+  
+  // 1. Discovery
+  discovery.kubernetes "pods" { role = "pod" }
+  
+  // 2. Relabeling (Capture IP for k8sattributes lookup)
+  discovery.relabel "app" {
+    targets = discovery.kubernetes.pods.targets
     rule {
       source_labels = ["__meta_kubernetes_pod_ip"]
       target_label  = "k8s_pod_ip"
     }
-    ```
-*   **Processing**: Forward to `otelcol.processor.memory_limiter.enriched.input`.
-*   **Result**: Metrics get full K8s metadata (Deployment name, Pod name, etc.) automatically attached by the central `k8sattributes` processor.
-
-#### B. Node & Meta-Exporter Targets (The "Simple" Path)
-Use this for exporters that provide data about other system components (e.g., Kube-State-Metrics, Node-Exporter, Kubelet, cAdvisor).
-
-*   **Discovery**: `role = "node"` (preferred for consistency) or `role = "endpoints"`.
-*   **Standardization**: For Node-Exporter, always map the node name to the `instance` label to allow joins with cAdvisor:
-    ```alloy
-    rule {
-      source_labels = ["__meta_kubernetes_node_name"]
-      target_label  = "instance"
-    }
-    ```
-*   **Processing**: Forward to `otelcol.processor.memory_limiter.simple.input`.
-*   **Result**: Prevents the "Alloy-Identity-Overwrite" bug where all KSM metrics would otherwise be labeled as belonging to the `alloy` namespace.
-
-### 1.3 Labeling Standards (Dual-Labeling)
-
-We implement a fallback logic that ensures every metric point carries both OTel semantic attributes and Prometheus legacy labels:
-
-| OTel Attribute | Prometheus Label | Description |
-| :--- | :--- | :--- |
-| `k8s.namespace.name` | `namespace` | The K8s Namespace |
-| `k8s.pod.name` | `pod` | The Name of the Pod |
-| `k8s.container.name` | `container` | The Container name |
-| `k8s.cluster.name` | `cluster` | Hardcoded as `prod-bwcloud` |
-
-## 2. Configuration Maintenance
-
-The configuration is managed as a flattened file in `apps/alloy/prod/templates/alloy-configmap.yaml` to avoid complex module scoping issues.
-
-### 2.1 Adding a new Scrape Target
-1.  Define a new `declare "otelcol_<name>_scrape"` block.
-2.  Set the `scrape_interval` to `15s`.
-3.  Choose the correct output chain (Enriched vs. Simple).
-4.  Instantiate the module at the bottom of the file.
-
-### 2.2 Verifying Labels
-After applying changes via Argo CD, verify the labels in Mimir:
-```bash
-# Port-forward to Mimir Gateway
-kubectl port-forward svc/mimir-gateway -n mimir 8080:8080
-
-# Query a sample metric
-curl -s -H "X-Scope-OrgID: 1" --data-urlencode 'query=<your_metric>' "http://localhost:8080/prometheus/api/v1/query" | jq '.data.result[0].metric'
+  }
+  
+  // 3. Scrape
+  prometheus.scrape "app" {
+    targets = discovery.relabel.app.output
+    forward_to = [otelcol.receiver.prometheus.app.receiver]
+    scrape_interval = "15s"
+  }
+  
+  // 4. Convert to OTel
+  otelcol.receiver.prometheus "app" {
+    output { metrics = [argument.forward_to.value] }
+  }
+}
 ```
-Check that both `namespace` and `k8s_namespace_name` are present and correct.
+
+## 4. Maintenance & Operations
+
+### 4.1 Adding a Target
+1.  Define the scraper module (preferably in a separate `.alloy` file or the `ConfigMap`).
+2.  Capture `k8s_pod_ip` if the target needs `pod_level` enrichment.
+3.  Instantiate the module and point it to the appropriate pipeline:
+    - `otelcol_pipeline_dual_semantics.pod_level.input`
+    - `otelcol_pipeline_dual_semantics.meta_level.input`
+
+### 4.2 Verifying Labels
+Verify the success of the Dual-Semantics mapping in Mimir using Grafana Explore or `curl`:
+```promql
+# A single series should now have both sets of labels:
+# Datapoint Labels: cluster="prod-bwcloud", namespace="...", pod="..."
+# Resource Labels:  k8s_cluster_name="prod-bwcloud", k8s_namespace_name="...", k8s_pod_name="..."
+up{job="my-app"}
+```
+
+---
+*Note: The configuration is rendered into `apps/alloy/noctua/templates/alloy-configmap.yaml` using the `./scripts/render-helm.sh` script.*
