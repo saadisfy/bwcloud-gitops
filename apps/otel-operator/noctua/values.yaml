@@ -2,7 +2,7 @@
 opentelemetry-operator: {}
 
 obi:
-  enabled: true
+  enabled: false
   image:
     repository: otel/ebpf-instrument
     tag: v0.9.0
