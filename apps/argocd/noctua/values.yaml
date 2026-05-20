@@ -36,7 +36,7 @@ argo-cd:
       # GitHub SSO via built-in Dex. Client ID/Secret werden aus dem
       # Secret `argocd-github-oauth` (Namespace argocd, Label
       # app.kubernetes.io/part-of=argocd) per `$<secret>:<key>` interpoliert.
-      # Secret stammt aus 0day-deployment-manifests/sso-secrets.yaml (gitignored).
+      # Secret stammt aus 0day-deployment-manifests/grafana-secrets.yaml (gitignored).
       url: https://argocd.saadisfy.me
       dex.config: |
         connectors:

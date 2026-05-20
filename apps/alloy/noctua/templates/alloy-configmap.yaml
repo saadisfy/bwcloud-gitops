@@ -61,19 +61,26 @@ data:
       metric_statements {
         context = "datapoint"
         statements = [
-          // 1. Map OTel Resource Attributes to legacy Prometheus labels for dashboard compatibility.
           "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
           "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
           "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
           "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
           "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
+          "set(attributes[\"pod_ip\"],    resource.attributes[\"k8s.pod.ip\"])         where resource.attributes[\"k8s.pod.ip\"] != nil",
 
-          // 2. Map to underscore format (k8s_*) explicitly as Mimir's automatic promotion is unreliable for all metrics.
-          "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
-          "set(attributes[\"k8s_pod_name\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
-          "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
-          "set(attributes[\"k8s_node_name\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
-          "set(attributes[\"k8s_cluster_name\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
+          "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
+          "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil",
+          "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil",
+          "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil",
+          "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"])   where attributes[\"cluster\"] != nil",
+          "set(attributes[\"k8s_pod_ip\"],         attributes[\"pod_ip\"])    where attributes[\"pod_ip\"] != nil",
+
+          "set(attributes[\"namespace\"], attributes[\"k8s_namespace_name\"]) where attributes[\"k8s_namespace_name\"] != nil and attributes[\"namespace\"] == nil",
+          "set(attributes[\"pod\"],       attributes[\"k8s_pod_name\"])       where attributes[\"k8s_pod_name\"] != nil and attributes[\"pod\"] == nil",
+          "set(attributes[\"container\"], attributes[\"k8s_container_name\"]) where attributes[\"k8s_container_name\"] != nil and attributes[\"container\"] == nil",
+          "set(attributes[\"node\"],      attributes[\"k8s_node_name\"])      where attributes[\"k8s_node_name\"] != nil and attributes[\"node\"] == nil",
+          "set(attributes[\"cluster\"],   attributes[\"k8s_cluster_name\"])   where attributes[\"k8s_cluster_name\"] != nil and attributes[\"cluster\"] == nil",
+          "set(attributes[\"pod_ip\"],    attributes[\"k8s_pod_ip\"])         where attributes[\"k8s_pod_ip\"] != nil and attributes[\"pod_ip\"] == nil",
         ]
       }
       metric_statements {
@@ -142,7 +149,6 @@ data:
       metric_statements {
         context = "datapoint"
         statements = [
-          // Promote scrape-time labels to resource attributes so k8sattributes can use them
           "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"k8s_pod_ip\"]) where attributes[\"k8s_pod_ip\"] != nil",
           "set(resource.attributes[\"k8s.pod.name\"], attributes[\"pod\"]) where attributes[\"pod\"] != nil",
           "set(resource.attributes[\"k8s.namespace.name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
@@ -150,9 +156,26 @@ data:
         ]
       }
     }
-    otelcol.processor.memory_limiter "enriched" {
+
+    // ==========================================================
+    // GLOBAL FILTER DROP (Export Time - Performance intensive)
+    // ==========================================================
+    otelcol.processor.filter "global_drop" {
+      error_mode = "ignore"
+      metrics {
+        datapoint = [
+          // Example: Drop any metric with a specific label value globally
+          // "attributes[\"some_noisy_label\"] == \"true\"",
+        ]
+      }
       output {
         metrics = [otelcol.processor.transform.promote_pod_ip_enriched.input]
+      }
+    }
+
+    otelcol.processor.memory_limiter "enriched" {
+      output {
+        metrics = [otelcol.processor.filter.global_drop.input]
       }
       check_interval  = "1s"
       limit           = "1500MiB"
@@ -177,17 +200,14 @@ data:
       metric_statements {
         context = "datapoint"
         statements = [
-          // Map OTel Resource Attributes to legacy labels.
           "set(attributes[\"cluster\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
           "set(attributes[\"k8s_cluster_name\"], resource.attributes[\"k8s.cluster.name\"]) where resource.attributes[\"k8s.cluster.name\"] != nil",
 
-          // Ensure sync for KSM-style labels (if they exist as datapoint attributes)
           "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil",
           "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil",
           "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil",
           "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil",
 
-          // Ensure sync for KSM-style labels (if they exist as datapoint attributes)
           "set(attributes[\"namespace\"], attributes[\"k8s_namespace_name\"]) where attributes[\"k8s_namespace_name\"] != nil and attributes[\"namespace\"] == nil",
           "set(attributes[\"pod\"],       attributes[\"k8s_pod_name\"])       where attributes[\"k8s_pod_name\"] != nil and attributes[\"pod\"] == nil",
           "set(attributes[\"container\"], attributes[\"k8s_container_name\"]) where attributes[\"k8s_container_name\"] != nil and attributes[\"container\"] == nil",
@@ -232,8 +252,61 @@ data:
       }
     }
 
-    // --- Module: Alloy Scrape ---
-    declare "otelcol_alloy_scrape" {
+    // ===============================================================
+    // MODULE IMPORTS
+    // ===============================================================
+    import.file "alloy_scrape" { filename = "/etc/alloy/alloy_scrape.alloy" }
+    import.file "kubelet_scrape" { filename = "/etc/alloy/kubelet_scrape.alloy" }
+    import.file "cadvisor_scrape" { filename = "/etc/alloy/cadvisor_scrape.alloy" }
+    import.file "ksm_scrape" { filename = "/etc/alloy/ksm_scrape.alloy" }
+    import.file "controllermanager_scrape" { filename = "/etc/alloy/controllermanager_scrape.alloy" }
+    import.file "scheduler_scrape" { filename = "/etc/alloy/scheduler_scrape.alloy" }
+    import.file "kubeproxy_scrape" { filename = "/etc/alloy/kubeproxy_scrape.alloy" }
+    import.file "apiserver_scrape" { filename = "/etc/alloy/apiserver_scrape.alloy" }
+    import.file "node_exporter_scrape" { filename = "/etc/alloy/node_exporter_scrape.alloy" }
+
+    // ===============================================================
+    // INSTANTIATION
+    // ===============================================================
+
+    alloy_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.enriched.input
+    }
+
+    kubelet_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    cadvisor_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    ksm_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    node_exporter_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    apiserver_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    controllermanager_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    scheduler_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+    kubeproxy_scrape.scrape "default" {
+      forward_to = otelcol.processor.memory_limiter.simple.input
+    }
+
+  alloy_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       argument "namespace" {
         optional = true
@@ -286,8 +359,8 @@ data:
       }
     }
 
-    // --- Module: Kubelet Scrape ---
-    declare "otelcol_kubelet_scrape" {
+  kubelet_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       discovery.kubernetes "nodes" {
         role = "node"
@@ -317,9 +390,25 @@ data:
           replacement   = "${1}:10250"
         }
       }
+      
+      // ==========================================
+      // LOCAL METRIC DROP (Performance optimized)
+      // ==========================================
+      prometheus.relabel "drop_unwanted" {
+        forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
+        
+        // Example: Drop highly cardinal/noisy kubelet metrics right at scrape time
+        rule {
+          source_labels = ["__name__"]
+          regex         = "container_network_receive_errors_total|example_noisy_metric_.*"
+          action        = "drop"
+        }
+      }
+
       prometheus.scrape "kubelet" {
         targets    = discovery.relabel.kubelet.output
-        forward_to = [otelcol.receiver.prometheus.kubelet.receiver]
+        // Point forward_to to the local relabel rule instead of otelcol directly
+        forward_to = [prometheus.relabel.drop_unwanted.receiver]
         bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
         tls_config {
           insecure_skip_verify = true
@@ -333,8 +422,8 @@ data:
       }
     }
 
-    // --- Module: cAdvisor Scrape ---
-    declare "otelcol_cadvisor_scrape" {
+  cadvisor_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       discovery.kubernetes "nodes" {
         role = "node"
@@ -384,8 +473,8 @@ data:
       }
     }
 
-    // --- Module: Kube-State-Metrics Scrape ---
-    declare "otelcol_ksm_scrape" {
+  ksm_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       argument "namespace" {
         optional = true
@@ -430,8 +519,8 @@ data:
       }
     }
 
-    // --- Module: Controller Manager Scrape ---
-    declare "otelcol_controllermanager_scrape" {
+  controllermanager_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       discovery.kubernetes "nodes" {
         role = "node"
@@ -472,8 +561,8 @@ data:
       }
     }
 
-    // --- Module: Scheduler Scrape ---
-    declare "otelcol_scheduler_scrape" {
+  scheduler_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       discovery.kubernetes "nodes" {
         role = "node"
@@ -514,8 +603,8 @@ data:
       }
     }
 
-    // --- Module: Kube Proxy Scrape ---
-    declare "otelcol_kubeproxy_scrape" {
+  kubeproxy_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       discovery.kubernetes "nodes" {
         role = "node"
@@ -548,8 +637,8 @@ data:
       }
     }
 
-    // --- Module: API Server Scrape ---
-    declare "otelcol_apiserver_scrape" {
+  apiserver_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       discovery.kubernetes "apiserver" {
         role = "endpoints"
@@ -590,8 +679,8 @@ data:
       }
     }
 
-    // --- Module: Node-Exporter Scrape ---
-    declare "otelcol_node_exporter_scrape" {
+  node_exporter_scrape.alloy: |-
+    declare "scrape" {
       argument "forward_to" {}
       discovery.kubernetes "nodes" {
         role = "node"
@@ -626,44 +715,3 @@ data:
         output { metrics = [argument.forward_to.value] }
       }
     }
-
-    // ===============================================================
-    // INSTANTIATION
-    // ===============================================================
-
-    otelcol_alloy_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.enriched.input
-    }
-
-    otelcol_kubelet_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-
-    otelcol_cadvisor_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-
-    otelcol_ksm_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-
-    otelcol_node_exporter_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-
-    otelcol_apiserver_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-
-    otelcol_controllermanager_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-
-    otelcol_scheduler_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-
-    otelcol_kubeproxy_scrape "default" {
-      forward_to = otelcol.processor.memory_limiter.simple.input
-    }
-

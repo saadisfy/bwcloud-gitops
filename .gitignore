@@ -1,8 +1,8 @@
 # GitHub PAT – nicht committen
 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
 
-# GitHub OAuth Client Secrets (Grafana + Argo CD SSO) – nicht committen
-0day-deployment-manifests/sso-secrets.yaml
+# GitHub OAuth Client Secrets (Grafana + Argo CD SSO) & SMTP – nicht committen
+0day-deployment-manifests/grafana-secrets.yaml
 
 *.lock
 

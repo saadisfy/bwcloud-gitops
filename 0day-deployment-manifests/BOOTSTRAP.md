@@ -24,10 +24,10 @@ This application manages all other `appsets/` in the cluster.
 kubectl apply -f 0day-deployment-manifests/root-application.yaml
 ```
 
-## 4. GitHub SSO (Optional)
-If you want to enable GitHub SSO for Grafana and Argo CD:
+## 4. GitHub SSO & SMTP
+If you want to enable GitHub SSO for Grafana and Argo CD, as well as SMTP for Grafana notifications:
 ```bash
-cp 0day-deployment-manifests/sso-secrets.yaml.example 0day-deployment-manifests/sso-secrets.yaml
-# Fill in your OAuth Client ID and Secret
-kubectl apply -f 0day-deployment-manifests/sso-secrets.yaml
+cp 0day-deployment-manifests/grafana-secrets.yaml.example 0day-deployment-manifests/grafana-secrets.yaml
+# Fill in your OAuth Client IDs, Secrets, and SMTP credentials
+kubectl apply -f 0day-deployment-manifests/grafana-secrets.yaml
 ```

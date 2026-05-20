@@ -18,6 +18,7 @@
    - Migrate the existing gitignored secrets to `SealedSecret` CRs committed
      to Git:
      - [0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml](0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml) (GitHub PAT for repo access)
-     - [0day-deployment-manifests/sso-secrets.yaml](0day-deployment-manifests/sso-secrets.yaml) (Grafana + Argo CD GitHub OAuth client secrets)
+     - [0day-deployment-manifests/grafana-secrets.yaml](0day-deployment-manifests/grafana-secrets.yaml) (Grafana SSO/SMTP + Argo CD GitHub OAuth secrets)
+
    - Remove the corresponding entries from [.gitignore](.gitignore) and delete
      the `.example` templates once the SealedSecrets are in place.

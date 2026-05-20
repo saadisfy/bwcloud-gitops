@@ -109,8 +109,10 @@ Das Alerting wird logisch in drei Ebenen getrennt:
    - Grafana Alerting für Grafana-managed Regeln
 
 3. **Benachrichtigung und Routing**  
-   - Mimir Alertmanager für Mimir-Ruler-Alerts
-   - Grafana Contact Points / Notification Policies für Grafana-managed Alerts
+   - Bevorzugt Mimir Alertmanager als zentrale Runtime-Notification-Plane
+   - Mimir-Ruler-Alerts laufen nativ in den Mimir Alertmanager
+   - Grafana-managed Alerts sollen, soweit technisch zuverlässig möglich, an den Mimir Alertmanager weitergeleitet werden
+   - Grafana Contact Points / Notification Policies bleiben nur Fallback oder Übergangslösung, wenn Forwarding nicht möglich ist
 
 ### 3.3 Betriebsprinzip
 
@@ -213,11 +215,11 @@ Das Alerting wird logisch in drei Ebenen getrennt:
 
 ## 5. Empfohlenes Zielbild für den Betrieb
 
-### 5.1 Empfohlenes Modell: Hybrid mit klaren Rollen
+### 5.1 Empfohlenes Modell: Hybrid bei Regeln, zentral bei Notifications
 
-Das aktuell im Repo angelegte Modell soll beibehalten und sauber operationalisiert werden:
+Das aktuell im Repo angelegte Modell soll beibehalten, aber beim Notification-Routing stärker vereinheitlicht werden:
 
-#### Mimir Alertmanager ist primär für Mimir-Ruler-Alerts
+#### Mimir Ruler bleibt primär für Prometheus-/Upstream-Regeln
 
 Nutzen für:
 
@@ -233,6 +235,16 @@ Nutzen für:
 - UI-erstellte Regeln
 - fachbereichsspezifische Alerts
 
+#### Mimir Alertmanager ist die bevorzugte zentrale Notification-Plane
+
+Nutzen für:
+
+- Mimir-Ruler-Alerts
+- Grafana-managed Alerts, wenn Grafana sie an den Mimir Alertmanager weiterleitet
+- einheitliche Contact Points, Notification Policies, Customer-Routen und spätere Eskalationen
+
+So bleibt die Regelerstellung flexibel, während das Routing nicht doppelt gepflegt werden muss.
+
 #### Grafana bleibt die zentrale Sicht
 
 Grafana dient als:
@@ -241,15 +253,18 @@ Grafana dient als:
 - UI für Alertmanager-Sichtbarkeit
 - Einstiegspunkt für Betrieb und Troubleshooting
 
-### 5.2 Warum kein harter Single-Plane-Ansatz im ersten Schritt
+### 5.2 Warum kein harter Single-Plane-Ansatz für die Regelerstellung
 
-Ein vollständig vereinheitlichtes Alerting auf nur einer Notification-Plane wäre zwar einfacher in der Theorie, ist im aktuellen Repo-Stand aber nicht der natuerliche Pfad.
+Ein vollständig vereinheitlichtes Alerting auf nur einem Regeltyp wäre zwar einfacher in der Theorie, ist im aktuellen Repo-Stand aber nicht der natuerliche Pfad.
 
 Gruende:
 
-- Der Mimir-Ruler-Pfad ist bereits auf den Mimir Alertmanager ausgerichtet.
-- Grafana-managed Rules haben ein eigenes, operatorfreundliches Provisionierungsmodell.
-- Eine fruehe Vereinheitlichung wuerde mehr Umbau als unmittelbaren Mehrwert erzeugen.
+- Der Mimir-Ruler-Pfad ist für Upstream- und Plattformregeln gut geeignet.
+- Grafana-managed Rules sind für Kunden und UI-nahe Teams deutlich zugänglicher.
+- Eine Konvertierung aller Upstream-Regeln in Grafana-Regeln würde Wartung und Upstream-Updates erschweren.
+- Ein Verbot von Grafana-UI-Alerts würde die Customer Experience verschlechtern.
+
+Deshalb gilt: **Rule-Authoring darf hybrid bleiben, Notification-Routing soll möglichst zentral über Mimir Alertmanager laufen.**
 
 ---
 
@@ -468,7 +483,150 @@ Jedes Routing benötigt eine belastbare Fallback-Route auf ein zentrales Plattfo
 
 ### 8.5 Aktuelle Luecke
 
-Die im Repo vorhandene Grafana-Konfiguration ist aktuell nur ein technischer Platzhalter. Vor produktivem Einsatz muessen echte Receiver, Verteiler und Routing-Bedingungen gepflegt werden.
+Die im Repo vorhandene Grafana-Konfiguration ist aktuell nur ein technischer Platzhalter. Zusätzlich besitzt der Mimir Alertmanager nur eine minimale Fallback-Konfiguration. Vor produktivem Einsatz muessen echte Receiver, Verteiler und Routing-Bedingungen im bevorzugten Zielsystem gepflegt werden.
+
+Empfohlener Zielpfad:
+
+1. Mimir Alertmanager als zentrale Notification-Plane konfigurieren.
+2. Grafana-managed Alerts an den Mimir Alertmanager weiterleiten.
+3. Grafana Contact Points / Notification Policies nur als Fallback oder Übergangslösung verwenden.
+4. Customer-Routing über `namespace` bzw. `k8s_namespace_name` und bei Grafana-managed Alerts optional über Folder-/Customer-Labels abbilden.
+
+### 8.6 Self-Service für Customer Notification Routing
+
+Ein zentrales Routing im Mimir Alertmanager darf nicht bedeuten, dass jede Kundenänderung manuell durch das Observability-Team umgesetzt werden muss.
+
+Für Customer-Self-Service gibt es drei Betriebsmodelle:
+
+1. **GitOps-only:** Kunden stellen Pull Requests für eigene Contact Points und Namespace-Routen. Das ist maximal auditierbar, aber langsam.
+2. **Grafana UI auf Mimir Alertmanager:** Grafana verwaltet den Mimir Alertmanager als Alertmanager-Datasource. Nutzer können dort, bei passenden Berechtigungen, Contact Points, Notification Policies und Silences bearbeiten. Runtime-System bleibt Mimir Alertmanager.
+3. **Customer-owned Routing-Fragmente:** Kunden pflegen eigene Routing-Fragmente in ihren GitOps-Bereichen. Die Plattform rendert daraus eine zentrale Alertmanager-Konfiguration.
+
+Nicht empfohlen ist der Versuch, Mimir-/Prometheus-Alerts erst an Grafanas eingebauten Alertmanager weiterzuleiten, damit dort das zentrale Routing passiert. Grafanas eingebauter Alertmanager ist primär für Grafana-managed Alerts gedacht. Für Mimir-/Prometheus-Alerts ist der Mimir Alertmanager der passendere zentrale Notification-Plane.
+
+Empfohlenes Zielbild:
+
+- kurzfristig: Mimir Alertmanager zentral, Customer-Routen per MR oder kontrollierter Grafana-UI-Verwaltung
+- langfristig: customer-owned GitOps-Fragmente mit klaren Guardrails
+- Guardrail: Kunden dürfen nur eigene Namespace-/Customer-Routen pflegen; globale Routen bleiben Plattform-owned
+
+Da Customer-GitOps-Repositories direkt auf Cust-Clustern deployen und nicht automatisch vom Observability-Repository konsumiert werden, ist eine rein zentrale Mimir-Alertmanager-Konfiguration für Customer-Self-Service nur mit zusätzlicher Integrationslogik möglich.
+
+Pragmatischer Betriebsmodus:
+
+- Plattform-/Upstream-Alerts bleiben im Mimir Ruler und routen über den Mimir Alertmanager.
+- Customer-owned Alerts dürfen weiterhin als Grafana-managed Alerts per UI erstellt, exportiert und über den Grafana Operator aus dem Customer-GitOps-Repository deployed werden.
+- Customer-eigene Notification Policies dürfen für Customer-owned Alerts in Grafana liegen.
+- Plattform-Alerts, die Kunden betreffen, werden im Mimir Alertmanager über `namespace` bzw. `k8s_namespace_name` an Kunden geroutet.
+
+Damit gibt es zwar zwei Notification-Planes, aber mit klarer fachlicher Ownership:
+
+| Alert-Typ | Eigentümer | Notification-Plane |
+|---|---|---|
+| Plattform-/Upstream-Alerts | Plattform/Observability | Mimir Alertmanager |
+| Customer-App-Alerts | Kunde | Grafana Alerting / Grafana-managed Notification Policy |
+| Plattform-Alerts mit Customer-Auswirkung | Plattform + Kunde | Mimir Alertmanager mit Namespace-Routing |
+
+Langfristige Alternative für vollständige Zentralisierung:
+
+- Ein eigener `CustomerAlertRoute`-Controller oder Operator auf Cust-Clustern.
+- Kunden deployen deklarative Routing-Fragmente in ihren eigenen Repositories.
+- Der Controller validiert Namespace-Ownership und synchronisiert erlaubte Fragmente in den zentralen Mimir Alertmanager.
+- Dadurch kann Customer-GitOps den zentralen Alertmanager beeinflussen, ohne direkten Vollzugriff auf globale Routing-Regeln zu erhalten.
+
+### 8.7 Notification-Onboarding für neue Kunden
+
+Beim Onboarding neuer Kunden reicht es nicht, nur Namespaces und Anwendungen anzulegen. Plattform-Alerts können sofort für diese Namespaces feuern, z.B. Kubernetes-, Quota-, Pending-Pod-, Restart- oder HPA-Alerts. Ohne zusätzliche Automation müsste das Observability- oder Cust-Cluster-Team jedes Mal manuell Contact Points und Notification-Routen anlegen.
+
+Deshalb braucht jeder Kunde ein **Notification-Onboarding-Profil**.
+
+Empfohlener Mindeststandard:
+
+1. Jeder Customer-Namespace ist eindeutig einem Kunden zuordenbar.
+   - bevorzugt über Namespace-Label, z.B. `observability.bwcloud.io/customer=<customer-id>`
+   - alternativ über Namenskonvention, z.B. `<customer-id>-*`
+2. Jeder Kunde pflegt ein `CustomerNotificationProfile` oder `CustomerAlertRoute` in seinem eigenen GitOps-Repository.
+3. Dieses Profil enthält Contact Points und erlaubte Namespace-Pattern.
+4. Plattform-Alerts mit Customer-Bezug routen über `namespace` oder `k8s_namespace_name`.
+5. Fehlt ein Profil, gehen Alerts nicht verloren, sondern landen bei `ch-cust-cluster` und `ch-platform-all`.
+
+Kurzfristig kann dies über einen zentralen Customer-Notification-Router umgesetzt werden:
+
+- Mimir Alertmanager routet customer-bezogene Alerts an einen generischen `customer-router-webhook`.
+- Der Router liest `namespace`, `k8s_namespace_name` oder Customer-Labels aus dem Alert.
+- Der Router sucht den passenden Customer Contact Point aus `CustomerNotificationProfile`-Daten.
+- Der Router sendet die Notification an die Kundenadresse oder fällt auf Cust-Cluster/Plattform zurück.
+
+Damit muss der Mimir Alertmanager nicht für jeden neuen Kunden manuell neue Receiver bekommen. Neue Kunden können ihre Notification-Daten über ihr eigenes GitOps-Repository pflegen, während globale Plattform-Routen geschützt bleiben.
+
+### 8.8 Delegierte Customer Notification Policy
+
+Wenn ein Kunde seine Notification Policy selbst ändern möchte, sollte er nicht die globale Alertmanager-Root-Policy bearbeiten. Stattdessen bekommt er einen **delegierten Policy-Subtree** unterhalb seines eigenen Customer-/Namespace-Matchers.
+
+Beispielhafte logische Struktur:
+
+```text
+global root
+├── severity=critical → ch-platform-all, continue=true
+├── namespace=~"customer-a-.*" → customer-a subtree, continue=true
+│   ├── severity=critical, service=frontend → customer-a-frontend-oncall
+│   ├── severity=critical                  → customer-a-critical
+│   ├── severity=warning                   → customer-a-default
+│   └── fallback                           → customer-a-default
+└── fallback → ch-platform-all
+```
+
+Der Kunde pflegt in seinem eigenen GitOps-Repository ein Objekt wie `CustomerNotificationPolicy`. Dieses Objekt beschreibt nur Receiver und Routen innerhalb seines eigenen Scopes.
+
+Erlaubt:
+
+- eigene Receiver definieren
+- eigene Routen unterhalb des Customer-Matchers definieren
+- nach `severity`, `service`, `alertname`, `component`, `namespace` routen
+- eigene Wiederholintervalle und Gruppierung setzen
+
+Nicht erlaubt:
+
+- globale Plattform-Routen ändern
+- fremde Namespaces matchen
+- zentrale Fallback-Receiver überschreiben
+- fremde Kundenreceiver referenzieren
+
+Technische Umsetzungsoptionen:
+
+1. **Controller rendert Customer-Subtrees in den Mimir Alertmanager.**
+   - Vorteil: ein zentraler Runtime-Alertmanager
+   - Nachteil: eigener Controller/Operator nötig
+2. **Customer-Router wertet Customer-Subtrees selbst aus.**
+   - Vorteil: Mimir Alertmanager bleibt stabil und braucht nur eine generische Customer-Route
+   - Nachteil: Router muss Matching, Grouping und Repeat-Logik nachbauen
+3. **Für Customer-owned Grafana Alerts bleibt Grafana Notification Policy aktiv.**
+   - Vorteil: sofort nutzbar mit Grafana Operator und Customer-GitOps
+   - Nachteil: zweite Notification-Plane, aber fachlich auf Customer-owned Alerts begrenzt
+
+Empfehlung:
+
+- kurzfristig Customer-owned Grafana Policies für Customer-owned Alerts zulassen
+- mittelfristig `CustomerNotificationProfile` für einfache Plattform-Alert-Zustellung einführen
+- langfristig `CustomerNotificationPolicy` als delegierten Subtree einführen
+
+#### Ablauf beim `customer-router-webhook`
+
+Der `customer-router-webhook` ist aus Sicht des Mimir Alertmanagers ein finaler Receiver. Der Mimir Alertmanager sendet eine Webhook-Notification an den Router; danach wertet nicht mehr der Alertmanager, sondern der Router weiter aus.
+
+```text
+Mimir Alertmanager
+   → receiver customer-router-webhook
+      → HTTP POST mit Alertmanager-Webhook-Payload
+         → Router liest Alert-Labels (`namespace`, `k8s_namespace_name`, `severity`, `service`, `alertname`)
+         → Router bestimmt Customer über Namespace-Mapping
+         → Router lädt `CustomerNotificationProfile` oder `CustomerNotificationPolicy`
+         → Router bestimmt Zielreceiver
+         → Router sendet E-Mail/Teams/Webhook an Kunden
+         → bei unbekanntem Customer fallback an Cust-Cluster/Plattform
+```
+
+Für einfache Profile reicht Customer-Lookup plus Zustellung. Wenn Kunden eigene komplexe Policy-Bäume mit `continue`, eigenen Gruppierungen und Wiederholintervallen wollen, muss der Router diese Alertmanager-Semantik selbst nachbauen. In diesem Fall ist langfristig ein Controller, der validierte Customer-Subtrees direkt in den Mimir Alertmanager rendert, robuster.
 
 ---
 
@@ -541,7 +699,7 @@ Eine Regel gilt erst als produktionsreif, wenn:
 
 ### Offene Entscheidungen
 
-1. Soll das Routing langfristig stärker ueber Mimir Alertmanager oder stärker ueber Grafana zentralisiert werden?
+1. Wie wird die Weiterleitung von Grafana-managed Alerts an den Mimir Alertmanager zuverlässig GitOps-fähig umgesetzt und validiert?
 2. Wo sollen Recording Rules dauerhaft verwaltet werden?
 3. Welche Alert-Domänen gelten als verpflichtender Plattform-Standard und welche nur als Referenzkatalog?
 4. Wie wird später Multi-Cluster-Routing abgebildet?
@@ -587,7 +745,8 @@ Bis zu einer späteren Architekturentscheidung gilt für dieses Repository:
 
 - **Mimir-Ruler-Regeln** sind die bevorzugte Quelle für plattformweite Standard-Alerts.
 - **Grafana-managed Regeln** sind zulässig für teamnahe und iterativ gepflegte Alerts, muessen aber versioniert werden.
-- **Grafana** ist die zentrale Sicht auf Alerting.
+- **Mimir Alertmanager** ist die bevorzugte zentrale Notification-Plane.
+- **Grafana** ist die zentrale Sicht auf Alerting, Regeln, Silences und Alertmanager-Status.
 - **Tenant `1`** ist der verbindliche Standard für interne Metriken und Alerts.
 - **Produktive Alerts ohne klare Labels, Ownership und Notification-Ziel sind nicht fertig.**
 
