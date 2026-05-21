@@ -1,0 +1,10 @@
+ts=2026-05-21T07:51:18.5413117Z level=info msg="finished node evaluation" controller_path=/ controller_id=kubeproxy_scrape.scrape.default trace_id=00000000000000000000000000000000 node_id=discovery.kubernetes.nodes duration=14.491µs
+ts=2026-05-21T07:51:18.54131575Z level=info msg="finished node evaluation" controller_path=/ controller_id=alloy_scrape.scrape.default trace_id=00000000000000000000000000000000 node_id=prometheus.scrape.alloy duration=45.921µs
+ts=2026-05-21T07:51:18.54133578Z level=info msg="finished complete graph evaluation" controller_path=/ controller_id=alloy_scrape.scrape.default trace_id=00000000000000000000000000000000 duration=488.048µs
+ts=2026-05-21T07:51:18.541424742Z level=info msg="finished node evaluation" controller_path=/ controller_id=kubeproxy_scrape.scrape.default trace_id=00000000000000000000000000000000 node_id=discovery.relabel.kubeproxy duration=95.552µs
+ts=2026-05-21T07:51:18.541449242Z level=info msg="finished node evaluation" controller_path=/ controller_id=kubeproxy_scrape.scrape.default trace_id=00000000000000000000000000000000 node_id=argument.forward_to duration=4.35µs
+ts=2026-05-21T07:51:18.541479473Z level=info msg="finished node evaluation" controller_path=/ controller_id=kubeproxy_scrape.scrape.default trace_id=00000000000000000000000000000000 node_id=otelcol.receiver.prometheus.kubeproxy duration=19.761µs
+ts=2026-05-21T07:51:18.541529503Z level=info msg="finished node evaluation" controller_path=/ controller_id=kubeproxy_scrape.scrape.default trace_id=00000000000000000000000000000000 node_id=prometheus.scrape.kubeproxy duration=33.05µs
+ts=2026-05-21T07:51:18.541549524Z level=info msg="finished complete graph evaluation" controller_path=/ controller_id=kubeproxy_scrape.scrape.default trace_id=00000000000000000000000000000000 duration=348.376µs
+Error: could not perform the initial load successfully
+2026/05/21 07:51:18 collector server run finished with error: could not perform the initial load successfully
