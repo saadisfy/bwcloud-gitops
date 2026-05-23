@@ -41,6 +41,12 @@ mimir-distributed:
     persistentVolume:
       enabled: true
       size: 1Gi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
 
     # Mount the mimir-rules-bundle ConfigMap directly into the ruler_storage local directory.
     # Path: /rules-storage/<tenantId>/<namespace>.yaml  →  /rules-storage/1/rules.yaml

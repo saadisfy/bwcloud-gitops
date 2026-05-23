@@ -91,10 +91,11 @@ mimir-distributed:
     replicas: 1
     resources:
       requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
+        cpu: 400m
         memory: 512Mi
+      limits:
+        cpu: 800m
+        memory: 1Gi
 
   ingester:
     replicas: 1

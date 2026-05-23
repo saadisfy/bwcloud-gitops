@@ -1105,7 +1105,7 @@ groups:
             runbook_url: https://grafana.com/docs/mimir/latest/operators-guide/mimir-runbooks/#mimirstoregatewaynosyncedtenants
           expr: |
             min by(cluster, namespace, pod) (cortex_bucket_stores_tenants_synced{component="store-gateway"}) == 0
-          for: 1h
+          for: 4h
           labels:
             severity: warning
         - alert: MimirBucketIndexNotUpdated
