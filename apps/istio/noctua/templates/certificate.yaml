@@ -1,0 +1,18 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: main-gateway-tls
+  namespace: istio-system
+spec:
+  secretName: main-gateway-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - argocd.saadisfy.me
+  - grafana.saadisfy.me
+  - kargo.saadisfy.me
+  - mimir.saadisfy.me
+  - mimir-query.saadisfy.me
+  - opentelemetry-demo.saadisfy.me
+  - spring-petclinic.saadisfy.me
