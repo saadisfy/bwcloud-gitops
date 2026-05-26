@@ -36,25 +36,3 @@ spec:
     allowedRoutes:
       namespaces:
         from: All
-  - name: https-kargo
-    hostname: kargo.saadisfy.me
-    port: 443
-    protocol: HTTPS
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - name: kargo-tls
-    allowedRoutes:
-      namespaces:
-        from: All
-  - name: https-mimir
-    hostname: "*.saadisfy.me"
-    port: 443
-    protocol: HTTPS
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - name: mimir-tls
-    allowedRoutes:
-      namespaces:
-        from: All
