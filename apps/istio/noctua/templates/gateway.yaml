@@ -14,19 +14,7 @@ spec:
     allowedRoutes:
       namespaces:
         from: All
-  - name: https-argocd
-    hostname: argocd.saadisfy.me
-    port: 443
-    protocol: HTTPS
-    tls:
-      mode: Terminate
-      certificateRefs:
-      - name: main-gateway-tls
-    allowedRoutes:
-      namespaces:
-        from: All
-  - name: https-grafana
-    hostname: grafana.saadisfy.me
+  - name: https
     port: 443
     protocol: HTTPS
     tls:
