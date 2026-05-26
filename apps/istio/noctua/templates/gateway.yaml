@@ -21,6 +21,7 @@ spec:
       mode: Terminate
       certificateRefs:
       - name: main-gateway-tls
+      - name: grafana-tls
     allowedRoutes:
       namespaces:
         from: All
