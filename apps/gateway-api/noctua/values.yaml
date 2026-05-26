@@ -1,2 +1,2 @@
 # Gateway API CRDs noctua overrides
-gateway-api-crds-wrapper: {}
+gateway-api-crds: {}

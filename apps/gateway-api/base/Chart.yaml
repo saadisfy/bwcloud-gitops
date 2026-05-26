@@ -1,8 +1,4 @@
 apiVersion: v2
-name: gateway-api-crds-wrapper
-description: Wrapper for Kubernetes Gateway API CRDs
+name: gateway-api-crds
+description: Kubernetes Gateway API CRDs
 version: 0.1.0
-dependencies:
-  - name: gateway-api-crds
-    version: "1.1.0"
-    repository: https://kubernetes-sigs.github.io/gateway-api/
