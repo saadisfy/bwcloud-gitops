@@ -20,8 +20,8 @@ spec:
     tls:
       mode: Terminate
       certificateRefs:
-      - name: main-gateway-tls
       - name: grafana-tls
+      - name: main-gateway-tls
     allowedRoutes:
       namespaces:
         from: All
