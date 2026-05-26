@@ -1,0 +1,3 @@
+# Gateway API CRDs base values
+gateway-api-crds:
+  create: true

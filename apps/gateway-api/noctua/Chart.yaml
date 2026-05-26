@@ -1,0 +1,8 @@
+apiVersion: v2
+name: gateway-api-crds
+description: Gateway API CRDs for noctua
+version: 0.1.0
+dependencies:
+  - name: gateway-api-crds-wrapper
+    version: 0.1.0
+    repository: "file://../base"
