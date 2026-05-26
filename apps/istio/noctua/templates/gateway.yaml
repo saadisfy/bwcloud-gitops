@@ -14,17 +14,47 @@ spec:
     allowedRoutes:
       namespaces:
         from: All
-  - name: https
+  - name: https-argocd
+    hostname: argocd.saadisfy.me
     port: 443
     protocol: HTTPS
     tls:
       mode: Terminate
       certificateRefs:
       - name: main-gateway-tls
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: https-grafana
+    hostname: grafana.saadisfy.me
+    port: 443
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
       - name: grafana-tls
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: https-kargo
+    hostname: kargo.saadisfy.me
+    port: 443
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
       - name: kargo-tls
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: https-mimir
+    hostname: "*.saadisfy.me"
+    port: 443
+    protocol: HTTPS
+    tls:
+      mode: Terminate
+      certificateRefs:
       - name: mimir-tls
-      - name: mimir-query-tls
     allowedRoutes:
       namespaces:
         from: All
