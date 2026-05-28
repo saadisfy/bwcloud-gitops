@@ -22,8 +22,10 @@ k8s-monitoring:
   collectors:
     alloy-metrics:
       enabled: true
+      presets: [clustered]
     alloy-node:
       enabled: true
+      presets: [daemonset]
 
 alloy:
   fullnameOverride: alloy-gateway
