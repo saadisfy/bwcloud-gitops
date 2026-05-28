@@ -13,7 +13,7 @@ k8s-monitoring:
     collector: alloy-metrics
   hostMetrics:
     enabled: true
-    collector: alloy-metrics
+    collector: alloy-node
   telemetryServices:
     kube-state-metrics:
       deploy: true
@@ -22,14 +22,16 @@ k8s-monitoring:
   collectors:
     alloy-metrics:
       enabled: true
-      discovery:
-        enabled: true
+    alloy-node:
+      enabled: true
 
 alloy:
   fullnameOverride: alloy-gateway
   controller:
     type: deployment
     replicas: 1
+    hostNetwork: false
+    dnsPolicy: ClusterFirst
   alloy:
     configMap:
       create: true
