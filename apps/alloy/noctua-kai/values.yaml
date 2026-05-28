@@ -12,6 +12,8 @@ k8s-monitoring:
     enabled: true
   hostMetrics:
     enabled: true
+    nodeExporter:
+      enabled: true
   telemetryServices:
     kube-state-metrics:
       deploy: true
@@ -92,8 +94,26 @@ alloy:
           metric_statements {
             context = "datapoint"
             statements = [
+              // 1. Promote Resource attributes back to Labels (Datapoint attributes)
               "set(attributes[\"pod\"], resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil",
               "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
+              "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
+              "set(attributes[\"node\"], resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil",
+
+              // 2. Ensure OTel-style labels (k8s_*) exist by copying from either Resource or existing Labels
+              "set(attributes[\"k8s_pod_name\"], resource.attributes[\"k8s.pod.name\"]) where resource.attributes[\"k8s.pod.name\"] != nil",
+              "set(attributes[\"k8s_pod_name\"], attributes[\"pod\"]) where attributes[\"pod\"] != nil and attributes[\"k8s_pod_name\"] == nil",
+              
+              "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
+              "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
+
+              "set(attributes[\"k8s_node_name\"], resource.attributes[\"k8s.node.name\"]) where resource.attributes[\"k8s.node.name\"] != nil",
+              "set(attributes[\"k8s_node_name\"], attributes[\"node\"]) where attributes[\"node\"] != nil and attributes[\"k8s_node_name\"] == nil",
+
+              "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
+              "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil and attributes[\"k8s_container_name\"] == nil",
+              
+              "set(attributes[\"k8s_deployment_name\"], resource.attributes[\"k8s.deployment.name\"]) where resource.attributes[\"k8s.deployment.name\"] != nil",
             ]
           }
         }
