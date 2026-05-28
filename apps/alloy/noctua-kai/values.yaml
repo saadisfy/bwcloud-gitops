@@ -4,7 +4,7 @@ k8s-monitoring:
   destinations:
     gateway:
       type: otlp
-      url: "alloy-gateway-otlp.alloy.svc.cluster.local:4317"
+      url: "http://alloy-gateway-otlp.alloy.svc.cluster.local:4317"
       protocol: grpc
       tls:
         insecure: true
