@@ -24,6 +24,7 @@ k8s-monitoring:
       enabled: true
       presets:
         - clustered
+        - host-metrics
       discovery:
         enabled: true
 
@@ -61,13 +62,18 @@ alloy:
         }
 
         otelcol.processor.transform "promote_pod_ip" {
-          output { metrics = [otelcol.processor.k8sattributes.enrich.input] }
+          output { metrics = [otelcol.processor.groupbyattrs.split_by_pod.input] }
           metric_statements {
             context = "datapoint"
             statements = [
               "set(resource.attributes[\"k8s.pod.ip\"], attributes[\"pod_ip\"]) where attributes[\"pod_ip\"] != nil",
             ]
           }
+        }
+
+        otelcol.processor.groupbyattrs "split_by_pod" {
+          keys = ["k8s.pod.ip"]
+          output { metrics = [otelcol.processor.k8sattributes.enrich.input] }
         }
 
         otelcol.processor.k8sattributes "enrich" {
