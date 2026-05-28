@@ -13,15 +13,12 @@ k8s-monitoring:
   clusterMetrics:
     enabled: true
     collector: alloy-metrics
+    kube-state-metrics:
+      enabled: true
   hostMetrics:
     enabled: true
     collector: alloy-node
-  
-  # Specific metrics to scrape
-  metrics:
     node-exporter:
-      enabled: true
-    kube-state-metrics:
       enabled: true
 
   # Telemetry services to deploy
