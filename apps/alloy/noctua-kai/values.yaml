@@ -8,16 +8,18 @@ k8s-monitoring:
       protocol: grpc
       tls:
         insecure: true
+  metrics:
+    enabled: true
+    kube-state-metrics:
+      enabled: true
+    node-exporter:
+      enabled: true
   clusterMetrics:
     enabled: true
     collector: alloy-metrics
-    kube-state-metrics:
-      enabled: true
   hostMetrics:
     enabled: true
     collector: alloy-node
-    node-exporter:
-      enabled: true
   telemetryServices:
     kube-state-metrics:
       deploy: true
