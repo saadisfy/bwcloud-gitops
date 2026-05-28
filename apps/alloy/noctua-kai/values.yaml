@@ -15,10 +15,26 @@ k8s-monitoring:
     collector: alloy-metrics
     kube-state-metrics:
       enabled: true
+    kubeStateMetrics:
+      enabled: true
   hostMetrics:
     enabled: true
     collector: alloy-node
     node-exporter:
+      enabled: true
+    nodeExporter:
+      enabled: true
+  
+  # Redundant metrics enablement (v3/v4 hybrid)
+  metrics:
+    enabled: true
+    node-exporter:
+      enabled: true
+    nodeExporter:
+      enabled: true
+    kube-state-metrics:
+      enabled: true
+    kubeStateMetrics:
       enabled: true
 
   # Telemetry services to deploy
