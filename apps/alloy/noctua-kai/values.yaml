@@ -10,10 +10,10 @@ k8s-monitoring:
         insecure: true
   clusterMetrics:
     enabled: true
+    collector: alloy-metrics
   hostMetrics:
     enabled: true
-    nodeExporter:
-      enabled: true
+    collector: alloy-metrics
   telemetryServices:
     kube-state-metrics:
       deploy: true
@@ -24,7 +24,6 @@ k8s-monitoring:
       enabled: true
       presets:
         - clustered
-        - host-metrics
       discovery:
         enabled: true
 
@@ -33,15 +32,6 @@ alloy:
   controller:
     type: deployment
     replicas: 1
-  extraPorts:
-    - name: otlp-grpc
-      port: 4317
-      targetPort: 4317
-      protocol: TCP
-    - name: otlp-http
-      port: 4318
-      targetPort: 4318
-      protocol: TCP
   alloy:
     configMap:
       create: true
