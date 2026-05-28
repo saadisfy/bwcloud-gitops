@@ -9,32 +9,12 @@ k8s-monitoring:
       tls:
         insecure: true
   
-  # Feature Enablement
-  clusterMetrics:
-    enabled: true
-    collector: alloy-metrics
-    kube-state-metrics:
-      enabled: true
-    kubeStateMetrics:
-      enabled: true
-  hostMetrics:
-    enabled: true
-    collector: alloy-node
-    node-exporter:
-      enabled: true
-    nodeExporter:
-      enabled: true
-  
-  # Redundant metrics enablement (v3/v4 hybrid)
+  # Specific metrics to scrape
   metrics:
     enabled: true
     node-exporter:
       enabled: true
-    nodeExporter:
-      enabled: true
     kube-state-metrics:
-      enabled: true
-    kubeStateMetrics:
       enabled: true
 
   # Telemetry services to deploy
