@@ -21,7 +21,7 @@ k8s-monitoring:
     alloy-metrics:
       enabled: true
       presets:
-        - cluster
+        - clustered
       discovery:
         enabled: true
 
