@@ -8,7 +8,7 @@ spec:
   generators:
     - list:
         elements:
-          - stage: noctua
+          - stage: noctua-kai
             namespace: alloy
   template:
     metadata:
