@@ -12,17 +12,23 @@ k8s-monitoring:
   # Global Metrics Switch
   metrics:
     enabled: true
+    node-exporter:
+      enabled: true
+    kube-state-metrics:
+      enabled: true
 
   # Feature Enablement
   clusterMetrics:
     enabled: true
     collector: alloy-metrics
-    kubeStateMetrics:
+    node-exporter:
+      enabled: true
+    kube-state-metrics:
       enabled: true
   hostMetrics:
     enabled: true
     collector: alloy-node
-    nodeExporter:
+    node-exporter:
       enabled: true
 
   # Telemetry services to deploy
