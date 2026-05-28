@@ -89,6 +89,7 @@ data:
             // Explicitly set k8s_* labels on the datapoint to ensure they exist regardless of backend behavior
             "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
             "set(attributes[\"k8s_pod_name\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
+            "set(attributes[\"k8s_pod_ip\"],         resource.attributes[\"k8s.pod.ip\"])         where resource.attributes[\"k8s.pod.ip\"] != nil",
             "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
             "set(attributes[\"k8s_node_name\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
             "set(attributes[\"k8s_cluster_name\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
@@ -96,6 +97,7 @@ data:
             // Fallback: If resource attribute was missing (e.g. meta_level), copy existing legacy datapoint labels to k8s_* format
             "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
             "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil and attributes[\"k8s_pod_name\"] == nil",
+            "set(attributes[\"k8s_pod_ip\"],         attributes[\"pod_ip\"])    where attributes[\"pod_ip\"] != nil and attributes[\"k8s_pod_ip\"] == nil",
             "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil and attributes[\"k8s_container_name\"] == nil",
             "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil and attributes[\"k8s_node_name\"] == nil",
             "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"])   where attributes[\"cluster\"] != nil and attributes[\"k8s_cluster_name\"] == nil",
@@ -231,6 +233,7 @@ data:
             // Explicitly set k8s_* labels on the datapoint to ensure they exist regardless of backend behavior
             "set(attributes[\"k8s_namespace_name\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
             "set(attributes[\"k8s_pod_name\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
+            "set(attributes[\"k8s_pod_ip\"],         resource.attributes[\"k8s.pod.ip\"])         where resource.attributes[\"k8s.pod.ip\"] != nil",
             "set(attributes[\"k8s_container_name\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
             "set(attributes[\"k8s_node_name\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
             "set(attributes[\"k8s_cluster_name\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
@@ -238,6 +241,7 @@ data:
             // Fallback: If resource attribute was missing (e.g. meta_level), copy existing legacy datapoint labels to k8s_* format
             "set(attributes[\"k8s_namespace_name\"], attributes[\"namespace\"]) where attributes[\"namespace\"] != nil and attributes[\"k8s_namespace_name\"] == nil",
             "set(attributes[\"k8s_pod_name\"],       attributes[\"pod\"])       where attributes[\"pod\"] != nil and attributes[\"k8s_pod_name\"] == nil",
+            "set(attributes[\"k8s_pod_ip\"],         attributes[\"pod_ip\"])    where attributes[\"pod_ip\"] != nil and attributes[\"k8s_pod_ip\"] == nil",
             "set(attributes[\"k8s_container_name\"], attributes[\"container\"]) where attributes[\"container\"] != nil and attributes[\"k8s_container_name\"] == nil",
             "set(attributes[\"k8s_node_name\"],      attributes[\"node\"])      where attributes[\"node\"] != nil and attributes[\"k8s_node_name\"] == nil",
             "set(attributes[\"k8s_cluster_name\"],   attributes[\"cluster\"])   where attributes[\"cluster\"] != nil and attributes[\"k8s_cluster_name\"] == nil",
@@ -277,9 +281,20 @@ data:
         }
       }
 
+      // 1.5 Cleanup (Drop misleading discovery labels for meta-level)
+      otelcol.processor.transform "cleanup" {
+        output { metrics = [otelcol.processor.transform.standardize_identity.input] }
+        metric_statements {
+          context = "datapoint"
+          statements = [
+            "delete_key(attributes, \"k8s_pod_ip\")",
+          ]
+        }
+      }
+
       // 1. Memory Limiter (OOM Protection)
       otelcol.processor.memory_limiter "default" {
-        output { metrics = [otelcol.processor.transform.standardize_identity.input] }
+        output { metrics = [otelcol.processor.transform.cleanup.input] }
         check_interval  = "1s"
         limit           = "3000MiB"
         spike_limit     = "500MiB"
