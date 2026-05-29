@@ -22,11 +22,6 @@ argo-cd:
       enabled: true
       serviceMonitor:
         enabled: true
-  server:
-    metrics:
-      enabled: true
-      serviceMonitor:
-        enabled: true
   repoServer:
     metrics:
       enabled: true
@@ -54,6 +49,10 @@ argo-cd:
   redisSecretInit:
     enabled: false
   server:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
     ingress:
       enabled: true
       ingressClassName: nginx
