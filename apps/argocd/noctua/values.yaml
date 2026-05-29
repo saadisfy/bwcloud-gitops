@@ -18,6 +18,8 @@ argo-cd:
   redis:
     exporter:
       enabled: true
+    metrics:
+      enabled: true
       serviceMonitor:
         enabled: true
   server:
