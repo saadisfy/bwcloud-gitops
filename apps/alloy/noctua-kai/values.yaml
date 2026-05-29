@@ -6,7 +6,7 @@ k8s-monitoring:
   destinations:
     alloy-gateway:
       type: otlp
-      url: "http://alloy-gateway.noctua-kai.svc.cluster.local:4318"
+      url: "http://alloy-gateway.alloy.svc.cluster.local:4318"
       protocol: http
       auth:
         type: none
