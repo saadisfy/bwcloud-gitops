@@ -63,6 +63,8 @@ alloy:
 
   service:
     enabled: true
+
+  alloy:
     extraPorts:
       - name: grpc-otlp
         port: 4317
@@ -73,7 +75,6 @@ alloy:
         targetPort: 4318
         protocol: TCP
 
-  alloy:
     configMap:
       create: true
       content: |-
