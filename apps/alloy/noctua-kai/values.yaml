@@ -12,24 +12,25 @@ k8s-monitoring:
       extraHeaders:
         X-Scope-OrgID: "1"
 
-  # Feature Enablement
+  # Feature Enablement (v4 Schema)
   clusterMetrics:
     enabled: true
     collector: alloy-metrics
+    kube-state-metrics:
+      enabled: true
   hostMetrics:
     enabled: true
     collector: alloy-node
-
-  # Telemetry services to deploy and scrape
-  metrics:
-    enabled: true
     node-exporter:
-      enabled: true
-    kube-state-metrics:
       enabled: true
 
   # Discover ServiceMonitors, PodMonitors, etc.
   prometheusOperatorObjects:
+    enabled: true
+    collector: alloy-metrics
+
+  # Discover Pods/Services via annotations
+  annotationAutodiscovery:
     enabled: true
     collector: alloy-metrics
 
@@ -38,11 +39,6 @@ k8s-monitoring:
       deploy: true
     node-exporter:
       deploy: true
-
-  # Discover Pods/Services via annotations
-  annotationAutodiscovery:
-    enabled: true
-    collector: alloy-metrics
 
   # Collector configuration
   collectors:
@@ -66,6 +62,9 @@ k8s-monitoring:
           }
     alloy-node:
       enabled: true
+      alloy:
+        clustering:
+          enabled: true
 
 # Keep the Gateway deployed but it will be unused in Stage 1
 alloy:
