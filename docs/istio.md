@@ -1,37 +1,48 @@
-# Istio auf diesem Cluster (kurz & konkret)
+# Istio auf diesem Cluster
 
-## Aktueller Stand im Repo
+## Aktueller Stand
 
-- Istio wird als Wrapper-Chart aus `base` + `istiod` deployed (`apps/istio/prod/Chart.yaml`).
-- Sidecar-Injection ist global **nicht** automatisch aktiv (`enableNamespacesByDefault: false` in `apps/istio/base/values.yaml`).
-- `ignoreDifferences` in `appsets/istio.yaml` ignoriert dynamische Webhook-Felder (`caBundle`, `failurePolicy`), damit Argo CD nicht wegen Runtime-Änderungen permanent drift meldet.
+- Istio wird als Wrapper-Chart aus `base` + `istiod` deployed (`apps/istio/noctua/Chart.yaml`).
+- **Ingress:** Der Cluster wurde von Nginx Ingress auf die moderne **Kubernetes Gateway API** mit Istio umgestellt.
+- **Gateway:** Ein zentrales `main-gateway` im Namespace `istio-system` verwaltet den eingehenden Traffic auf der öffentlichen IP `193.196.39.79`.
+- **TLS:** Ein Multi-Domain (SAN) Zertifikat (`main-gateway-tls`) sichert alle produktiven Hostnames ab.
 
-## Was zu einem lauffähigen Istio-Setup gehört
+---
 
-1. **Control Plane stabil betreiben**  
-   `istiod` muss dauerhaft healthy sein (inkl. Webhook-Validierung).
+## Architektur: Istio als Gateway (Gateway API)
 
-2. **Dataplane sauber anbinden**  
-   Namespace bewusst onboarden (z. B. `istio.io/rev=default` oder `istio-injection=enabled`).
+Anstelle der älteren Istio-spezifischen Ressourcen (`Gateway` und `VirtualService` im API `networking.istio.io`) nutzt dieser Cluster den neuen Industriestandard **Kubernetes Gateway API**.
 
-3. **Workloads neu starten**  
-   Nur neue/restartete Pods bekommen Sidecars; ohne Restart bleibt ein Mischzustand.
+### Kernkomponenten
+1.  **GatewayClass (`istio`)**: Definiert das Template für Gateways. Istio fungiert hier als Controller.
+2.  **Gateway (`main-gateway`)**: Die Infrastruktur-Instanz. Sobald diese Ressource erstellt wird, rollt Istio automatisch ein Envoy-Proxy Deployment (`main-gateway-istio`) und einen LoadBalancer-Service aus.
+3.  **HTTPRoute**: Beinhaltet die Routing-Logik. Diese Ressourcen liegen in den jeweiligen Anwendungs-Namespaces und binden sich per `parentRefs` an das zentrale Gateway. Dies ermöglicht eine saubere Trennung zwischen Infrastruktur (Gateway) und Applikations-Konfiguration (Route).
 
-4. **Sicherheits-/Netzwerk-Baseline festlegen**  
-   Mindestens entscheiden, ob zunächst permissive oder sofort strict mTLS gefahren wird.
+---
 
-5. **Ingress-Entscheidung treffen**  
-   Entweder nginx als Entry behalten (wie aktuell) oder auf Istio Ingress Gateway umstellen.
+## TLS, SNI und Zertifikats-Management
 
-6. **Ressourcen-Overhead einplanen**  
-   Jeder Pod erhält zusätzlich Envoy-Sidecar (CPU/RAM + etwas Latenz).
+### Das SNI-Prinzip (Server Name Indication)
+Da mehrere Domains (`argocd.saadisfy.me`, `grafana.saadisfy.me`, etc.) dieselbe IP und denselben Port (443) teilen, muss der Proxy beim TLS-Handshake wissen, welches Zertifikat er vorzeigen soll. Der Client sendet den Hostnamen im "Client Hello". 
 
-7. **Betriebschecks definieren**  
-   Sidecar-Injection, Proxy-Health und Service-Erreichbarkeit als feste Go-Live-Kriterien.
+**Wichtig:** Das Gateway muss entweder für jeden Host ein spezifisches Zertifikat hinterlegt haben oder ein Sammel-Zertifikat (SAN) nutzen. In diesem Setup nutzen wir ein **SAN-Zertifikat**, das alle benötigten Domains abdeckt, um Fehlkonfigurationen und "Mismatch"-Warnungen im Browser zu vermeiden.
 
-## Fokus-Beispiel: `opentelemetry-demo`
+### ACME-Challenges über Cert-Manager
+Die Zertifikate werden automatisch via Let's Encrypt (LE) über das ACME-Protokoll bezogen.
 
-- Namespace `opentelemetry-demo` onboarden (Injection aktivieren).
-- Demo-Workloads sauber neu ausrollen, damit alle Pods Sidecars haben.
-- Einstieg pragmatisch halten: erst Connectivity + Stabilität prüfen, danach mTLS/Routing-Policies schrittweise aktivieren.
-- Da aktuell kein Istio-Traffic-Management im Repo definiert ist (keine `VirtualService`/`DestinationRule`), bringt das erste Enable vor allem Service-Mesh-Transport + Telemetriepunkt, aber noch keine Canary/Advanced-Routing-Logik.
+1.  **Challenge-Typ:** Wir nutzen `HTTP-01`. LE fordert einen Beweis, dass uns die Domain gehört, indem ein Token unter `http://<domain>/.well-known/acme-challenge/<TOKEN>` bereitgestellt wird.
+2.  **Solver-Prozess:** Cert-Manager startet temporäre "Solver-Pods". 
+3.  **Routing:** Cert-Manager erstellt automatisch temporäre `HTTPRoutes` (oder Ingress-Ressourcen), um den Traffic für die Challenge-Pfade zum Solver-Pod zu leiten.
+4.  **RBAC:** Damit dies reibungslos funktioniert, benötigt Cert-Manager explizite Berechtigungen (`ClusterRole`), um `HTTPRoutes` im Gateway API Kontext zu erstellen und zu verwalten.
+
+---
+
+## Betrieb und Sidecar-Injection
+
+- Sidecar-Injection ist global **nicht** automatisch aktiv (`enableNamespacesByDefault: false`).
+- Namespaces müssen explizit per Label (z.B. `istio-injection=enabled`) onboarded werden.
+- Nur neu gestartete Pods erhalten den Envoy-Sidecar.
+
+### Fokus-Beispiel: `opentelemetry-demo`
+- Der Namespace ist für Injection vorbereitet.
+- Durch den Sidecar erhält die Demo automatisch mTLS-Verschlüsselung zwischen den Services und detaillierte Telemetriedaten (Metriken/Traces) direkt aus der Netzwerk-Ebene.
