@@ -16,12 +16,15 @@ k8s-monitoring:
   clusterMetrics:
     enabled: true
     collector: alloy-metrics
-    kube-state-metrics:
-      enabled: true
   hostMetrics:
     enabled: true
     collector: alloy-node
+
+  # Specific metrics to scrape
+  metrics:
     node-exporter:
+      enabled: true
+    kube-state-metrics:
       enabled: true
 
   # Discover ServiceMonitors, PodMonitors, etc.
@@ -44,22 +47,23 @@ k8s-monitoring:
   collectors:
     alloy-metrics:
       enabled: true
+      # Correct level for extraConfig in k8s-monitoring chart
+      extraConfig: |-
+        discovery.kubernetes "alloy" {
+          role = "pod"
+          selectors {
+            role = "pod"
+            label = "app.kubernetes.io/name=alloy-metrics"
+          }
+        }
+        prometheus.scrape "alloy" {
+          targets    = discovery.kubernetes.alloy.targets
+          forward_to = [prometheus.remote_write.mimir.receiver]
+          job_name   = "integrations/alloy"
+        }
       alloy:
         clustering:
           enabled: true
-        extraConfig: |-
-          discovery.kubernetes "alloy" {
-            role = "pod"
-            selectors {
-              role = "pod"
-              label = "app.kubernetes.io/name=alloy-metrics"
-            }
-          }
-          prometheus.scrape "alloy" {
-            targets    = discovery.kubernetes.alloy.targets
-            forward_to = [prometheus.remote_write.mimir.receiver]
-            job_name   = "integrations/alloy"
-          }
     alloy-node:
       enabled: true
       alloy:
