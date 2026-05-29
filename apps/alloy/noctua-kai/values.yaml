@@ -28,6 +28,11 @@ k8s-monitoring:
     kube-state-metrics:
       enabled: true
 
+  # Discover ServiceMonitors, PodMonitors, etc.
+  prometheusOperatorObjects:
+    enabled: true
+    collector: alloy-metrics
+
   telemetryServices:
     kube-state-metrics:
       deploy: true
