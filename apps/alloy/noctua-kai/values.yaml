@@ -118,11 +118,11 @@ alloy:
               "replace_pattern(attributes[\"k8s.pod.ip\"], \":\\\\d+$\", \"\") where attributes[\"k8s.pod.ip\"] != nil",
               "set(attributes[\"service.name\"], \"kube-state-metrics\") where attributes[\"service.name\"] == \"integrations/kubernetes/kube-state-metrics\"",
               "set(attributes[\"service.name\"], \"node-exporter\") where attributes[\"service.name\"] == \"integrations/node_exporter\"",
-              "set(attributes[\"service.name\"], \"kubelet\") where attributes[\"service.name\"] == \"integrations/kubernetes/cadvisor\"",
+              "set(attributes[\"service.name\"], \"cadvisor\") where attributes[\"service.name\"] == \"integrations/kubernetes/cadvisor\"",
               "set(attributes[\"service.name\"], \"kubelet\") where attributes[\"service.name\"] == \"integrations/kubernetes/kubelet\"",
               "set(attributes[\"job\"], \"kube-state-metrics\") where attributes[\"job\"] == \"integrations/kubernetes/kube-state-metrics\"",
               "set(attributes[\"job\"], \"node-exporter\") where attributes[\"job\"] == \"integrations/node_exporter\"",
-              "set(attributes[\"job\"], \"kubelet\") where attributes[\"job\"] == \"integrations/kubernetes/cadvisor\"",
+              "set(attributes[\"job\"], \"cadvisor\") where attributes[\"job\"] == \"integrations/kubernetes/cadvisor\"",
               "set(attributes[\"job\"], \"kubelet\") where attributes[\"job\"] == \"integrations/kubernetes/kubelet\"",
             ]
           }
@@ -165,7 +165,7 @@ alloy:
               "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
               "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
               "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
-              "set(attributes[\"metrics_path\"], \"/metrics/cadvisor\") where (resource.attributes[\"service.name\"] == \"kubelet\" or resource.attributes[\"job\"] == \"kubelet\") and IsMatch(metric.name, \"^container_\")",
+              "set(attributes[\"metrics_path\"], \"/metrics/cadvisor\") where (resource.attributes[\"service.name\"] == \"cadvisor\" or resource.attributes[\"job\"] == \"cadvisor\") and IsMatch(metric.name, \"^container_\")",
             ]
           }
         }
