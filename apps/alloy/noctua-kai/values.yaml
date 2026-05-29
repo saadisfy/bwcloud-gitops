@@ -157,6 +157,11 @@ alloy:
               "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
               "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
               "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
+              "set(attributes[\"metrics_path\"], \"/metrics/cadvisor\") where attributes[\"job\"] == \"integrations/kubernetes/cadvisor\"",
+              "set(attributes[\"job\"], \"kube-state-metrics\") where attributes[\"job\"] == \"integrations/kubernetes/kube-state-metrics\"",
+              "set(attributes[\"job\"], \"node-exporter\") where attributes[\"job\"] == \"integrations/node_exporter\"",
+              "set(attributes[\"job\"], \"kubelet\") where attributes[\"job\"] == \"integrations/kubernetes/cadvisor\"",
+              "set(attributes[\"job\"], \"kubelet\") where attributes[\"job\"] == \"integrations/kubernetes/kubelet\"",
             ]
           }
         }
