@@ -89,10 +89,11 @@ graph TD
 
     subgraph "Tier 2: Gateway (alloy-gateway)"
         Service -->|Ingest| Recv[otelcol.receiver.otlp.gateway]
-        Recv -->|1. Promote Meta| Transform1[otelcol.processor.transform.promote_meta]
-        Transform1 -->|2. Enrich Metadata| Enrich[otelcol.processor.k8sattributes.enrich]
-        Enrich -->|3. Dual Semantics| Transform2[otelcol.processor.transform.dual_semantics]
-        Transform2 -->|4. Batching| Batch[otelcol.processor.batch.default]
+        Recv -->|1. Group by Attributes| Group[otelcol.processor.groupbyattrs.group]
+        Group -->|2. Promote Meta| Transform1[otelcol.processor.transform.promote_meta]
+        Transform1 -->|3. Enrich Metadata| Enrich[otelcol.processor.k8sattributes.enrich]
+        Enrich -->|4. Dual Semantics| Transform2[otelcol.processor.transform.dual_semantics]
+        Transform2 -->|5. Batching| Batch[otelcol.processor.batch.default]
         Batch -->|Export OTLP HTTP| Mimir[Mimir Distributor :8080/otlp]
     end
 ```
@@ -104,23 +105,26 @@ The Gateway's configuration (`config.alloy`) implements the pipeline as follows:
 1. **`otelcol.receiver.otlp "gateway"`**
    Listens on `0.0.0.0:4318` for HTTP OTLP metrics exported from the Tier 1 agents.
 
-2. **`otelcol.processor.transform "promote_meta"`**
-   Before running `k8sattributes`, we promote metric labels to OTel resource attributes. This allows the enrichment step to associate metrics based on the target pod's IP or name rather than the forwarding agent's IP:
+2. **`otelcol.processor.groupbyattrs "group"`**
+   Because the Tier 1 agents scrape multiple targets and forward them in batches under a single OTel Resource (representing the forwarding agent itself), we must group the metrics back into separate resource blocks before processing them. This component groups metrics by `namespace`, `pod`, `k8s_pod_ip`, and `instance` and promotes these keys from datapoint attributes to resource attributes. This avoids cross-contamination of metadata.
+
+3. **`otelcol.processor.transform "promote_meta"`**
+   Before running `k8sattributes`, we promote metric labels to OTel resource attributes (now executing in context = `"resource"`). This allows the enrichment step to associate metrics based on the target pod's IP or name rather than the forwarding agent's IP:
    * Promotes `namespace` to `k8s.namespace.name`.
    * Promotes `pod` to `k8s.pod.name`.
    * Maps `k8s_pod_ip` or `instance` to `k8s.pod.ip`.
    * Runs a regex replacement (`replace_pattern`) to strip port suffixes (e.g. `:8080` or `:9100`) from the IP.
 
-3. **`otelcol.processor.k8sattributes "enrich"`**
+4. **`otelcol.processor.k8sattributes "enrich"`**
    Uses the API server connection to fetch cluster metadata (including UID, Node, Deployment, and Container name) based on the resource attributes (`k8s.pod.ip` or `k8s.pod.name`) promoted in the previous step.
 
-4. **`otelcol.processor.transform "dual_semantics"`**
+5. **`otelcol.processor.transform "dual_semantics"`**
    To ensure complete backwards-compatibility with upstream Prometheus dashboards and alerting rules, this step mirrors the enriched OTel resource attributes back to data point labels (e.g. `namespace`, `pod`, `container`, `node`, `cluster`).
 
-5. **`otelcol.processor.batch "default"`**
+6. **`otelcol.processor.batch "default"`**
    Batches outgoing metrics with a max size of `10,000` data points and a `10s` timeout for efficient transmission.
 
-6. **`otelcol.exporter.otlphttp "mimir"`**
+7. **`otelcol.exporter.otlphttp "mimir"`**
    Forwards the fully enriched, dual-semantic metrics to Mimir (`http://mimir-distributor.mimir.svc.cluster.local:8080/otlp`) using organization ID header `X-Scope-OrgID: 1`.
 
 ### Legacy Cleanup & Operational Stability
