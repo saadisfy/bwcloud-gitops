@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: alloy-self-monitoring
+  namespace: alloy
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: alloy-kai-alloy-metrics
+  endpoints:
+  - port: http-metrics
+    path: /metrics
+    interval: 60s
