@@ -16,7 +16,7 @@ argo-cd:
       serviceMonitor:
         enabled: true
   redis:
-    metrics:
+    exporter:
       enabled: true
       serviceMonitor:
         enabled: true
