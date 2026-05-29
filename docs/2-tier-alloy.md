@@ -72,3 +72,58 @@ The final stage bridges the gap between OTel resource attributes and Prometheus 
 *   **The Concept:** In addition to adding resource attributes, we introduce an extra step in the OTel processing pipeline to promote specific Kubernetes attributes (e.g., `k8s.namespace.name`, `k8s.pod.name`, `k8s.container.name`) back to metric labels (data resource attributes).
 *   **Use Case:** This is critical for cross-signal correlation between Mimir (Metrics), Tempo (Traces), and Loki (Logs). Certain legacy alerting rules or specialized panels query metric labels directly instead of OTel resource attributes. Promoting these select attributes back to metric labels enables robust, seamless cross-linking and drill-downs across the entire LGTM stack.
 
+---
+
+## 5. Final Implementation Details (Stage 2 & 3)
+
+The complete two-tier OTLP loopback architecture is deployed via the [noctua-kai](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/apps/alloy/noctua-kai/values.yaml) Helm chart.
+
+### Data Flow Diagram
+
+```mermaid
+graph TD
+    subgraph "Tier 1: Agents (noctua-kai)"
+        Scraped[Prometheus Scraped Metrics] -->|Convert to OTLP| Agent[Alloy Agent]
+        Agent -->|Export OTLP HTTP /v1/metrics| Service[alloy-gateway Service :4318]
+    end
+
+    subgraph "Tier 2: Gateway (alloy-gateway)"
+        Service -->|Ingest| Recv[otelcol.receiver.otlp.gateway]
+        Recv -->|1. Promote Meta| Transform1[otelcol.processor.transform.promote_meta]
+        Transform1 -->|2. Enrich Metadata| Enrich[otelcol.processor.k8sattributes.enrich]
+        Enrich -->|3. Dual Semantics| Transform2[otelcol.processor.transform.dual_semantics]
+        Transform2 -->|4. Batching| Batch[otelcol.processor.batch.default]
+        Batch -->|Export OTLP HTTP| Mimir[Mimir Distributor :8080/otlp]
+    end
+```
+
+### Gateway Pipeline Stages & Configuration
+
+The Gateway's configuration (`config.alloy`) implements the pipeline as follows:
+
+1. **`otelcol.receiver.otlp "gateway"`**
+   Listens on `0.0.0.0:4318` for HTTP OTLP metrics exported from the Tier 1 agents.
+
+2. **`otelcol.processor.transform "promote_meta"`**
+   Before running `k8sattributes`, we promote metric labels to OTel resource attributes. This allows the enrichment step to associate metrics based on the target pod's IP or name rather than the forwarding agent's IP:
+   * Promotes `namespace` to `k8s.namespace.name`.
+   * Promotes `pod` to `k8s.pod.name`.
+   * Maps `k8s_pod_ip` or `instance` to `k8s.pod.ip`.
+   * Runs a regex replacement (`replace_pattern`) to strip port suffixes (e.g. `:8080` or `:9100`) from the IP.
+
+3. **`otelcol.processor.k8sattributes "enrich"`**
+   Uses the API server connection to fetch cluster metadata (including UID, Node, Deployment, and Container name) based on the resource attributes (`k8s.pod.ip` or `k8s.pod.name`) promoted in the previous step.
+
+4. **`otelcol.processor.transform "dual_semantics"`**
+   To ensure complete backwards-compatibility with upstream Prometheus dashboards and alerting rules, this step mirrors the enriched OTel resource attributes back to data point labels (e.g. `namespace`, `pod`, `container`, `node`, `cluster`).
+
+5. **`otelcol.processor.batch "default"`**
+   Batches outgoing metrics with a max size of `10,000` data points and a `10s` timeout for efficient transmission.
+
+6. **`otelcol.exporter.otlphttp "mimir"`**
+   Forwards the fully enriched, dual-semantic metrics to Mimir (`http://mimir-distributor.mimir.svc.cluster.local:8080/otlp`) using organization ID header `X-Scope-OrgID: 1`.
+
+### Legacy Cleanup & Operational Stability
+During deployment, the legacy `alloy` Argo CD Application and its crashing `alloy-alloy-operator` deployment (which was stuck due to finalizers after its ServiceAccount was deleted) were completely pruned and deleted. Only the new `alloy-kai` components are running, and Mimir ingester out-of-order errors have successfully stabilized.
+
+
