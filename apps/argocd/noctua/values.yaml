@@ -3,6 +3,43 @@
 argo-cd:
   global:
     domain: argocd.saadisfy.me
+  
+  # Enable metrics and ServiceMonitors for all components
+  controller:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  dex:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  redis:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  server:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  repoServer:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  applicationSet:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  notifications:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
   # Der redis-secret-init Helm-Hook Job generiert beim Erst-Install den
   # `argocd-redis` Secret. Bei jedem Self-Sync danach läuft er erneut als
   # PreSync-Hook, hat `ttlSecondsAfterFinished: 60` und wird prompt vom
