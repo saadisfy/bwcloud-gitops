@@ -12,7 +12,7 @@ spec:
             namespace: alloy
   template:
     metadata:
-      name: alloy
+      name: alloy-kai
     spec:
       project: default
       source:
