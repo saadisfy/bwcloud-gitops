@@ -1,0 +1,54 @@
+groups:
+  - name: mimir_custom_alerts
+    rules:
+      - alert: MimirIngesterFlushQueueHigh
+        annotations:
+          message: "Mimir Ingester {{ $labels.pod }} has {{ $value }} series waiting to be flushed. This indicates disk/storage IO pressure."
+          summary: "Ingester flush queue is backing up"
+        expr: |
+          sum by (namespace, pod) (cortex_ingester_flush_queues_length) > 5000
+        for: 10m
+        labels:
+          severity: warning
+
+      - alert: MimirIngesterAppendLatencyHigh
+        annotations:
+          message: "Mimir Ingester {{ $labels.pod }} append latency is high ({{ printf \"%.2f\" $value }}s). WAL performance might be degraded."
+          summary: "Ingester append latency high"
+        expr: |
+          (
+            sum by (namespace, pod) (rate(cortex_ingester_ingest_duration_seconds_sum[5m]))
+            /
+            sum by (namespace, pod) (rate(cortex_ingester_ingest_duration_seconds_count[5m]))
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: MimirDataLossRatioHigh
+        annotations:
+          message: "Mimir is discarding {{ printf \"%.2f\" $value }}% of incoming samples in namespace {{ $labels.namespace }}."
+          summary: "Significant data loss detected"
+        expr: |
+          (
+            sum by (namespace) (rate(cortex_discarded_samples_total[5m]))
+            /
+            sum by (namespace) (rate(cortex_distributor_received_samples_total[5m]))
+          ) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+
+      - alert: MimirIngestionRateSaturation
+        annotations:
+          message: "Mimir ingestion rate is at {{ printf \"%.2f\" $value }}% of the configured limit."
+          summary: "Ingestion rate approaching limit"
+        expr: |
+          (
+            sum(rate(cortex_distributor_received_samples_total[2m]))
+            /
+            sum(cortex_distributor_ingestion_rate_limit)
+          ) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
