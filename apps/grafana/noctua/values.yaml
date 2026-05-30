@@ -103,10 +103,16 @@ grafanaOperatorCRs:
           - disableResolveMessage: false
             type: telegram
             settings:
-              # bottoken: Grafana expands $__env{} for this secure field natively (shows [REDACTED] in API)
-              bottoken: "$__env{GF_TELEGRAM_BOT_TOKEN}"
-              # chatid: plain settings field — Grafana does NOT expand $__env{} here, use literal value
+              # chatid is a plain settings field and is not sensitive.
               chatid: "462723448"
+            # valuesFrom injects the bot token from the Kubernetes Secret at operator reconciliation time,
+            # so the operator passes the actual token value to the Grafana API rather than a literal env var string.
+            valuesFrom:
+              - targetPath: "bottoken"
+                valueFrom:
+                  secretKeyRef:
+                    name: grafana-secrets
+                    key: GF_TELEGRAM_BOT_TOKEN
   notificationPolicies:
     - name: "root"
       spec:
