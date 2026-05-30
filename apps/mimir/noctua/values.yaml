@@ -1,5 +1,18 @@
 # Mimir prod stage overrides
 mimir-distributed:
+  global:
+    extraEnv:
+      - name: GF_ADMIN_USER
+        valueFrom:
+          secretKeyRef:
+            name: grafana-admin-credentials
+            key: admin-user
+      - name: GF_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: grafana-admin-credentials
+            key: admin-password
+
   mimir:
     structuredConfig:
       limits:
@@ -13,7 +26,10 @@ mimir-distributed:
         # so we use the EmptyDir storage volume mounted at /data instead.
         rule_path: /data/ruler-rules
         # Send alerts to Grafana's internal Alertmanager to manage notifications via Grafana Operator
-        alertmanager_url: "http://grafana.grafana.svc.cluster.local/api/prom/alertmanager"
+        alertmanager_url: "http://grafana.grafana.svc.cluster.local/api/alertmanager/grafana"
+        alertmanager_client:
+          basic_auth_username: "${GF_ADMIN_USER}"
+          basic_auth_password: "${GF_ADMIN_PASSWORD}"
       # local backend: read-only, reads standard Prometheus YAML directly from filesystem.
       # The ConfigMap (mimir-rules-bundle) is mounted via extraVolumeMounts at
       # /rules-storage/1/rules.yaml (tenantId=1, namespace=rules).
