@@ -103,8 +103,8 @@ grafanaOperatorCRs:
           - disableResolveMessage: false
             type: telegram
             settings:
-              bottoken: $__env{GF_TELEGRAM_BOT_TOKEN}
-              chatid: $__env{GF_TELEGRAM_CHAT_ID}
+              bottoken: "${GF_TELEGRAM_BOT_TOKEN}"
+              chatid: "${GF_TELEGRAM_CHAT_ID}"
   notificationPolicies:
     - name: "root"
       spec:
