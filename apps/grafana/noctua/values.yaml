@@ -102,7 +102,7 @@ grafanaOperatorCRs:
             rules:
               - uid: "mimir_alerts_forwarder_rule"
                 title: "Mimir Alerts Forwarder"
-                expr: 'ALERTS{alertstate="firing"}'
+                expr: 'label_replace(ALERTS{alertstate="firing"}, "mimir_alertname", "$1", "alertname", "(.*)")'
                 for: "1m"
                 threshold: 0
                 evalOperator: "gt"
@@ -111,8 +111,8 @@ grafanaOperatorCRs:
                 labels:
                   source: "mimir-ruler"
                 annotations:
-                  summary: "Mimir Alert Firing: {{ $labels.alertname }}"
-                  description: "An alert is firing in Mimir Ruler.\nAlertname: {{ $labels.alertname }}\nSeverity: {{ $labels.severity }}\nDetails: {{ $labels.description }}"
+                  summary: "Mimir Alert Firing: {{ $labels.mimir_alertname }}"
+                  description: "An alert is firing in Mimir Ruler.\nAlertname: {{ $labels.mimir_alertname }}\nSeverity: {{ $labels.severity }}\nNamespace: {{ $labels.namespace }}\nPod: {{ $labels.pod }}\nDeployment: {{ $labels.deployment }}"
               - uid: "test_always_firing_rule"
                 title: "Grafana Alerting Test"
                 expr: "vector(1)"
@@ -148,7 +148,7 @@ grafanaOperatorCRs:
       spec:
         route:
           receiver: "telegram-alerts"
-          group_by: ["alertname", "job"]
+          group_by: ["alertname", "mimir_alertname", "job"]
           group_wait: 30s
           group_interval: 5m
           repeat_interval: 4h
