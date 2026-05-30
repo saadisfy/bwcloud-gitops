@@ -99,18 +99,21 @@ grafanaOperatorCRs:
   contactPoints:
     - name: "telegram-alerts"
       spec:
-        # Top-level fields for compatibility
-        type: telegram
-        settings:
-          bottoken: "${GF_TELEGRAM_BOT_TOKEN}"
-          chatid: "${GF_TELEGRAM_CHAT_ID}"
         receivers:
           - name: "telegram-alerts"
             disableResolveMessage: false
             type: telegram
             settings:
-              bottoken: "${GF_TELEGRAM_BOT_TOKEN}"
-              chatid: "${GF_TELEGRAM_CHAT_ID}"
+              # chatid is a plain (non-secure) field — commit it directly.
+              chatid: "462723448"
+            # valuesFrom injects the bot token from the Kubernetes Secret at operator
+            # reconciliation time, keeping it out of Git and out of plain settings.
+            valuesFrom:
+              - targetPath: "settings.bottoken"
+                valueFrom:
+                  secretKeyRef:
+                    name: grafana-secrets
+                    key: GF_TELEGRAM_BOT_TOKEN
   notificationPolicies:
     - name: "root"
       spec:
