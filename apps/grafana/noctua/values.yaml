@@ -113,6 +113,19 @@ grafanaOperatorCRs:
                 annotations:
                   summary: "Mimir Alert Firing: {{ $labels.alertname }}"
                   description: "An alert is firing in Mimir Ruler.\nAlertname: {{ $labels.alertname }}\nSeverity: {{ $labels.severity }}\nDetails: {{ $labels.description }}"
+              - uid: "test_always_firing_rule"
+                title: "Grafana Alerting Test"
+                expr: "vector(1)"
+                for: "10s"
+                threshold: 0
+                evalOperator: "gt"
+                noDataState: "OK"
+                execErrState: "OK"
+                labels:
+                  severity: "warning"
+                annotations:
+                  summary: "Grafana Alerting is working!"
+                  description: "If you see this and receive it in Telegram, the complete Grafana Alerting notification pipeline is functional!"
   contactPoints:
     - name: "telegram-alerts"
       spec:
