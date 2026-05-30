@@ -21,10 +21,10 @@ grafana:
         hosts:
           - grafana.saadisfy.me
 
-  # Secrets (SSO, SMTP) are injected as env vars from the manually
+  # Secrets (SSO, SMTP, Telegram) are injected as env vars from the manually
   # applied Secret 0day-deployment-manifests/grafana-secrets.yaml (gitignored).
   # Reloader (podAnnotations in base/values.yaml) restarts the pod on change.
-  envFromSecret: grafana-github-oauth
+  envFromSecret: grafana-secrets
 
   grafana.ini:
     server:
