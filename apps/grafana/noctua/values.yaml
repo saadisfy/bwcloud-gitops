@@ -99,8 +99,14 @@ grafanaOperatorCRs:
   contactPoints:
     - name: "telegram-alerts"
       spec:
+        # Top-level fields for compatibility
+        type: telegram
+        settings:
+          bottoken: "${GF_TELEGRAM_BOT_TOKEN}"
+          chatid: "${GF_TELEGRAM_CHAT_ID}"
         receivers:
-          - disableResolveMessage: false
+          - name: "telegram-alerts"
+            disableResolveMessage: false
             type: telegram
             settings:
               bottoken: "${GF_TELEGRAM_BOT_TOKEN}"
