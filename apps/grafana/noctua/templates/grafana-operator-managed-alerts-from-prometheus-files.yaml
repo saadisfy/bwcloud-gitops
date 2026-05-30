@@ -45,7 +45,7 @@ spec:
 {{- if and (hasKey $rule "uid") (hasKey $rule "data") }}
 {{- toYaml (list $rule) | nindent 4 }}
 {{- else }}
-{{- $ruleUid := printf "mmr-%s" ((printf "%s|%s|%s|%s" $path $groupName ($rule.alert | default "") ($rule.expr | default "")) | sha256sum | trunc 20) }}
+{{- $ruleUid := printf "mmr-%s" ((printf "%s|%s|%s|%s|%s|%s" $path $groupName ($rule.alert | default "") ($rule.expr | default "") ($rule.for | default "") (toYaml ($rule.labels | default dict) | sha256sum)) | sha256sum | trunc 20) }}
     - uid: {{ $ruleUid | quote }}
       title: {{ $rule.alert | quote }}
       condition: B
