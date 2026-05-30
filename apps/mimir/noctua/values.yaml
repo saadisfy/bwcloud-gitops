@@ -12,7 +12,8 @@ mimir-distributed:
         # /tmp is read-only (readOnlyRootFilesystem=true on this container),
         # so we use the EmptyDir storage volume mounted at /data instead.
         rule_path: /data/ruler-rules
-        alertmanager_url: "http://mimir-alertmanager-headless.mimir.svc.cluster.local:8080/alertmanager"
+        # Send alerts to Grafana's internal Alertmanager to manage notifications via Grafana Operator
+        alertmanager_url: "http://grafana.grafana.svc.cluster.local/api/prom/alertmanager"
       # local backend: read-only, reads standard Prometheus YAML directly from filesystem.
       # The ConfigMap (mimir-rules-bundle) is mounted via extraVolumeMounts at
       # /rules-storage/1/rules.yaml (tenantId=1, namespace=rules).
