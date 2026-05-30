@@ -96,6 +96,23 @@ grafanaOperatorCRs:
     folders:
       - name: "infrastruktur"
         title: "Infrastruktur"
+        groups:
+          - name: "mimir-alerts-forwarder"
+            interval: "1m"
+            rules:
+              - uid: "mimir_alerts_forwarder_rule"
+                title: "Mimir Alerts Forwarder"
+                expr: 'ALERTS{alertstate="firing"}'
+                for: "1m"
+                threshold: 0
+                evalOperator: "gt"
+                noDataState: "OK"
+                execErrState: "OK"
+                labels:
+                  source: "mimir-ruler"
+                annotations:
+                  summary: "Mimir Alert Firing: {{ $labels.alertname }}"
+                  description: "An alert is firing in Mimir Ruler.\nAlertname: {{ $labels.alertname }}\nSeverity: {{ $labels.severity }}\nDetails: {{ $labels.description }}"
   contactPoints:
     - name: "telegram-alerts"
       spec:
