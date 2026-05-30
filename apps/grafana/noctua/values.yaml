@@ -100,8 +100,7 @@ grafanaOperatorCRs:
     - name: "telegram-alerts"
       spec:
         receivers:
-          - name: "telegram-alerts"
-            disableResolveMessage: false
+          - disableResolveMessage: false
             type: telegram
             settings:
               # chatid is a plain (non-secure) field — commit it directly.
