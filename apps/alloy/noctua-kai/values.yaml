@@ -186,6 +186,10 @@ k8s-monitoring:
     destinations:
       - mimir
 
+  alloy-operator:
+    waitForAlloyRemoval:
+      enabled: false
+
   telemetryServices:
     kube-state-metrics:
       deploy: true
