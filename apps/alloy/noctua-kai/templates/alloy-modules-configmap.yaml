@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-modules
+data:
+  k8s-enrich.alloy: |
+    // ─────────────────────────────────────────────────────────────────────
+    // SINGLE SOURCE OF TRUTH: K8s-Anreicherung für den Prometheus-Pull-Pfad
+    //
+    // Genutzt von:   alloy-metrics und alloy-node via import.file
+    // NICHT nutzbar in:
+    //   - replaceComponent.content  (River-Import nicht erlaubt in Component-Body)
+    //   - applicationObservability.metrics.transforms  (YAML, kein River)
+    // → Diese beiden müssen manuell mit den statements hier synchron gehalten werden.
+    // ─────────────────────────────────────────────────────────────────────
+
+    declare "metrics_enrichment" {
+      // Kapselt k8sattributes (IP-Lookup für Prometheus)
+      //
+      // HINWEIS: Die dual_semantics-Statements (Promotion von Resource Attributes zu
+      // Datenpunkt-Labels) werden jetzt global in values.yaml unter destinations.mimir
+      // gepflegt, um eine doppelte Pflege zu vermeiden.
+
+      argument "output" { optional = false }
+
+      // Exportiert den Eingang von k8sattributes, damit promote_meta direkt verdrahten kann.
+      export "input" {
+        value = otelcol.processor.k8sattributes.enrich.input
+      }
+
+      otelcol.processor.k8sattributes "enrich" {
+        // Lookup via Pod-IP: Prometheus kennt nur IPs, keine UIDs.
+        // Für Logs (pod_logs replaceComponent) wird stattdessen k8s.pod.uid genutzt.
+        output { metrics = [argument.output.value] }
+        extract {
+          metadata = [
+            {{- range .Values.customConfig.metadata }}
+            {{ . | quote }},
+            {{- end }}
+          ]
+          deployment_name_from_replicaset = true
+          label {
+            tag_name = "app_kubernetes_io_name"
+            key      = "app.kubernetes.io/name"
+            from     = "pod"
+          }
+        }
+        pod_association { source { from = "resource_attribute" name = "k8s.pod.ip"   } }
+        pod_association { source { from = "resource_attribute" name = "k8s.pod.name" } }
+        pod_association { source { from = "connection" } }
+      }
+    }

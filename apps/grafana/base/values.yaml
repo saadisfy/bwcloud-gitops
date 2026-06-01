@@ -41,6 +41,11 @@ grafana:
             httpHeaderName1: X-Scope-OrgID
             manageAlerts: true
             alertmanagerUid: mimir-am
+            exemplarTraceIdDestinations:
+              - datasourceUid: tempo
+                name: traceID
+              - datasourceUid: tempo
+                name: trace_id
           secureJsonData:
             httpHeaderValue1: "1"
         - name: Loki
@@ -48,6 +53,12 @@ grafana:
           access: proxy
           uid: loki
           url: http://loki.loki.svc.cluster.local:3100
+          jsonData:
+            derivedFields:
+              - datasourceUid: tempo
+                matcherRegex: "(?:traceID|trace_id|traceId)[:=]\\s*([a-fA-F0-9]+)"
+                name: TraceID
+                url: "${__value.raw}"
         - name: Tempo
           type: tempo
           access: proxy

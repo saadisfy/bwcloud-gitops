@@ -13,7 +13,56 @@ A fundamental requirement of our Two-Tier Observability architecture is that **A
 
 ---
 
-## 2. Core Requirement: Minimal Additional Alloy Configuration
+## 2. Hard Requirement: Single Point of Configuration für Pipeline-Logik
+
+Jede Pipeline-Logik (k8s-Metadaten, Label-Mapping, Enrichment) darf **nur an einer einzigen Stelle definiert sein**. Änderungen an z. B. der `metadata`-Liste oder den `dual_semantics`-Statements müssen an exakt einer Stelle gemacht werden können — ohne Risiko, eine zweite Kopie zu vergessen und damit inkonsistente Labels zwischen Loki und Mimir zu produzieren.
+
+### Warum das kritisch ist
+
+Der gleiche ArgoCD-Pod wird sowohl über den Prometheus-Pull-Pfad (Metrics) als auch über den OTel-Push-Pfad (Logs) erfasst. Wenn `namespace`, `pod`, `container` oder `deployment` in beiden Pipelines nicht identisch definiert sind, entstehen **korrelationsunfähige Daten**: man kann in Grafana nicht mehr vom Metric-Panel direkt zu den Logs dieses Pods drilldownen.
+
+### Umsetzung: River-Module als Single Source of Truth
+
+Die `k8sattributes`- und `dual_semantics`-Logik ist in einer dedizierten Alloy-Modul-Datei gekapselt:
+
+```
+apps/alloy/noctua-kai/templates/alloy-modules-configmap.yaml
+  └── k8s-enrich.alloy
+        └── declare "metrics_enrichment" { ... }
+              ├── otelcol.processor.k8sattributes "enrich"   ← metadata-Liste hier pflegen
+              └── otelcol.processor.transform "dual_semantics" ← statements hier pflegen
+```
+
+Beide Collectors (`alloy-metrics` und `alloy-node`) importieren dieses Modul via `import.file` in ihrem `extraConfig`. Eine Änderung an der Modul-Datei wirkt automatisch für beide.
+
+### Single Source of Truth & Reduzierte Duplikation
+
+Um die Anzahl der Stellen zu minimieren, an denen dieselben Listen gepflegt werden müssen, haben wir die Konfiguration wie folgt vereinfacht:
+
+1. **Globale Dual-Semantics:** Die `dual_semantics`-Transformationen (Promotion von Resource-Attributen zu Datenpunkt-Labels wie `namespace`, `pod` etc.) wurden komplett aus dem River-Modul (`k8s-enrich.alloy`) und der `applicationObservability`-Konfiguration entfernt. Sie sind nun **zentral an einer einzigen Stelle** in `values.yaml` unter `k8s-monitoring.destinations.mimir.processors.transform.metrics.datapoint` definiert. Da alle Metrik-Pfade (Scraped Prometheus und OTLP App-Metriken) vor dem Export über diese Destination laufen, greift die Transformation automatisch für alle Metriken konsistent.
+2. **Dynamische Metadaten-Listen:** Die Liste der zu extrahierenden Kubernetes-Metadaten ist primär in `values.yaml` unter `customConfig.metadata` gepflegt. Das River-Modul `k8s-enrich.alloy` (`templates/alloy-modules-configmap.yaml`) rendert diese Liste dynamisch mittels Helm-Templating.
+
+### Bekannte unvermeidliche Kopien (und warum)
+
+Es gibt nur noch eine verbleibende Stelle, die manuell synchron gehalten werden muss:
+
+| Stelle | Grund |
+|---|---|
+| `replaceComponent` → `pod_logs` → `extract.metadata` | `content:` ist ein opaker River-String-Block innerhalb der `values.yaml`; Helm-Templates können diesen Wert nicht dynamisch interpolieren, da `values.yaml` vor dem Rendering geparst wird. |
+
+### Regel für zukünftige Änderungen
+
+> Wenn du ein neues Metadaten-Feld (z. B. `k8s.replicaset.name`) hinzufügen möchtest:
+> 1. Trage es in `values.yaml` unter `customConfig.metadata` ein (wird automatisch ins River-Modul für Metrics gerendert).
+> 2. Ergänze es in `values.yaml` in der `metadata`-Liste unter `replaceComponent` → `pod_logs` (für Loki Logs).
+> 
+> Wenn du ein neues Label-Mapping hinzufügen möchtest:
+> 1. Trage das Statement in `values.yaml` unter `k8s-monitoring.destinations.mimir.processors.transform.metrics.datapoint` ein.
+> Es greift sofort für alle Metrikquellen (Metrics und Application Observability).
+
+---
+
+## 3. Core Requirement: Minimal Additional Alloy Configuration
 
 To keep the pipeline maintainable and avoid deploying additional infrastructure, all custom OTel processing (metrics enrichment, metadata lookup, and label mapping) must be kept to a minimum and executed **inline within the existing collectors (`alloy-metrics` and `alloy-node`)** rather than spinning up a separate, dedicated `alloy-gateway` deployment.
 

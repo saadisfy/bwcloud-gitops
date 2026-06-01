@@ -1,8 +1,26 @@
+customConfig:
+  metadata:
+    - "k8s.namespace.name"
+    - "k8s.pod.name"
+    - "k8s.pod.uid"
+    - "k8s.node.name"
+    - "k8s.container.name"
+    - "k8s.deployment.name"
+    - "k8s.statefulset.name"
+    - "k8s.daemonset.name"
+    - "k8s.cronjob.name"
+    - "k8s.job.name"
+
 k8s-monitoring:
   cluster:
     name: "prod-bwcloud"
 
   # Intercept chart-generated components and customize their behavior
+  # NOTE: replaceComponent überschreibt chart-interne Alloy-Komponenten.
+  # pod_logs (logs) und enrich (metrics) sind BEWUSST zwei separate k8sattributes-Instanzen:
+  #   - pod_logs:  Lookup via k8s.pod.uid  → OTel-Collector kennt die UID direkt
+  #   - enrich:    Lookup via k8s.pod.ip   → Prometheus liefert nur IPs, keine UIDs
+  # extract.metadata ist in beiden IDENTISCH → gleiche Labels für denselben Pod in Loki und Mimir.
   replaceComponent:
     - type: otelcol.receiver.prometheus
       name: mimir
@@ -22,30 +40,40 @@ k8s-monitoring:
         }
         extract {
           otel_annotations = false
+          // Vollständige Metadaten — identisch mit enrich (metrics), damit derselbe Pod
+          // in Loki und Mimir exakt dieselben Labels bekommt.
+          // Nur der pod_association-Lookup unterscheidet sich (uid hier vs. ip dort).
           metadata = [
+            "k8s.namespace.name",
+            "k8s.pod.name",
+            "k8s.pod.uid",
+            "k8s.node.name",
+            "k8s.container.name",
             "k8s.deployment.name",
             "k8s.statefulset.name",
             "k8s.daemonset.name",
             "k8s.cronjob.name",
             "k8s.job.name",
-            "k8s.node.name",
           ]
+          deployment_name_from_replicaset = true
           annotation {
             key_regex = "resource.opentelemetry.io/(.*)"
             tag_name  = "$1"
             from      = "pod"
           }
+          // Log-spezifisch: steuert ob Pod-Logs gesammelt werden (→ filter weiter unten)
           annotation {
             tag_name = "logs.grafana.com/pods.enabled"
             key      = "logs.grafana.com/pods.enabled"
             from     = "pod"
           }
-          // Dynamically detect any OTel Operator inject annotation and flag it as otel_injected
+          // Log-spezifisch: erkennt OTel-Operator Injection → gefilterte Pods
           annotation {
             key_regex = "instrumentation\\.opentelemetry\\.io/inject-.*"
             tag_name  = "otel_injected"
             from      = "pod"
           }
+          // Gemeinsam mit enrich: app-Name für Dashboard-Queries
           label {
             tag_name = "app_kubernetes_io_name"
             key      = "app.kubernetes.io/name"
@@ -62,10 +90,12 @@ k8s-monitoring:
         error_mode = "ignore"
         logs {
           log_record = [
-            `resource.attributes["logs.grafana.com/pods.enabled"] == "false"`,
-            `resource.attributes["logs.grafana.com/pods.enabled"] == "no"`,
-            `resource.attributes["logs.grafana.com/pods.enabled"] == "skip"`,
-            // Auto-detect OTel Operator auto-instrumentation injection annotations
+            // opt-out via annotation deaktiviert: wir wollen keine manuelle Aussteuerung pro Pod.
+            // Bei Bedarf wieder aktivieren:
+            // `resource.attributes["logs.grafana.com/pods.enabled"] == "false"`,
+            // `resource.attributes["logs.grafana.com/pods.enabled"] == "no"`,
+            // `resource.attributes["logs.grafana.com/pods.enabled"] == "skip"`,
+            // OTel-Operator injizierte Pods herausfiltern: Logs kommen bereits via OTLP rein
             `resource.attributes["otel_injected"] != nil`,
           ]
         }
@@ -79,46 +109,49 @@ k8s-monitoring:
       type: otlp
       url: "http://loki-gateway.loki.svc.cluster.local/otlp"
       protocol: http
-      auth:
-        type: none
+#      auth:  # default (type: none)
       tls:
         insecure: true
       logs:
         enabled: true
       metrics:
-        enabled: false
+        enabled: false  # override: loki ist logs-only
       traces:
-        enabled: false
+        enabled: false  # override: loki ist logs-only
     mimir:
       type: otlp
       url: "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
       protocol: http
-      auth:
-        type: none
       tls:
         insecure: true
       extraHeaders:
         X-Scope-OrgID: "1"
-      metrics:
-        enabled: true
       logs:
         enabled: false
       traces:
         enabled: false
+      processors:
+        transform:
+          metrics:
+            datapoint:
+              - "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil"
+              - "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil"
+              - "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil"
+              - "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil"
+              - "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil"
+              - "set(attributes[\"job\"],       resource.attributes[\"service.name\"])       where resource.attributes[\"service.name\"] != nil and attributes[\"job\"] == nil"
+              - "set(attributes[\"instance\"],  resource.attributes[\"service.instance.id\"]) where resource.attributes[\"service.instance.id\"] != nil and attributes[\"instance\"] == nil"
+              - "set(attributes[\"instance\"],  resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"instance\"] == nil"
+              - "set(attributes[\"metrics_path\"], \"/metrics/cadvisor\") where (resource.attributes[\"service.name\"] == \"cadvisor\" or resource.attributes[\"job\"] == \"cadvisor\") and IsMatch(metric.name, \"^container_\")"
     tempo:
       type: otlp
       url: "http://tempo.tempo.svc.cluster.local:4317"
-      protocol: grpc
-      auth:
-        type: none
       tls:
         insecure: true
       metrics:
         enabled: false
       logs:
         enabled: false
-      traces:
-        enabled: true
 
   # Feature Enablement
   clusterMetrics:
@@ -135,8 +168,6 @@ k8s-monitoring:
       - mimir
     linuxHosts:
       enabled: true
-  podLogsViaLoki:
-    enabled: false
   # Chart sammelt Logs, reichert nativ mit k8s Resource Attributes an,
   # und schickt direkt via OTLP/HTTP zu Loki — kein Gateway nötig
   podLogsViaOpenTelemetry:
@@ -144,7 +175,6 @@ k8s-monitoring:
     collector: alloy-node
     destinations:
       - loki-otlp
-    annotations: {}
   applicationObservability:
     enabled: true
     collector: alloy-node
@@ -154,18 +184,6 @@ k8s-monitoring:
           enabled: true
         http:
           enabled: true
-    metrics:
-      enabled: true
-      transforms:
-        datapoint:
-          - "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil"
-          - "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil"
-          - "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil"
-          - "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil"
-          - "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil"
-          - "set(attributes[\"job\"],       resource.attributes[\"service.name\"])       where resource.attributes[\"service.name\"] != nil and attributes[\"job\"] == nil"
-          - "set(attributes[\"instance\"],  resource.attributes[\"service.instance.id\"]) where resource.attributes[\"service.instance.id\"] != nil and attributes[\"instance\"] == nil"
-          - "set(attributes[\"instance\"],  resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"instance\"] == nil"
 
   # Discover ServiceMonitors, PodMonitors, etc.
   prometheusOperatorObjects:
@@ -182,7 +200,6 @@ k8s-monitoring:
       - mimir
 
   selfReporting:
-    enabled: true
     destinations:
       - mimir
 
@@ -203,15 +220,28 @@ k8s-monitoring:
       presets: [clustered]
       includeDestinations:
         - mimir
+      alloy:
+        extraVolumes:
+          - name: alloy-modules
+            configMap:
+              name: alloy-modules
+        extraVolumeMounts:
+          - name: alloy-modules
+            mountPath: /etc/alloy/modules
+            readOnly: true
       extraConfig: &metricsPipeline |
-        // ─────────────────────────────────────────────────────────────────────
-        // METRICS ENRICHMENT PIPELINE
-        // Prometheus-Labels → OTel Resource Attributes → k8sattributes → Mimir
-        // ─────────────────────────────────────────────────────────────────────
+        // k8sattributes + dual_semantics kommen aus dem Modul (single source of truth).
+        // Änderungen → templates/alloy-modules-configmap.yaml
+        import.file "enrich" {
+          filename = "/etc/alloy/modules/k8s-enrich.alloy"
+        }
 
-        // 1. GROUPBYATTRS: Gruppiert Metriken nach Pod und Namespace in getrennte Batches.
-        // Warum: In OTel werden Daten in Batches verarbeitet. Ohne Gruppierung würden Metriken
-        // verschiedener Pods vermischt und k8sattributes würde falsche Zuordnungen treffen.
+        enrich.metrics_enrichment "main" {
+          output = otelcol.processor.attributes.mimir.input
+        }
+
+        // GROUPBYATTRS: Gruppiert Prometheus-Metriken nach Pod/Namespace in getrennte Batches,
+        // damit k8sattributes (im Modul) korrekte Pro-Pod-Zuordnungen treffen kann.
         otelcol.processor.groupbyattrs "group" {
           keys = ["namespace", "pod", "k8s_pod_ip", "instance"]
           output {
@@ -219,12 +249,12 @@ k8s-monitoring:
           }
         }
 
-        // 2. TRANSFORM (promote_meta): Kopiert Prometheus-Labels in OTel-Resource-Attribute.
-        // Warum: k8sattributes benötigt OTel-Resource-Attribute (wie k8s.pod.ip) für den Lookup.
-        // IP-Fallback: Wir nutzen bevorzugt k8s_pod_ip, andernfalls instance (wo wir den Port :8080 abschneiden).
+        // TRANSFORM (promote_meta): Hebt Prometheus-Labels zu OTel-Resource-Attributes hoch
+        // und normalisiert service.name/job für bekannte Integrations-Prefixes.
+        // Notwendig weil k8sattributes (im Modul) OTel-Resource-Attributes für den IP-Lookup braucht.
         otelcol.processor.transform "promote_meta" {
           output {
-            metrics = [otelcol.processor.k8sattributes.enrich.input]
+            metrics = [enrich.metrics_enrichment.main.exports.input]
           }
           metric_statements {
             context = "resource"
@@ -255,63 +285,17 @@ k8s-monitoring:
           }
         }
 
-        // 3. K8SATTRIBUTES (enrich): Fragt K8s-API ab und reichert Metadaten für die IP an.
-        // Warum: Fragt den K8s-API-Server nach echten Metadaten (z.B. Deployment-Name, Container-Name, Pod-UID)
-        // basierend auf der k8s.pod.ip/connection und speichert sie als OTel-Resource-Attribute.
-        otelcol.processor.k8sattributes "enrich" {
-          output {
-            metrics = [otelcol.processor.transform.dual_semantics.input]
-          }
-          extract {
-            metadata = ["k8s.namespace.name", "k8s.pod.name", "k8s.pod.uid", "k8s.node.name", "k8s.deployment.name", "k8s.container.name"]
-            deployment_name_from_replicaset = true
-          }
-          pod_association {
-            source {
-              from = "resource_attribute"
-              name = "k8s.pod.ip"
-            }
-          }
-          pod_association {
-            source {
-              from = "resource_attribute"
-              name = "k8s.pod.name"
-            }
-          }
-          pod_association {
-            source {
-              from = "connection"
-            }
-          }
-        }
-
-        // 4. TRANSFORM (dual_semantics): Kopiert neu gewonnene K8s-Metadaten zurück auf Datenpunkt-Labels.
-        // Warum: Ermöglicht die Abfrage über klassische Prometheus-Metrik-Labels (namespace, pod, container, node, cluster, job, instance)
-        // in existierenden Grafana-Dashboards, da OTLP-Pushed-Metrics diese sonst auf Datenpunktebene nicht besitzen.
-        otelcol.processor.transform "dual_semantics" {
-          error_mode = "ignore"
-          output {
-            metrics = [otelcol.processor.attributes.mimir.input]
-          }
-          metric_statements {
-            context = "datapoint"
-            statements = [
-              "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
-              "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
-              "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
-              "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
-              "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
-              "set(attributes[\"job\"],       resource.attributes[\"service.name\"])       where resource.attributes[\"service.name\"] != nil and attributes[\"job\"] == nil",
-              "set(attributes[\"instance\"],  resource.attributes[\"service.instance.id\"]) where resource.attributes[\"service.instance.id\"] != nil and attributes[\"instance\"] == nil",
-              "set(attributes[\"instance\"],  resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"instance\"] == nil",
-              "set(attributes[\"metrics_path\"], \"/metrics/cadvisor\") where (resource.attributes[\"service.name\"] == \"cadvisor\" or resource.attributes[\"job\"] == \"cadvisor\") and IsMatch(metric.name, \"^container_\")",
-            ]
-          }
-        }
-
     alloy-node:
       enabled: true
       presets: [daemonset, clustered, filesystem-log-reader]
       alloy:
         stabilityLevel: public-preview
+        extraVolumes:
+          - name: alloy-modules
+            configMap:
+              name: alloy-modules
+        extraVolumeMounts:
+          - name: alloy-modules
+            mountPath: /etc/alloy/modules
+            readOnly: true
       extraConfig: *metricsPipeline

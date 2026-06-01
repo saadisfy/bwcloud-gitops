@@ -22,8 +22,15 @@ spec:
           X-Scope-OrgID: "1"
         tls:
           insecure: true
+      otlp/tempo:
+        endpoint: tempo.tempo.svc.cluster.local:4317
+        tls:
+          insecure: true
     service:
       pipelines:
         metrics:
           receivers: [otlp]
           exporters: [otlphttp]
+        traces:
+          receivers: [otlp]
+          exporters: [otlp/tempo]
