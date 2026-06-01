@@ -2,13 +2,58 @@ k8s-monitoring:
   cluster:
     name: "prod-bwcloud"
 
-  # Intercept chart-generated mimir prometheus receiver and route it to our enrichment pipeline
+  # Intercept chart-generated components and customize their behavior
   replaceComponent:
     - type: otelcol.receiver.prometheus
       name: mimir
       content: |
         output {
           metrics = [otelcol.processor.groupbyattrs.group.input]
+        }
+    - type: otelcol.processor.k8sattributes
+      name: pod_logs
+      module: pod_logs_via_opentelemetry
+      content: |
+        pod_association {
+          source {
+            from = "resource_attribute"
+            name = "k8s.pod.uid"
+          }
+        }
+        extract {
+          otel_annotations = false
+          metadata = [
+            "k8s.deployment.name",
+            "k8s.statefulset.name",
+            "k8s.daemonset.name",
+            "k8s.cronjob.name",
+            "k8s.job.name",
+            "k8s.node.name",
+          ]
+          annotation {
+            key_regex = "resource.opentelemetry.io/(.*)"
+            tag_name  = "$1"
+            from      = "pod"
+          }
+          annotation {
+            tag_name = "logs.grafana.com/pods.enabled"
+            key      = "logs.grafana.com/pods.enabled"
+            from     = "pod"
+          }
+          // Dynamically detect any OTel Operator inject annotation and flag it as otel_injected
+          annotation {
+            key_regex = "instrumentation\\.opentelemetry\\.io/inject-.*"
+            tag_name  = "otel_injected"
+            from      = "pod"
+          }
+          label {
+            tag_name = "app_kubernetes_io_name"
+            key      = "app.kubernetes.io/name"
+            from     = "pod"
+          }
+        }
+        output {
+          logs = [otelcol.processor.filter.pod_logs.input]
         }
     - type: otelcol.processor.filter
       name: pod_logs
@@ -21,12 +66,7 @@ k8s-monitoring:
             `resource.attributes["logs.grafana.com/pods.enabled"] == "no"`,
             `resource.attributes["logs.grafana.com/pods.enabled"] == "skip"`,
             // Auto-detect OTel Operator auto-instrumentation injection annotations
-            `resource.attributes["otel_inject_java"] != nil`,
-            `resource.attributes["otel_inject_nodejs"] != nil`,
-            `resource.attributes["otel_inject_python"] != nil`,
-            `resource.attributes["otel_inject_go"] != nil`,
-            `resource.attributes["otel_inject_dotnet"] != nil`,
-            `resource.attributes["otel_inject_sdk"] != nil`,
+            `resource.attributes["otel_injected"] != nil`,
           ]
         }
         output {
@@ -104,13 +144,7 @@ k8s-monitoring:
     collector: alloy-node
     destinations:
       - loki-otlp
-    annotations:
-      otel_inject_java: "instrumentation.opentelemetry.io/inject-java"
-      otel_inject_nodejs: "instrumentation.opentelemetry.io/inject-nodejs"
-      otel_inject_python: "instrumentation.opentelemetry.io/inject-python"
-      otel_inject_go: "instrumentation.opentelemetry.io/inject-go"
-      otel_inject_dotnet: "instrumentation.opentelemetry.io/inject-dotnet"
-      otel_inject_sdk: "instrumentation.opentelemetry.io/inject-sdk"
+    annotations: {}
   applicationObservability:
     enabled: true
     collector: alloy-node
