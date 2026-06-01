@@ -173,56 +173,50 @@ spec:
 
 ---
 
-## 2. Architekturentscheidung
+## 2. Architekturentscheidung: Die zwei Hauptarchitekturen
 
-### 2.1 Evaluierte Optionen
+Für die Verwaltung und Bereitstellung von Alerts und Benachrichtigungen gibt es zwei etablierte Hauptpfade:
 
-#### Option 1: Mimir Ruler + Mimir Alertmanager (abgelehnt)
+### 2.1 Variante A: Pur Grafana Operator (Grafana-only Alerting)
 
-Prometheus-Regeln → Mimir Ruler → Mimir Alertmanager → Notification.
+In dieser Architektur wird die komplette Alerting-Konfiguration über den **Grafana Operator** abgewickelt. Der interne Grafana Alertmanager übernimmt das Benachrichtigungsrouting.
 
-**Blocker:**
-- Grafana Operator kann Mimir Alertmanager nicht konfigurieren (keine API für externe AM)
-- mimirtool-Job oder Crossplane Mimir Provider nötig — beides inoffiziell oder eigener Controller
-- Split-Dependencies: Dashboards via Grafana Operator, Alerts via mimirtool, Notification via separatem Controller
+- **Datenfluss:** Grafana-Engine evaluiert Regeln via PromQL → Interner Grafana Alertmanager → Benachrichtigung.
+- **Bereitstellung:** 
+  * Dashboards, Contact Points und Notification Policies werden direkt als Grafana-Operator-CRDs deklariert.
+  * Prometheus-basierte Rule-Dateien (z. B. Mixins) müssen entweder über Helm-Templates **on-the-fly in `GrafanaAlertRuleGroup` CRs konvertiert** oder manuell in der UI erstellt/umgewandelt werden.
+- **Vorteile:**
+  * Einfaches Setup mit nur einer einzigen Dependency (Grafana Operator).
+  * Direkte UI-Sichtbarkeit und Editierbarkeit (falls Berechtigungen vorhanden).
+- **Nachteile:**
+  * Hoher Performance-Overhead auf der Grafana-Instanz, da Grafana alle Regeln selbst auswerten muss.
+  * Keine native Mehrmandantenfähigkeit (Tenant-Isolation) im integrierten Alertmanager für getrennte Notification-Rules.
 
-#### Option 2: Mimir Ruler + Grafana Alertmanager (abgelehnt)
+### 2.2 Variante B: Hybrid-Modell mit Crossplane (Mimir Ruler + Alertmanager) — *Aktuell Gewählt*
 
-Prometheus-Regeln → Mimir Ruler → Grafana Alertmanager als Forwarding-Ziel.
+In dieser Architektur wird der Grafana Operator **ausschließlich** für Dashboards und Ordnerstrukturen genutzt. Das komplette Alerting und Routing läuft direkt in Mimir (Ruler und Alertmanager) und wird deklarativ via **Crossplane** provisioniert.
 
-**Blocker:**
-- Grafana Alertmanager ist kein offiziell supported Ziel für Mimir Ruler — Kompatibilität nicht garantiert
+- **Datenfluss:** Mimir Ruler evaluiert Regeln lokal in der Datenquelle → Mimir Alertmanager (extern) → Benachrichtigung.
+- **Bereitstellung:**
+  * Dashboards und Folders laufen via Grafana Operator.
+  * Mimir Rules und Recording Rules sowie die Alertmanager Config (Policies & Contact Points) werden via Crossplane Mimir Provider (`Rules` und `Config` CRs) direkt über die Mimir HTTP APIs provisioniert.
+  * In Grafana wird die interne Alerting-Engine deaktiviert bzw. so konfiguriert (`unified_alerting.alertmanagers_choice: external`), dass sie alle in der UI erstellten Alerts direkt an den externen Mimir Alertmanager weiterleitet (`handleGrafanaManagedAlerts: true`).
+- **Vorteile:**
+  * Maximale Performance und Skalierbarkeit, da Regeln direkt in Mimir (verteilt im Ingest-Pfad/Ruler-Ring) evaluiert werden.
+  * Native Mehrmandantenfähigkeit (Tenant-Isolation pro Namespace/Kunde).
+  * Saubere Trennung der Zuständigkeiten (Grafana = Visualisierung, Mimir = Storage & Alerting).
+- **Nachteile:**
+  * Zusätzliche Komponenten-Abhängigkeit (Crossplane und der entsprechende Crossplane-Mimir-Provider).
 
-#### Option 3: Grafana-managed Alerts + Mimir Alertmanager extern (abgelehnt)
+### 2.3 Entscheidungsmatrix
 
-Grafana evaluiert Regeln, sendet Alerts an Mimir Alertmanager.
-
-**Blocker:**
-- `GrafanaNotificationPolicy` CR greift ausschliesslich auf internen Grafana Alertmanager zu
-- Programmatische GitOps-Konfiguration von Notification Policies für externen AM nicht möglich
-- Grafana kann Mimir AM in der UI als Datasource anzeigen, aber nicht als Notification-Plane konfigurieren
-
-#### Option 4: Grafana-managed Alerts + Grafana Alertmanager intern (gewählt)
-
-Grafana evaluiert Regeln gegen Mimir (PromQL-Datasource). Interner Grafana Alertmanager übernimmt Routing.
-Alles via Grafana Operator GitOps-fähig.
-
-**Warum:**
-- `GrafanaAlertRuleGroup`, `GrafanaContactPoint`, `GrafanaNotificationPolicy` — alle vom Grafana Operator supported
-- Eine einzige Dependency-Kette: Argo CD → Grafana Operator → Grafana
-- Dashboards und Alerts laufen über denselben Operator
-
-### 2.2 Entscheidungsmatrix
-
-| Aspekt | Entscheidung |
-|---|---|
-| Regelquelle | Grafana-managed Rules (`GrafanaAlertRuleGroup`) |
-| Evaluierung | Grafana Alerting Engine |
-| Datasource | Mimir (PromQL), Tenant `1` |
-| Notification-Plane | Grafana Alertmanager (intern) |
-| GitOps-Mechanismus | Grafana Operator CRs |
-| Mimir Ruler | Nicht verwendet für Alert-Regeln |
-| Mimir Alertmanager | Nicht primäre Plane; läuft passiv |
+| Aspekt | Variante A (Pur Grafana Operator) | Variante B (Hybrid via Crossplane) |
+|---|---|---|
+| **Zentrale Benachrichtigungs-Plane** | Grafana Alertmanager (intern) | Mimir Alertmanager (extern) |
+| **Evaluierungs-Ort** | Grafana Alerting Engine | Mimir Ruler |
+| **GitOps-Mechanismus** | Grafana Operator CRDs | Crossplane Mimir Provider CRDs |
+| **Geeignet für** | Einfache, zentralisierte Umgebungen | Große Multi-Tenant- oder Cloud-Native-Plattformen |
+| **Status in diesem Repo** | Archiviert/Möglich | **Aktiv & Implementiert** |
 
 ---
 
