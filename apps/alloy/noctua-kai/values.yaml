@@ -43,6 +43,20 @@ k8s-monitoring:
         enabled: false
       traces:
         enabled: false
+    tempo:
+      type: otlp
+      url: "http://tempo.tempo.svc.cluster.local:4317"
+      protocol: grpc
+      auth:
+        type: none
+      tls:
+        insecure: true
+      metrics:
+        enabled: false
+      logs:
+        enabled: false
+      traces:
+        enabled: true
 
   # Feature Enablement
   clusterMetrics:
@@ -68,11 +82,27 @@ k8s-monitoring:
     collector: alloy-node
     destinations:
       - loki-otlp
-  applicationTraces:
+  applicationObservability:
     enabled: true
     collector: alloy-node
-    destinations:
-      - tempo
+    receivers:
+      otlp:
+        grpc:
+          enabled: true
+        http:
+          enabled: true
+    metrics:
+      enabled: true
+      transforms:
+        datapoint:
+          - "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil"
+          - "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil"
+          - "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil"
+          - "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil"
+          - "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil"
+          - "set(attributes[\"job\"],       resource.attributes[\"service.name\"])       where resource.attributes[\"service.name\"] != nil and attributes[\"job\"] == nil"
+          - "set(attributes[\"instance\"],  resource.attributes[\"service.instance.id\"]) where resource.attributes[\"service.instance.id\"] != nil and attributes[\"instance\"] == nil"
+          - "set(attributes[\"instance\"],  resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"instance\"] == nil"
 
   # Discover ServiceMonitors, PodMonitors, etc.
   prometheusOperatorObjects:
@@ -149,11 +179,18 @@ k8s-monitoring:
               "set(attributes[\"job\"], \"kube-apiserver\")     where attributes[\"job\"] == \"integrations/kubernetes/kube-apiserver\"",
             ]
           }
+          metric_statements {
+            context = "datapoint"
+            statements = [
+              "set(resource.attributes[\"service.name\"], attributes[\"job\"]) where resource.attributes[\"service.name\"] == nil and attributes[\"job\"] != nil",
+              "set(resource.attributes[\"service.instance.id\"], attributes[\"instance\"]) where resource.attributes[\"service.instance.id\"] == nil and attributes[\"instance\"] != nil",
+            ]
+          }
         }
 
         // 3. K8SATTRIBUTES (enrich): Fragt K8s-API ab und reichert Metadaten für die IP an.
         // Warum: Fragt den K8s-API-Server nach echten Metadaten (z.B. Deployment-Name, Container-Name, Pod-UID)
-        // basierend auf der k8s.pod.ip und speichert sie als OTel-Resource-Attribute.
+        // basierend auf der k8s.pod.ip/connection und speichert sie als OTel-Resource-Attribute.
         otelcol.processor.k8sattributes "enrich" {
           output {
             metrics = [otelcol.processor.transform.dual_semantics.input]
@@ -174,10 +211,15 @@ k8s-monitoring:
               name = "k8s.pod.name"
             }
           }
+          pod_association {
+            source {
+              from = "connection"
+            }
+          }
         }
 
         // 4. TRANSFORM (dual_semantics): Kopiert neu gewonnene K8s-Metadaten zurück auf Datenpunkt-Labels.
-        // Warum: Ermöglicht die Abfrage über klassische Prometheus-Metrik-Labels (namespace, pod, container, node, cluster)
+        // Warum: Ermöglicht die Abfrage über klassische Prometheus-Metrik-Labels (namespace, pod, container, node, cluster, job, instance)
         // in existierenden Grafana-Dashboards, da OTLP-Pushed-Metrics diese sonst auf Datenpunktebene nicht besitzen.
         otelcol.processor.transform "dual_semantics" {
           error_mode = "ignore"
@@ -192,18 +234,15 @@ k8s-monitoring:
               "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
               "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
               "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
+              "set(attributes[\"job\"],       resource.attributes[\"service.name\"])       where resource.attributes[\"service.name\"] != nil and attributes[\"job\"] == nil",
+              "set(attributes[\"instance\"],  resource.attributes[\"service.instance.id\"]) where resource.attributes[\"service.instance.id\"] != nil and attributes[\"instance\"] == nil",
+              "set(attributes[\"instance\"],  resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil and attributes[\"instance\"] == nil",
               "set(attributes[\"metrics_path\"], \"/metrics/cadvisor\") where (resource.attributes[\"service.name\"] == \"cadvisor\" or resource.attributes[\"job\"] == \"cadvisor\") and IsMatch(metric.name, \"^container_\")",
             ]
           }
         }
 
     alloy-node:
-      enabled: true
-      presets: [daemonset, clustered, filesystem-log-reader]
-      alloy:
-        stabilityLevel: public-preview
-      extraConfig: *metricsPipeline
-alloy-node:
       enabled: true
       presets: [daemonset, clustered, filesystem-log-reader]
       alloy:
