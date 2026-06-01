@@ -92,7 +92,7 @@ grafanaOperatorCRs:
 
   # Mandatory alerting configuration for the operator
   alerting:
-    syncPrometheusRules: true
+    syncPrometheusRules: false
     folders:
       - name: "infrastruktur"
         title: "Infrastruktur"
