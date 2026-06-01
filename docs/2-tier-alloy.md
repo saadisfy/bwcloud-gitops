@@ -13,7 +13,17 @@ A fundamental requirement of our Two-Tier Observability architecture is that **A
 
 ---
 
-## 2. Wrapper Chart Architecture & Pod Count
+## 2. Core Requirement: Minimal Additional Alloy Configuration
+
+To keep the pipeline maintainable and avoid deploying additional infrastructure, all custom OTel processing (metrics enrichment, metadata lookup, and label mapping) must be kept to a minimum and executed **inline within the existing collectors (`alloy-metrics` and `alloy-node`)** rather than spinning up a separate, dedicated `alloy-gateway` deployment.
+
+* **No Dedicated Gateway Pods:** Eliminating the gateway saves pod overhead, network hops, and inter-collector OTLP traffic.
+* **Inline Processing via `replaceComponent`:** We intercept the chart-generated `mimir` prometheus receiver using the subchart's `replaceComponent` values and feed it directly into our inline enrichment processors.
+* **Declarative Fallback Logics:** Custom pipelines are fully documented with inline comments detailing how IP addresses are extracted, how port numbers are stripped from Prometheus scrape targets, and how newly added metadata (like `node` or `container`) is copied back to metrics for dashboard compatibility.
+
+---
+
+## 3. Wrapper Chart Architecture & Pod Count
 
 In `apps/alloy/noctua-kai/Chart.yaml`, we only declare the `k8s-monitoring` Helm chart as a dependency. This is a highly consolidated and unified design choice:
 
@@ -42,7 +52,7 @@ Depending on whether log scraping is consolidated or separated, the pod count ch
 
 ---
 
-## 3. Inter-Tier Connectivity (Tier 1 -> Tier 2)
+## 4. Inter-Tier Connectivity (Tier 1 -> Tier 2)
 
 ### Protocol Choice: HTTP vs. gRPC
 *   **Challenge:** When using gRPC (port 4317) for OTLP export from Tier 1 to Tier 2, the `k8s-monitoring` chart defaults to a secure TLS handshake even when the URL is `http://`.
@@ -53,7 +63,7 @@ Depending on whether log scraping is consolidated or separated, the pod count ch
 *   **Challenge:** The Alloy Gateway (Tier 2) often inherits `hostNetwork: true` from base values. If Tier 1 (Agent) is also running on the same node with host networking, they will conflict on port 12345 (Alloy UI/Metrics).
 *   **Solution:** Tier 2 should run with `hostNetwork: false` and `dnsPolicy: ClusterFirst`. This allows it to use its own virtual IP and avoid port collisions with host-level agents.
 
-## 4. Helm Chart Schema (grafana/k8s-monitoring v4)
+## 5. Helm Chart Schema (grafana/k8s-monitoring v4)
 
 ### Metrics Enablement
 *   **Observation:** Enabling metrics in v4 requires a specific hierarchy. Setting `telemetryServices.node-exporter.deploy: true` only starts the pod; it does **not** configure the scrape job.
@@ -71,7 +81,7 @@ Depending on whether log scraping is consolidated or separated, the pod count ch
             enabled: true
     ```
 
-## 5. Evolutionary Strategy from Single-Tier to 2-Tier
+## 6. Evolutionary Strategy from Single-Tier to 2-Tier
 
 Before adopting the 2-Tier architecture, our general pipeline concept was outlined in [data-pipeline-concept.md](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/docs/data-pipeline-concept.md). This layout relied on a flat structure where a single daemonset Alloy scraped and processed all metrics. 
 
@@ -79,7 +89,7 @@ To scale efficiently and simplify configuration, we are transitioning to a **2-T
 
 ---
 
-## 6. The 3-Stage Migration Plan
+## 7. The 3-Stage Migration Plan
 
 ### Stage 1: Out-of-the-Box `k8s-monitoring` Chart Baseline
 The goal of this stage is to build a solid baseline using standard chart features without custom routing workarounds.
@@ -114,7 +124,7 @@ The final stage bridges the gap between OTel resource attributes and Prometheus 
 
 ---
 
-## 7. Final Implementation Details (Stage 2 & 3)
+## 8. Final Implementation Details (Stage 2 & 3)
 
 The complete two-tier OTLP loopback architecture is deployed via the [noctua-kai](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/apps/alloy/noctua-kai/values.yaml) Helm chart.
 
@@ -172,7 +182,7 @@ During deployment, the legacy `alloy` Argo CD Application and its crashing `allo
 
 ---
 
-## 8. Loki & Log-Scraping Integration (Consolidated DaemonSet)
+## 9. Loki & Log-Scraping Integration (Consolidated DaemonSet)
 
 To collect and persist cluster logs efficiently, we deployed Loki and expanded our Alloy architecture:
 

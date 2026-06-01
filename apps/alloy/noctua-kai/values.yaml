@@ -107,7 +107,9 @@ k8s-monitoring:
         // Prometheus-Labels → OTel Resource Attributes → k8sattributes → Mimir
         // ─────────────────────────────────────────────────────────────────────
 
-        // Group metrics by pod/namespace to prevent metadata cross-contamination
+        // 1. GROUPBYATTRS: Gruppiert Metriken nach Pod und Namespace in getrennte Batches.
+        // Warum: In OTel werden Daten in Batches verarbeitet. Ohne Gruppierung würden Metriken
+        // verschiedener Pods vermischt und k8sattributes würde falsche Zuordnungen treffen.
         otelcol.processor.groupbyattrs "group" {
           keys = ["namespace", "pod", "k8s_pod_ip", "instance"]
           output {
@@ -115,7 +117,9 @@ k8s-monitoring:
           }
         }
 
-        // Promote Prometheus labels → OTel resource attributes
+        // 2. TRANSFORM (promote_meta): Kopiert Prometheus-Labels in OTel-Resource-Attribute.
+        // Warum: k8sattributes benötigt OTel-Resource-Attribute (wie k8s.pod.ip) für den Lookup.
+        // IP-Fallback: Wir nutzen bevorzugt k8s_pod_ip, andernfalls instance (wo wir den Port :8080 abschneiden).
         otelcol.processor.transform "promote_meta" {
           output {
             metrics = [otelcol.processor.k8sattributes.enrich.input]
@@ -142,7 +146,9 @@ k8s-monitoring:
           }
         }
 
-        // Enrich with Kubernetes cluster metadata via K8s API
+        // 3. K8SATTRIBUTES (enrich): Fragt K8s-API ab und reichert Metadaten für die IP an.
+        // Warum: Fragt den K8s-API-Server nach echten Metadaten (z.B. Deployment-Name, Container-Name, Pod-UID)
+        // basierend auf der k8s.pod.ip und speichert sie als OTel-Resource-Attribute.
         otelcol.processor.k8sattributes "enrich" {
           output {
             metrics = [otelcol.processor.transform.dual_semantics.input]
@@ -165,7 +171,9 @@ k8s-monitoring:
           }
         }
 
-        // Mirror OTel resource attributes → metric datapoint labels (Prometheus dashboard compatibility)
+        // 4. TRANSFORM (dual_semantics): Kopiert neu gewonnene K8s-Metadaten zurück auf Datenpunkt-Labels.
+        // Warum: Ermöglicht die Abfrage über klassische Prometheus-Metrik-Labels (container, node, cluster)
+        // in existierenden Grafana-Dashboards. namespace/pod lassen wir weg, da diese bereits vorhanden sind.
         otelcol.processor.transform "dual_semantics" {
           error_mode = "ignore"
           output {
@@ -174,8 +182,6 @@ k8s-monitoring:
           metric_statements {
             context = "datapoint"
             statements = [
-              "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
-              "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
               "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
               "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
               "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
@@ -195,7 +201,9 @@ k8s-monitoring:
         // Prometheus-Labels → OTel Resource Attributes → k8sattributes → Mimir
         // ─────────────────────────────────────────────────────────────────────
 
-        // Group metrics by pod/namespace to prevent metadata cross-contamination
+        // 1. GROUPBYATTRS: Gruppiert Metriken nach Pod und Namespace in getrennte Batches.
+        // Warum: In OTel werden Daten in Batches verarbeitet. Ohne Gruppierung würden Metriken
+        // verschiedener Pods vermischt und k8sattributes würde falsche Zuordnungen treffen.
         otelcol.processor.groupbyattrs "group" {
           keys = ["namespace", "pod", "k8s_pod_ip", "instance"]
           output {
@@ -203,7 +211,9 @@ k8s-monitoring:
           }
         }
 
-        // Promote Prometheus labels → OTel resource attributes
+        // 2. TRANSFORM (promote_meta): Kopiert Prometheus-Labels in OTel-Resource-Attribute.
+        // Warum: k8sattributes benötigt OTel-Resource-Attribute (wie k8s.pod.ip) für den Lookup.
+        // IP-Fallback: Wir nutzen bevorzugt k8s_pod_ip, andernfalls instance (wo wir den Port :8080 abschneiden).
         otelcol.processor.transform "promote_meta" {
           output {
             metrics = [otelcol.processor.k8sattributes.enrich.input]
@@ -230,7 +240,9 @@ k8s-monitoring:
           }
         }
 
-        // Enrich with Kubernetes cluster metadata via K8s API
+        // 3. K8SATTRIBUTES (enrich): Fragt K8s-API ab und reichert Metadaten für die IP an.
+        // Warum: Fragt den K8s-API-Server nach echten Metadaten (z.B. Deployment-Name, Container-Name, Pod-UID)
+        // basierend auf der k8s.pod.ip und speichert sie als OTel-Resource-Attribute.
         otelcol.processor.k8sattributes "enrich" {
           output {
             metrics = [otelcol.processor.transform.dual_semantics.input]
@@ -253,7 +265,9 @@ k8s-monitoring:
           }
         }
 
-        // Mirror OTel resource attributes → metric datapoint labels (Prometheus dashboard compatibility)
+        // 4. TRANSFORM (dual_semantics): Kopiert neu gewonnene K8s-Metadaten zurück auf Datenpunkt-Labels.
+        // Warum: Ermöglicht die Abfrage über klassische Prometheus-Metrik-Labels (container, node, cluster)
+        // in existierenden Grafana-Dashboards. namespace/pod lassen wir weg, da diese bereits vorhanden sind.
         otelcol.processor.transform "dual_semantics" {
           error_mode = "ignore"
           output {
@@ -262,8 +276,6 @@ k8s-monitoring:
           metric_statements {
             context = "datapoint"
             statements = [
-              "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil",
-              "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil",
               "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil",
               "set(attributes[\"node\"],      resource.attributes[\"k8s.node.name\"])      where resource.attributes[\"k8s.node.name\"] != nil",
               "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
