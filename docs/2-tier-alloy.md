@@ -130,4 +130,30 @@ The Gateway's configuration (`config.alloy`) implements the pipeline as follows:
 ### Legacy Cleanup & Operational Stability
 During deployment, the legacy `alloy` Argo CD Application and its crashing `alloy-alloy-operator` deployment (which was stuck due to finalizers after its ServiceAccount was deleted) were completely pruned and deleted. Only the new `alloy-kai` components are running, and Mimir ingester out-of-order errors have successfully stabilized.
 
+---
+
+## 6. Loki & Log-Scraping Integration (Consolidated DaemonSet)
+
+To collect and persist cluster logs efficiently, we deployed Loki and expanded our Alloy architecture:
+
+### Loki Deployment (noctua)
+* **Mode:** Monolithic `SingleBinary` configuration for local development and PoC.
+* **Storage:** PVC-backed (`5Gi` size on `local-path` storageClass) storing TSDB indexes and chunks.
+* **Retention:** Configured to `24h` (1 day) using the Loki compactor.
+  * *Note:* Specifying retention requires setting `delete_request_store: filesystem` under `compactor` in Loki v3.x+.
+
+### Consolidated DaemonSet for Metrics & Logs
+* **Challenge:** Deploying a separate collector for logs (`alloy-logs`) would spin up another 5 pods on a 5-node cluster, consuming significant node resources.
+* **Solution:** We consolidated log collection onto the existing `alloy-node` DaemonSet (Tier 1 agent).
+* **Configuration:**
+  * Enabled the `filesystem-log-reader` preset on `alloy-node`.
+  * Assigned the `podLogsViaLoki` feature to target the `alloy-node` collector.
+  * Added the `loki` destination pointing directly to `http://loki-gateway.loki.svc.cluster.local/loki/api/v1/push`.
+* **Result:** Pod logs are read directly from `/var/log/pods` by `alloy-node` and shipped to Loki without creating new workloads.
+
+### Memberlist DNS Deadlock Mitigation
+* **Challenge:** During initial startup, Loki pods returned `503 Service Unavailable` on `/ready` because the `loki-memberlist` headless service selector had no endpoints. CoreDNS returned `NXDOMAIN` (No such host) because the headless service filters out unready pods. This prevented memberlist from initializing, causing a deadlock.
+* **Solution:** We configured `memberlist.service.publishNotReadyAddresses: true` in the Loki Helm values. This forces Kubernetes to publish the pod IP in CoreDNS immediately upon startup, allowing the memberlist cluster to bootstrap before the pods pass their readiness checks.
+
+
 
