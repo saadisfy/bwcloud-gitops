@@ -37,7 +37,8 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   forProvider:
-    namespace: "1"
+    {{- $mimirNamespace := dir $filePath | trimPrefix "files/" }}
+    namespace: {{ $mimirNamespace | quote }}
     content: |
       {{- $yaml := $fileContent | fromYaml }}
       {{- if and $yaml.spec $yaml.spec.groups }}
