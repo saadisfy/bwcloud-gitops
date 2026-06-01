@@ -43,6 +43,11 @@ grafana:
             alertmanagerUid: mimir-am
           secureJsonData:
             httpHeaderValue1: "1"
+        - name: Loki
+          type: loki
+          access: proxy
+          uid: loki
+          url: http://loki-gateway.loki.svc.cluster.local
   ingress:
     enabled: true
     ingressClassName: nginx
