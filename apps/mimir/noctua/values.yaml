@@ -14,15 +14,13 @@ mimir-distributed:
         rule_path: /data/ruler-rules
         # Send alerts to Mimir's local Alertmanager
         alertmanager_url: "http://mimir-alertmanager.mimir.svc.cluster.local:8080/alertmanager"
-      # local backend: read-only, reads standard Prometheus YAML directly from filesystem.
-      # The ConfigMap (mimir-rules-bundle) is mounted via extraVolumeMounts at
-      # /rules-storage/1/rules.yaml (tenantId=1, namespace=rules).
-      # No Job, no initContainer copy, no API call needed.
-      # Stakater Reloader restarts the ruler pod when the ConfigMap changes.
+      # filesystem backend: uses the ruler PersistentVolume at /rules-storage.
+      # Unlike 'local', filesystem enables the Ruler HTTP API (SetRuleGroup).
+      # Crossplane pushes rules via API — no ConfigMap mount needed.
       ruler_storage:
-        backend: local
-        local:
-          directory: /rules-storage
+        backend: filesystem
+        filesystem:
+          dir: /rules-storage
 
   ingester:
     replicas: 1
@@ -49,18 +47,9 @@ mimir-distributed:
       limits:
         memory: 512Mi
 
-    # Mount the mimir-rules-bundle ConfigMap directly into the ruler_storage local directory.
-    # Path: /rules-storage/<tenantId>/<namespace>.yaml  →  /rules-storage/1/rules.yaml
-    # Mimir local backend reads this as tenant=1, namespace=rules on every startup.
-    extraVolumes:
-      - name: ruler-rules-storage
-        configMap:
-          name: mimir-rules-bundle
-    extraVolumeMounts:
-      - name: ruler-rules-storage
-        mountPath: /rules-storage/1/rules.yaml
-        subPath: rules.yaml
-        readOnly: true
+    # filesystem backend uses the ruler PV at /rules-storage (mounted automatically
+    # via ruler.persistentVolume). No ConfigMap mount needed — Crossplane pushes
+    # rules via the Ruler HTTP API which writes to this directory.
 
 
 queryFrontendIngress:
@@ -72,14 +61,7 @@ queryFrontendIngress:
   host: mimir-query.saadisfy.me
   tlsSecretName: mimir-query-tls
 
-# rulerRuleSync: enabled=true keeps the mimir-rules-bundle ConfigMap rendered.
-# The ConfigMap is mounted directly into the ruler pod at /rules-storage/1/rules.yaml
-# via ruler.extraVolumeMounts (subPath). No Job, no initContainer copy needed.
-# Stakater Reloader auto-restarts the ruler when the ConfigMap changes (via Git push).
+# rulerRuleSync: disabled — rules are now provisioned via Crossplane Rules CR
+# which uses the Mimir Ruler HTTP API (filesystem backend, API-enabled).
 rulerRuleSync:
-  enabled: true
-  argocdHook: false
-  image:
-    repository: grafana/mimirtool
-    tag: "3.0.1"
-    pullPolicy: IfNotPresent
+  enabled: false
