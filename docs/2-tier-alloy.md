@@ -171,6 +171,7 @@ To collect and persist cluster logs efficiently, we deployed Loki and expanded o
 * **Storage:** PVC-backed (`5Gi` size on `local-path` storageClass) storing TSDB indexes and chunks.
 * **Retention:** Configured to `24h` (1 day) using the Loki compactor.
   * *Note:* Specifying retention requires setting `delete_request_store: filesystem` under `compactor` in Loki v3.x+.
+* **Grafana Integration:** Added Loki as a data source under `grafana.datasources.datasources.yaml` with the URL `http://loki-gateway.loki.svc.cluster.local` and UID `loki`.
 
 ### Consolidated DaemonSet for Metrics & Logs
 * **Challenge:** Deploying a separate collector for logs (`alloy-logs`) would spin up another 5 pods on a 5-node cluster, consuming significant node resources.
