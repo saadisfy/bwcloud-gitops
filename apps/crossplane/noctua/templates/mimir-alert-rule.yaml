@@ -3,7 +3,7 @@ kind: GroupAlerting
 metadata:
   name: mimir-test-alerts
   annotations:
-    crossplane.io/external-name: "1/mimir-test-alerts/test-alerts"
+    crossplane.io/external-name: "test-alerts"
     argocd.argoproj.io/sync-wave: "20"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
