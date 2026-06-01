@@ -2,7 +2,18 @@
 
 This document summarizes the technical challenges and solutions discovered during the implementation of a two-tier observability pipeline on the `noctua-k3s` cluster.
 
-## 1. Wrapper Chart Architecture & Pod Count
+## 1. Core Observability Requirement: OTLP Resource Attributes First
+
+A fundamental requirement of our Two-Tier Observability architecture is that **ALL telemetry signals (Metrics, Logs, and Traces) must possess standardized OTLP resource attributes** (specifically Kubernetes metadata like `k8s.namespace.name`, `k8s.pod.name`, `k8s.container.name`, etc.) by the time they reach their storage backends (Mimir, Loki, Tempo).
+
+* **Why this is critical:** Standardizing on OpenTelemetry resource semantic conventions is the only way to achieve reliable cross-signal correlation (e.g. drilling down from a metric spike directly to the logs of that container, or correlating a trace span with host metrics).
+* **Impact on the Pipeline:** 
+  * **Metrics:** Handled via the Stage 2/3 OTLP Loopback where Prometheus metrics are converted to OTLP, enriched in Tier 2, and dual-semantically mapped back.
+  * **Logs & Traces:** Any future expansion or current integration (like Loki log ingestion) must ensure that these signals are either enriched using OTel processor components (like `k8sattributes` in a unified OTLP pipeline) or mapped using OTel-compatible resource metadata so that the LGTM stack can correlate them seamlessly.
+
+---
+
+## 2. Wrapper Chart Architecture & Pod Count
 
 In `apps/alloy/noctua-kai/Chart.yaml`, we explicitly declare both `k8s-monitoring` and `alloy` as direct dependencies. This is a deliberate choice for our Two-Tier architecture:
 
@@ -32,7 +43,7 @@ Depending on whether log scraping is consolidated or separated, the pod count ch
 
 ---
 
-## 2. Inter-Tier Connectivity (Tier 1 -> Tier 2)
+## 3. Inter-Tier Connectivity (Tier 1 -> Tier 2)
 
 ### Protocol Choice: HTTP vs. gRPC
 *   **Challenge:** When using gRPC (port 4317) for OTLP export from Tier 1 to Tier 2, the `k8s-monitoring` chart defaults to a secure TLS handshake even when the URL is `http://`.
@@ -43,7 +54,7 @@ Depending on whether log scraping is consolidated or separated, the pod count ch
 *   **Challenge:** The Alloy Gateway (Tier 2) often inherits `hostNetwork: true` from base values. If Tier 1 (Agent) is also running on the same node with host networking, they will conflict on port 12345 (Alloy UI/Metrics).
 *   **Solution:** Tier 2 should run with `hostNetwork: false` and `dnsPolicy: ClusterFirst`. This allows it to use its own virtual IP and avoid port collisions with host-level agents.
 
-## 3. Helm Chart Schema (grafana/k8s-monitoring v4)
+## 4. Helm Chart Schema (grafana/k8s-monitoring v4)
 
 ### Metrics Enablement
 *   **Observation:** Enabling metrics in v4 requires a specific hierarchy. Setting `telemetryServices.node-exporter.deploy: true` only starts the pod; it does **not** configure the scrape job.
@@ -61,7 +72,7 @@ Depending on whether log scraping is consolidated or separated, the pod count ch
             enabled: true
     ```
 
-## 4. Evolutionary Strategy from Single-Tier to 2-Tier
+## 5. Evolutionary Strategy from Single-Tier to 2-Tier
 
 Before adopting the 2-Tier architecture, our general pipeline concept was outlined in [data-pipeline-concept.md](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/docs/data-pipeline-concept.md). This layout relied on a flat structure where a single daemonset Alloy scraped and processed all metrics. 
 
@@ -69,7 +80,7 @@ To scale efficiently and simplify configuration, we are transitioning to a **2-T
 
 ---
 
-## 5. The 3-Stage Migration Plan
+## 6. The 3-Stage Migration Plan
 
 ### Stage 1: Out-of-the-Box `k8s-monitoring` Chart Baseline
 The goal of this stage is to build a solid baseline using standard chart features without custom routing workarounds.
@@ -104,7 +115,7 @@ The final stage bridges the gap between OTel resource attributes and Prometheus 
 
 ---
 
-## 6. Final Implementation Details (Stage 2 & 3)
+## 7. Final Implementation Details (Stage 2 & 3)
 
 The complete two-tier OTLP loopback architecture is deployed via the [noctua-kai](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/apps/alloy/noctua-kai/values.yaml) Helm chart.
 
@@ -162,7 +173,7 @@ During deployment, the legacy `alloy` Argo CD Application and its crashing `allo
 
 ---
 
-## 7. Loki & Log-Scraping Integration (Consolidated DaemonSet)
+## 8. Loki & Log-Scraping Integration (Consolidated DaemonSet)
 
 To collect and persist cluster logs efficiently, we deployed Loki and expanded our Alloy architecture:
 
