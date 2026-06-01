@@ -460,3 +460,42 @@ kubectl get grafananotificationpolicies.grafana.integreatly.org -A
 ```
 
 *Soll-Zustand:* Contact Points und Notification Policies sind vorhanden und `No matching route` oder Blackhole-Fallbacks treten nur für bewusst ignorierte Alerts auf.
+
+---
+
+## 🙋 Häufige Fragen & Fortgeschrittene Themen (FAQ)
+
+### 1. Performance bei massiver Menge an Upstream-Rules (Rate-Limits & Argo CD)
+
+**Frage:** *Wir haben hunderte von Upstream-Rules (z. B. aus `alloy-mixin`, `mimir-mixin` etc.). Wenn Crossplane für jede Regelgruppe ein eigenes CRD im Cluster generiert, führt das zu Performance-Problemen bei Argo CD oder Crossplane?*
+
+**Antwort:** 
+Ja, wenn man für jede einzelne Regel oder jede kleine Regelgruppe ein eigenes Crossplane-Manifest anlegt, steigt die Anzahl der Kubernetes-Objekte rasant an. Das belastet den Kubernetes-API-Server, erhöht die Sync-Zeiten in Argo CD und zwingt den Crossplane-Provider zu hunderten Mimir-API-Abfragen pro Abgleichintervall.
+
+**Best Practice / Lösung:**
+* **Bündelung:** Erstelle **nicht** ein Crossplane-Objekt pro Alert. Bündele stattdessen zusammenhängende Alerts in logische Sammeldateien (z. B. `kubernetes/alerts.yaml`, `mimir/alerts.yaml`, `tempo/alerts.yaml`).
+* **Verhältnis:** In unserem Setup importieren wir 17 Dateien, was genau **17 `Rules` CRs** im Cluster erzeugt. Diese 17 CRs enthalten jedoch unter der Haube **74 Regelgruppen mit über 200 Einzel-Alerts**.
+* **Effizienz:** 10 bis 30 Crossplane-Objekte sind für Argo CD und den Crossplane-Controller absolut vernachlässigbar und werden in Sekundenschnelle ohne API-Rate-Limits synchronisiert.
+
+---
+
+### 2. Das "Orphaned Rules"-Problem (Geister-Regeln in Mimir nach dem Löschen)
+
+**Frage:** *Was passiert, wenn wir eine Alert-Datei aus Git löschen? Wird die Regel in Mimir sauber über die API gelöscht, oder bleibt sie als "Geister-Regel" (Orphaned Rule) aktiv?*
+
+**Antwort:**
+Im Gegensatz zur ConfigMap-Methode (wo Mimir einfach das Dateisystem spiegelt) läuft das Löschen bei Crossplane über den Kubernetes **Finalizer-Mechanismus** ab:
+
+1. **Lösch-Trigger:** Du entfernst die Regeldatei aus Git. Argo CD erkennt das Fehlen und löscht das entsprechende `Rules` CR im Kubernetes-Cluster.
+2. **Finalizer-Block:** Kubernetes löscht das Objekt nicht sofort, sondern setzt es in den Status `Terminating`. Crossplane hat sich zuvor mit einem Finalizer (`finalizer.managedresource.crossplane.io`) auf dem Objekt registriert.
+3. **API-Delete-Call:** Der Crossplane Mimir Provider fängt den Löschbefehl ab und führt einen HTTP `DELETE`-Aufruf gegen die Mimir-Ruler-API aus:
+   ```http
+   DELETE /prometheus/api/v1/rules/{namespace}/{group_name}
+   ```
+4. **Erfolgsmeldung:** Erst wenn Mimir den erfolgreichen Löschvorgang mit `200 OK` bestätigt, entfernt Crossplane seinen Finalizer und das Kubernetes-Objekt verschwindet endgültig aus dem Cluster.
+
+⚠️ **Wichtiger Warnhinweis:**
+Sollte die Mimir-API während des Löschvorgangs offline oder fehlerhaft sein, bleibt das Crossplane-Objekt dauerhaft im Status `Terminating` hängen. 
+* **Tu das nicht:** Entferne in diesem Fall **niemals manuell die Finalizer** aus dem Objekt (z. B. via `kubectl patch`), um das Löschen zu erzwingen. Wenn du die Finalizer manuell entfernst, löscht Kubernetes das Objekt, ohne dass der API-Delete-Call an Mimir abgesetzt werden konnte. Dadurch entsteht eine **Orphaned/Geister-Regel in Mimir**, die im Hintergrund weiter evaluiert wird, obwohl sie im Git und in Kubernetes nicht mehr existiert!
+* **Richtiges Vorgehen bei Hängern:** Prüfe die Logs des Crossplane-Providers und stelle sicher, dass Mimir Ruler wieder erreichbar ist, damit der Löschvorgang sauber abgeschlossen werden kann.
+
