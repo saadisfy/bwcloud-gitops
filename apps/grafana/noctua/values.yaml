@@ -114,27 +114,18 @@ grafanaOperatorCRs:
                   summary: "Grafana Alerting is working!"
                   description: "If you see this and receive it in Telegram, the complete Grafana Alerting notification pipeline is functional!"
   contactPoints:
-    - name: "telegram-alerts"
+    - name: "dummy"
       spec:
         receivers:
           - disableResolveMessage: false
-            type: telegram
+            type: email
             settings:
-              # chatid is a plain settings field and is not sensitive.
-              chatid: "462723448"
-            # valuesFrom injects the bot token from the Kubernetes Secret at operator reconciliation time,
-            # so the operator passes the actual token value to the Grafana API rather than a literal env var string.
-            valuesFrom:
-              - targetPath: "bottoken"
-                valueFrom:
-                  secretKeyRef:
-                    name: grafana-secrets
-                    key: GF_TELEGRAM_BOT_TOKEN
+              addresses: "dummy@localhost"
   notificationPolicies:
     - name: "root"
       spec:
         route:
-          receiver: "telegram-alerts"
+          receiver: "dummy"
           group_by: ["alertname", "job"]
           group_wait: 30s
           group_interval: 5m
