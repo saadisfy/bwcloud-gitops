@@ -60,3 +60,18 @@ Verantwortlich für Metriken, die von **instrumentierten Anwendungen direkt via 
 Damit beide Wege dieselben Queries in Grafana unterstützen, mappen wir die Labels in beiden Pipelines identisch:
 - **OTel resource-level:** `k8s.namespace.name`, `k8s.pod.name`, `service.name`, `service.instance.id`
 - **Prometheus metric-level:** `namespace`, `pod`, `container`, `job`, `instance`
+
+---
+
+## 📝 Logs: Vermeidung von Duplikaten (Auto-Deduplication)
+
+Wenn eine Anwendung per OTel-SDK instrumentiert ist und ihre Logs **direkt per OTLP an Alloy sendet**, aber gleichzeitig Logs über die Konsole (`stdout`/`stderr`) ausgibt, würden Logs doppelt in Loki ankommen:
+1. Über die Konsole (vom Host-Log-Reader eingelesen).
+2. Über die OTLP-Netzwerkschnittstelle.
+
+### Die Lösung
+Unsere Konfiguration erkennt **automatisch**, ob eine Anwendung vom OpenTelemetry Operator auto-instrumentiert ist.
+- Der `k8sattributes "pod_logs"`-Prozessor liest die OTel-Operator-Annotationen des Pods (`instrumentation.opentelemetry.io/inject-*`) aus.
+- Ist eine dieser Injektions-Annotationen auf dem Pod vorhanden, filtert (`otelcol.processor.filter "pod_logs"`) der Log-Reader die Logdatei dieses Pods auf dem Node heraus und verwirft sie.
+- Die Logs werden stattdessen ausschließlich über die OTLP-Verbindung der Anwendung empfangen.
+- **Ergebnis:** Keine doppelten Logs in Loki, vollautomatisches Handling ohne manuelles Dazutun.

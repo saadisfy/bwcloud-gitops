@@ -10,6 +10,28 @@ k8s-monitoring:
         output {
           metrics = [otelcol.processor.groupbyattrs.group.input]
         }
+    - type: otelcol.processor.filter
+      name: pod_logs
+      module: pod_logs_via_opentelemetry
+      content: |
+        error_mode = "ignore"
+        logs {
+          log_record = [
+            `resource.attributes["logs.grafana.com/pods.enabled"] == "false"`,
+            `resource.attributes["logs.grafana.com/pods.enabled"] == "no"`,
+            `resource.attributes["logs.grafana.com/pods.enabled"] == "skip"`,
+            // Auto-detect OTel Operator auto-instrumentation injection annotations
+            `resource.attributes["otel_inject_java"] != nil`,
+            `resource.attributes["otel_inject_nodejs"] != nil`,
+            `resource.attributes["otel_inject_python"] != nil`,
+            `resource.attributes["otel_inject_go"] != nil`,
+            `resource.attributes["otel_inject_dotnet"] != nil`,
+            `resource.attributes["otel_inject_sdk"] != nil`,
+          ]
+        }
+        output {
+          logs = [otelcol.processor.transform.pod_logs.input]
+        }
 
   # Destinations: direkt zu den Backends, kein Gateway-Hop
   destinations:
@@ -82,6 +104,13 @@ k8s-monitoring:
     collector: alloy-node
     destinations:
       - loki-otlp
+    annotations:
+      otel_inject_java: "instrumentation.opentelemetry.io/inject-java"
+      otel_inject_nodejs: "instrumentation.opentelemetry.io/inject-nodejs"
+      otel_inject_python: "instrumentation.opentelemetry.io/inject-python"
+      otel_inject_go: "instrumentation.opentelemetry.io/inject-go"
+      otel_inject_dotnet: "instrumentation.opentelemetry.io/inject-dotnet"
+      otel_inject_sdk: "instrumentation.opentelemetry.io/inject-sdk"
   applicationObservability:
     enabled: true
     collector: alloy-node
