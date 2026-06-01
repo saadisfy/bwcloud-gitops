@@ -21,7 +21,7 @@ grafana:
           type: alertmanager
           uid: mimir-am
           access: proxy
-          url: http://mimir-alertmanager.mimir.svc.cluster.local:8080/alertmanager
+          url: http://mimir-gateway.mimir.svc.cluster.local
           jsonData:
             handleGrafanaManagedAlerts: false
             implementation: mimir
