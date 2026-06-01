@@ -70,8 +70,9 @@ Wenn eine Anwendung per OTel-SDK instrumentiert ist und ihre Logs **direkt per O
 2. Über die OTLP-Netzwerkschnittstelle.
 
 ### Die Lösung
-Unsere Konfiguration erkennt **automatisch**, ob eine Anwendung vom OpenTelemetry Operator auto-instrumentiert ist.
-- Der `k8sattributes "pod_logs"`-Prozessor liest die OTel-Operator-Annotationen des Pods (`instrumentation.opentelemetry.io/inject-*`) aus.
-- Ist eine dieser Injektions-Annotationen auf dem Pod vorhanden, filtert (`otelcol.processor.filter "pod_logs"`) der Log-Reader die Logdatei dieses Pods auf dem Node heraus und verwirft sie.
-- Die Logs werden stattdessen ausschließlich über die OTLP-Verbindung der Anwendung empfangen.
-- **Ergebnis:** Keine doppelten Logs in Loki, vollautomatisches Handling ohne manuelles Dazutun.
+Unsere Konfiguration erkennt **automatisch**, ob eine Anwendung vom OpenTelemetry Operator auto-instrumentiert ist:
+- Der `k8sattributes "pod_logs"`-Prozessor sucht dynamisch mittels Regex (`instrumentation\.opentelemetry\.io/inject-.*`) nach jeglichen OTel-Injektions-Annotationen auf dem Pod.
+- Wird eine solche Annotation gefunden, setzt Alloy das Resource-Attribut `otel_injected` auf den Wert dieser Annotation.
+- Der nachgelagerte Filter (`otelcol.processor.filter "pod_logs"`) prüft auf das Vorhandensein dieses Attributs (`otel_injected != nil`).
+- Ist das Attribut vorhanden, verwirft der Log-Reader die Logdatei dieses Pods auf dem Node. Die Logs werden stattdessen ausschließlich über die OTLP-Verbindung der Anwendung empfangen.
+- **Ergebnis:** Keine doppelten Logs in Loki, vollautomatisches und zukunftssicheres Handling (unabhängig von der Programmiersprache) ohne manuellen Pflegeaufwand.
