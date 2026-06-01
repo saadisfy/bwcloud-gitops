@@ -37,9 +37,12 @@ mimir-distributed:
   ruler:
     enabled: true
     replicas: 1
-    persistentVolume:
-      enabled: true
-      size: 1Gi
+    extraVolumes:
+      - name: rules-storage
+        emptyDir: {}
+    extraVolumeMounts:
+      - name: rules-storage
+        mountPath: /rules-storage
     resources:
       requests:
         cpu: 100m
@@ -47,9 +50,8 @@ mimir-distributed:
       limits:
         memory: 512Mi
 
-    # filesystem backend uses the ruler PV at /rules-storage (mounted automatically
-    # via ruler.persistentVolume). No ConfigMap mount needed — Crossplane pushes
-    # rules via the Ruler HTTP API which writes to this directory.
+    # filesystem backend uses the ruler emptyDir at /rules-storage.
+    # No ConfigMap mount needed — Crossplane pushes rules via the Ruler HTTP API.
 
 
 queryFrontendIngress:

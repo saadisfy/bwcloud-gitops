@@ -1,772 +1,774 @@
 # Alert-Konzept
 
-Dieses Dokument beschreibt das Alerting-Zielbild, den aktuellen Ist-Zustand im Repository und ein belastbares Betriebsmodell für den Stack aus Alloy, Mimir und Grafana.
-
-Es ist als Bruecke zwischen Architektur, GitOps-Umsetzung und späterer Alert-Regelpflege gedacht.
-
----
-
-## 1. Ziel und Scope
-
-### Ziele
-
-- Störungen im Plattformbetrieb frueh erkennen.
-- Echte Incident-Signale von rein informativen Signalen trennen.
-- Alerts GitOps-fähig, reviewbar und reproduzierbar verwalten.
-- Eine klare Trennung zwischen Regelquelle, Evaluierung und Notification-Routing schaffen.
-- Grafana als zentrale Sicht auf Alerts, Regeln und Alertmanager nutzen.
-
-### Im Scope
-
-- Metrics-basierte Alerts auf Basis von Mimir.
-- Grafana-managed Alerts für Team- und UI-nahe Regeln.
-- Mimir Ruler für Prometheus-/Datasource-managed Regeln.
-- Notification Routing ueber Alertmanager bzw. Grafana Alerting.
-- Label- und Routing-Standard.
-- GitOps-Workflow für Alert-Regeln.
-
-### Ausserhalb des aktuellen Scope
-
-- Logs-basiertes Alerting mit Loki.
-- Trace-basiertes Alerting mit Tempo.
-- PagerDuty/Opsgenie/ServiceNow-Integrationen.
-- Vollständiges Multi-Cluster-Routing.
-
-Hinweis: Tempo und Loki werden in der Observability-Doku als Zielbild erwähnt, sind für das aktuelle Alerting im Repo aber noch kein belastbarer Umsetzungspfad.
+**Stand:** 2026-06-01
+**Entscheidung:** Grafana-only Alerting — kein Mimir Ruler, kein Mimir Alertmanager als primäre Plane.
 
 ---
 
-## 2. Aktueller Ist-Zustand im Repo
-
-### 2.1 Metrikfluss
-
-Der aktuelle Stack ist produktionsnah für Metriken aufgebaut:
-
-1. Alloy sammelt und reichert Metriken an.
-2. Alloy sendet per OTLP/HTTP an Mimir.
-3. Alle internen Metriken laufen unter `X-Scope-OrgID = 1`.
-4. Grafana greift per Mimir-Datasource auf dieselben Daten zu.
-
-### 2.2 Alerting-Pfade
-
-Im Repo sind zwei getrennte, aber komplementäre Alerting-Pfade angelegt:
-
-#### Pfad A: Mimir datasource-managed Alerts
-
-- Regeldateien im Prometheus-Format liegen unter `apps/mimir/prod/files/**/alerts*.yaml`.
-- Diese Dateien werden automatisch in einer zentralen ConfigMap `mimir-rules-bundle` gebündelt.
-- Das `mimir-ruler` Deployment wird durch einen **dynamischen Job** ergänzt (`mimir-rules-sync-<checksum>`), der bei jeder Änderung der Regeln das `mimirtool` nutzt, um diese gegen den Mimir-Gateway zu pushen.
-- **GitOps Loop:** Da der Job einen eindeutigen Namen pro Stand hat, wird er von Argo CD bei jeder Änderung zuverlässig neu erstellt und ausgeführt.
-- Der Mimir Ruler evaluiert die Regeln für Tenant `1`.
-- Firing Alerts werden an den Mimir Alertmanager gesendet.
-
-Dieser Pfad ist für plattformnahe, versionierte und stabil laufende Regeln gedacht.
-
-#### Pfad B: Grafana-managed Alerts
-
-- Grafana ist mit `manageAlerts: true` an die Mimir-Datasource angebunden.
-- Grafana kann eigene Alert-Regeln als `GrafanaAlertRuleGroup` provisionieren.
-- Die Provisionierung kann aus Values oder aus exportierten `alert-rules*.yaml` Dateien erfolgen.
-- Contact Points und Notification Policies werden ueber den Grafana Operator provisioniert.
-
-Dieser Pfad ist für teamnahe, UI-getriebene oder iterativ entwickelte Regeln gedacht.
-
-### 2.3 Aktuelle Schwächen im Ist-Zustand
-
-- Grafana Contact Points sind aktuell nur mit einem Platzhalter-Empfänger (`dummy@example.com`) konfiguriert.
-- Die Root-Notification-Policy in Grafana routet derzeit nur auf einen Default-Receiver.
-- Der Mimir Alertmanager besitzt aktuell nur eine minimale `fallbackConfig` ohne echte produktive Integrationen.
-- Für Grafana-exportierte Alert-Regeln sind aktuell keine echten `alert-rules*.yaml` im Repo eingecheckt.
-- Das fachliche Alert-Zielbild ist umfangreicher als der aktuell wirklich implementierte Runtime-Zustand.
-
----
-
-## 3. Architekturprinzipien
-
-### 3.1 Tenant-Standard
-
-für interne Plattform-Metriken und Alerts gilt verbindlich:
-
-- Tenant: `1`
-- Header: `X-Scope-OrgID: 1`
-
-Das gilt für:
-
-- Alloy Export nach Mimir
-- Grafana Mimir Datasource
-- Grafana Alertmanager Datasource
-- Mimir Ruler Sync
-
-### 3.2 Trennung von Verantwortungen
-
-Das Alerting wird logisch in drei Ebenen getrennt:
-
-1. **Signalquelle**  
-   Metriken aus Kubernetes, Mimir, Alloy, Argo CD, Kargo und weiteren Exportern.
-
-2. **Regel-Evaluierung**  
-   - Mimir Ruler für Prometheus-/Datasource-managed Regeln
-   - Grafana Alerting für Grafana-managed Regeln
-
-3. **Benachrichtigung und Routing**  
-   - Bevorzugt Mimir Alertmanager als zentrale Runtime-Notification-Plane
-   - Mimir-Ruler-Alerts laufen nativ in den Mimir Alertmanager
-   - Grafana-managed Alerts sollen, soweit technisch zuverlässig möglich, an den Mimir Alertmanager weitergeleitet werden
-   - Grafana Contact Points / Notification Policies bleiben nur Fallback oder Übergangslösung, wenn Forwarding nicht möglich ist
-
-### 3.3 Betriebsprinzip
-
-- Plattformnahe Standard-Alerts sollen bevorzugt dateibasiert und GitOps-gesteuert sein.
-- Experimentelle oder teamspezifische Regeln duerfen in Grafana entstehen, muessen aber exportiert und versioniert werden, sobald sie produktiv werden.
-- Grafana bleibt die zentrale Sicht auf Regeln und Alerting-Status.
-- Direkte, nicht versionierte UI-änderungen ohne Rueckfuehrung ins Repo sollen vermieden werden.
-
----
-
-## 4. Source-of-Truth-Modell
-
-### 4.1 Datasource-managed Rules in Mimir
-
-**Kanonische Quelle:**
-
-- `apps/mimir/prod/files/**/alerts*.yaml`
-
-**Provisionierung (Checksum-basierter Job):**
-
-- Ein Helm-Template (`ruler-rules-configmap.yaml`) bündelt alle passenden Dateien in einer ConfigMap `mimir-rules-bundle`.
-- Ein dynamischer Kubernetes-Job (`mimir-rules-sync-<checksum>`) wird bei jeder Änderung neu erstellt.
-- **Double-Checksum Mechanismus:** Der Name des Jobs basiert auf der Checksumme der **Regeldateien PLUS der Mimir-Infrastruktur-Konfiguration**.
-- **Stabilisierter Job-Template:** Um Konflikte mit immutablen Feldern in Kubernetes zu vermeiden (z.B. `spec.selector`), nutzt das Job-Template eine minimalistische Definition. Kubernetes generiert die notwendigen Selektoren automatisch.
-- **Hintergrund:** Da der Mimir Ruler aktuell flüchtigen Speicher (`emptyDir`) nutzt, gehen geladene Regeln bei einem Pod-Neustart verloren. Ein Neustart wird oft durch Infrastruktur-Änderungen (z.B. Memory-Limits) ausgelöst. Durch die Kopplung der Job-Checksumme an die Infrastruktur stellt Argo CD sicher, dass nach jedem potenziellen Neustart des Rulers auch der Sync-Job erneut läuft und die Regeln wieder einspielt.
-
-**Technische Rationale (Warum dieses Modell?):**
-1. **API-Standard:** Mimir nutzt intern eine komplexe, Base64-kodierte Verzeichnisstruktur für Rule-Dateien. Der API-Weg via `mimirtool` ist der offizielle und robusteste Weg.
-2. **GitOps-Konformität:** Da Kubernetes-Jobs "immutable" sind, ist der Name-Rotation-Ansatz (via Checksum) der einzig zuverlässige Weg in GitOps, um sicherzustellen, dass Logik tatsächlich ausgeführt wird.
-3. **Selbstheilung:** Der Job nutzt Kubernetes-native Retries (`backoffLimit`), um auf die Verfügbarkeit der Mimir-API zu warten, ohne auf Shell-Skripte in distroless Images angewiesen zu sein.
-
-**Zielsystem:**
-
-- Mimir Ruler, Tenant `1`
-
-**Geeignet für:**
-
-- Plattform-Alerts
-- Offizielle Upstream-Alerts
-- Stabile Standard-Regeln
-- Regeln mit klarer Runbook-/Ownership-Zuordnung
-
-### 4.2 Grafana-managed Rules aus Exportdateien
-
-**Kanonische Quelle:**
-
-- `apps/grafana/prod/files/**/alert-rules*.yaml`
-- `apps/grafana/prod/files/**/alert-rules*.yml`
-
-**Provisionierung:**
-
-- Helm rendert pro exportierter Gruppe eine `GrafanaAlertRuleGroup`.
-- Dieser Exportpfad ist der aktuell klare Dateipfad für Grafana-managed Regeln im prod-Setup.
-
-**Zielsystem:**
-
-- Grafana Alerting via Grafana Operator
-
-**Geeignet für:**
-
-- Team-spezifische Alerts
-- UI-basierte Iteration
-- Regeln mit Grafana-spezifischem Ausdrucksmodell
-
-### 4.3 Grafana-managed Rules aus Values
-
-**Kanonische Quelle:**
-
-- `grafanaOperatorCRs.alerting` in den Grafana Values
-
-**Status aktuell:**
-
-- Es existiert die Struktur für Folder/Alerting, aber aktuell noch kein signifikanter produktiver Regelbestand in den prod Values.
-- Der alternative Import von Prometheus-Dateien in Grafana ist zwar templated vorhanden, im prod-Setup aber durch `syncPrometheusRules: false` deaktiviert.
-
-### 4.4 Contact Points und Notification Policies
-
-**Kanonische Quelle:**
-
-- `grafanaOperatorCRs.contactPoints`
-- `grafanaOperatorCRs.notificationPolicies`
-
-**Status aktuell:**
-
-- Platzhalterkonfiguration vorhanden.
-- Echte produktive Receiver und Routing-Matrix fehlen noch.
-
-### 4.5 Recording Rules
-
-**Aktueller Stand:**
-
-- Recording Rules werden jetzt konsistent über den gleichen Mechanismus wie Alert Rules verwaltet.
-- Sie befinden sich in Dateien namens `alerts-rules.yaml` oder `recording-rules*.yaml` (glob: `alerts*.yaml`).
-- Sie werden zusammen mit den Alerts in das Mimir Filesystem-Backend geladen.
-
-**Konzeptentscheidung:**
-- Recording Rules werden im gleichen Mimir-Ruler-Pfad wie Alert Rules geführt, um die Konsistenz der Metriken sicherzustellen.
-
----
-
-## 5. Empfohlenes Zielbild für den Betrieb
-
-### 5.1 Empfohlenes Modell: Hybrid bei Regeln, zentral bei Notifications
-
-Das aktuell im Repo angelegte Modell soll beibehalten, aber beim Notification-Routing stärker vereinheitlicht werden:
-
-#### Mimir Ruler bleibt primär für Prometheus-/Upstream-Regeln
-
-Nutzen für:
-
-- Upstream-Regeln
-- Plattformregeln im Prometheus-Format
-- GitOps-gesteuerte Kernalerts
-
-#### Grafana Alerting ist primär für Grafana-managed Alerts
-
-Nutzen für:
-
-- Teamregeln
-- UI-erstellte Regeln
-- fachbereichsspezifische Alerts
-
-#### Mimir Alertmanager ist die bevorzugte zentrale Notification-Plane
-
-Nutzen für:
-
-- Mimir-Ruler-Alerts
-- Grafana-managed Alerts, wenn Grafana sie an den Mimir Alertmanager weiterleitet
-- einheitliche Contact Points, Notification Policies, Customer-Routen und spätere Eskalationen
-
-So bleibt die Regelerstellung flexibel, während das Routing nicht doppelt gepflegt werden muss.
-
-#### Grafana bleibt die zentrale Sicht
-
-Grafana dient als:
-
-- UI für Regelstatus
-- UI für Alertmanager-Sichtbarkeit
-- Einstiegspunkt für Betrieb und Troubleshooting
-
-### 5.2 Warum kein harter Single-Plane-Ansatz für die Regelerstellung
-
-Ein vollständig vereinheitlichtes Alerting auf nur einem Regeltyp wäre zwar einfacher in der Theorie, ist im aktuellen Repo-Stand aber nicht der natuerliche Pfad.
-
-Gruende:
-
-- Der Mimir-Ruler-Pfad ist für Upstream- und Plattformregeln gut geeignet.
-- Grafana-managed Rules sind für Kunden und UI-nahe Teams deutlich zugänglicher.
-- Eine Konvertierung aller Upstream-Regeln in Grafana-Regeln würde Wartung und Upstream-Updates erschweren.
-- Ein Verbot von Grafana-UI-Alerts würde die Customer Experience verschlechtern.
-
-Deshalb gilt: **Rule-Authoring darf hybrid bleiben, Notification-Routing soll möglichst zentral über Mimir Alertmanager laufen.**
-
----
-
-## 6. Label- und Routing-Standard
-
-Jede produktive Alert-Regel soll mindestens die folgenden Labels tragen:
-
-### Pflicht-Labels
-
-- `severity`
-- `service`
-- `component`
-
-### Empfohlene Routing-Labels
-
-- `domain`
-- `owner`
-- `clusterTier`
-
-### Bedeutung der Labels
-
-#### `severity`
-
-- `critical`: unmittelbarer Handlungsbedarf
-- `warning`: zeitnahe Pruefung erforderlich
-- `info`: informativ, kein Incident per se
-
-#### `service`
-
-Beispiele:
-
-- `kubernetes`
-- `argocd`
-- `kargo`
-- `crossplane`
-- `kyverno`
-- `mimir`
-- `grafana`
-- `otel`
-
-#### `component`
-
-Beispiele:
-
-- `node`
-- `controller`
-- `api-server`
-- `ingester`
-- `ruler`
-- `alertmanager`
-- `deployment`
-- `promotion`
-
-#### `domain`
-
-Beispiele:
-
-- `platform`
-- `gitops`
-- `devexperience`
-- `customer`
-- `observability`
-- `security`
-
-#### `owner`
-
-Beispiele gemäss aktueller Planung:
-
-- `S`
-- `GG`
-- `L`
-- `M`
-- `B`
-- `distribution`
-
-#### `clusterTier`
-
-- `customer`
-- `non-customer`
-
-### Mindestanforderung an Annotations
-
-Jede produktive Regel soll mindestens enthalten:
-
-- `summary`
-- `description`
-
-Optional, aber empfohlen:
-
-- `runbook_url`
-- `dashboard_uid`
-- `panel_id`
-
----
-
-## 7. Alert-Domänen
-
-Die vorhandene Fachplanung deckt folgende Domänen ab.
-
-### 7.1 Cluster Health
-
-Beispiele:
-
-- Node NotReady
-- Disk Pressure
-- Memory Pressure
-- Kubelet down
-- API-Server Fehlerquote
-- Pods stuck Pending
-- CrashLoopBackOff
-
-### 7.2 GitOps / Argo CD
-
-Beispiele:
-
-- App OutOfSync
-- App Health Degraded
-- AppSet Generation Error
-- Repo-Server down
-
-### 7.3 Promotion Pipeline / Kargo
-
-Beispiele:
-
-- Promotion Failed
-- Warehouse stale
-- Freight not verified
-- Stage unhealthy
-
-### 7.4 Observability
-
-Beispiele:
-
-- Grafana down
-- Mimir Distributor/Ingester down
-- Ingestion Drop
-- OTel/Alloy Exportfehler
-
-### 7.5 Security / Governance / Infrastruktur
-
-Beispiele:
-
-- Crossplane Provider down
-- Managed Resource not Ready
-- Kyverno Webhook failures
-- Certificate Renewal failed
-
-### 7.6 Customer Workloads
-
-Beispiele:
-
-- Rollout stuck
-- HPA an Maximalgrenze
-- Quota hoch
-- Pod Restarts
-
-### Priorisierung für den Rollout
-
-Empfohlene Reihenfolge:
-
-1. Observability-Stack selbst
-2. Cluster Health
-3. Argo CD / Kargo
-4. Zertifikate / Ingress
-5. Customer-Workloads
-6. Security-/Governance-Domänen
-
-So wird zuerst die Ueberwachung des Ueberwachers stabilisiert.
-
----
-
-## 8. Notification-Konzept
-
-### 8.1 Startmodell
-
-für den Einstieg ist E-Mail ausreichend, solange das Routing klar ist.
-
-Empfängerarten:
-
-1. direkte verantwortliche Person
-2. Team-/Bereichsverteiler
-3. Teams-Channel-Mailadresse
-
-### 8.2 Routing-Regeln
-
-Routing soll primär ueber Labels erfolgen:
-
-- `severity`
-- `service`
-- `domain`
-- `owner`
-- `clusterTier`
-
-### 8.3 Grundregeln je Severity
-
-#### `critical`
-
-- kurze `group_wait`
-- kurze `group_interval`
-- kurze `repeat_interval`
-- direkte Person plus Verteiler
-
-#### `warning`
-
-- Team-/Owner-basierte Zustellung
-- deutlich längere Wiederholung
-
-#### `info`
-
-- nur Verteiler oder Team-Kanal
-- keine Incident-Charakteristik
-
-### 8.4 Fallback
-
-Jedes Routing benötigt eine belastbare Fallback-Route auf ein zentrales Plattform-Postfach oder einen Plattform-Kanal.
-
-### 8.5 Aktuelle Luecke
-
-Die im Repo vorhandene Grafana-Konfiguration ist aktuell nur ein technischer Platzhalter. Zusätzlich besitzt der Mimir Alertmanager nur eine minimale Fallback-Konfiguration. Vor produktivem Einsatz muessen echte Receiver, Verteiler und Routing-Bedingungen im bevorzugten Zielsystem gepflegt werden.
-
-Empfohlener Zielpfad:
-
-1. Mimir Alertmanager als zentrale Notification-Plane konfigurieren.
-2. Grafana-managed Alerts an den Mimir Alertmanager weiterleiten.
-3. Grafana Contact Points / Notification Policies nur als Fallback oder Übergangslösung verwenden.
-4. Customer-Routing über `namespace` bzw. `k8s_namespace_name` und bei Grafana-managed Alerts optional über Folder-/Customer-Labels abbilden.
-
-### 8.6 Self-Service für Customer Notification Routing
-
-Ein zentrales Routing im Mimir Alertmanager darf nicht bedeuten, dass jede Kundenänderung manuell durch das Observability-Team umgesetzt werden muss.
-
-Für Customer-Self-Service gibt es drei Betriebsmodelle:
-
-1. **GitOps-only:** Kunden stellen Pull Requests für eigene Contact Points und Namespace-Routen. Das ist maximal auditierbar, aber langsam.
-2. **Grafana UI auf Mimir Alertmanager:** Grafana verwaltet den Mimir Alertmanager als Alertmanager-Datasource. Nutzer können dort, bei passenden Berechtigungen, Contact Points, Notification Policies und Silences bearbeiten. Runtime-System bleibt Mimir Alertmanager.
-3. **Customer-owned Routing-Fragmente:** Kunden pflegen eigene Routing-Fragmente in ihren GitOps-Bereichen. Die Plattform rendert daraus eine zentrale Alertmanager-Konfiguration.
-
-Nicht empfohlen ist der Versuch, Mimir-/Prometheus-Alerts erst an Grafanas eingebauten Alertmanager weiterzuleiten, damit dort das zentrale Routing passiert. Grafanas eingebauter Alertmanager ist primär für Grafana-managed Alerts gedacht. Für Mimir-/Prometheus-Alerts ist der Mimir Alertmanager der passendere zentrale Notification-Plane.
-
-Empfohlenes Zielbild:
-
-- kurzfristig: Mimir Alertmanager zentral, Customer-Routen per MR oder kontrollierter Grafana-UI-Verwaltung
-- langfristig: customer-owned GitOps-Fragmente mit klaren Guardrails
-- Guardrail: Kunden dürfen nur eigene Namespace-/Customer-Routen pflegen; globale Routen bleiben Plattform-owned
-
-Da Customer-GitOps-Repositories direkt auf Cust-Clustern deployen und nicht automatisch vom Observability-Repository konsumiert werden, ist eine rein zentrale Mimir-Alertmanager-Konfiguration für Customer-Self-Service nur mit zusätzlicher Integrationslogik möglich.
-
-Pragmatischer Betriebsmodus:
-
-- Plattform-/Upstream-Alerts bleiben im Mimir Ruler und routen über den Mimir Alertmanager.
-- Customer-owned Alerts dürfen weiterhin als Grafana-managed Alerts per UI erstellt, exportiert und über den Grafana Operator aus dem Customer-GitOps-Repository deployed werden.
-- Customer-eigene Notification Policies dürfen für Customer-owned Alerts in Grafana liegen.
-- Plattform-Alerts, die Kunden betreffen, werden im Mimir Alertmanager über `namespace` bzw. `k8s_namespace_name` an Kunden geroutet.
-
-Damit gibt es zwar zwei Notification-Planes, aber mit klarer fachlicher Ownership:
-
-| Alert-Typ | Eigentümer | Notification-Plane |
-|---|---|---|
-| Plattform-/Upstream-Alerts | Plattform/Observability | Mimir Alertmanager |
-| Customer-App-Alerts | Kunde | Grafana Alerting / Grafana-managed Notification Policy |
-| Plattform-Alerts mit Customer-Auswirkung | Plattform + Kunde | Mimir Alertmanager mit Namespace-Routing |
-
-Langfristige Alternative für vollständige Zentralisierung:
-
-- Ein eigener `CustomerAlertRoute`-Controller oder Operator auf Cust-Clustern.
-- Kunden deployen deklarative Routing-Fragmente in ihren eigenen Repositories.
-- Der Controller validiert Namespace-Ownership und synchronisiert erlaubte Fragmente in den zentralen Mimir Alertmanager.
-- Dadurch kann Customer-GitOps den zentralen Alertmanager beeinflussen, ohne direkten Vollzugriff auf globale Routing-Regeln zu erhalten.
-
-### 8.7 Notification-Onboarding für neue Kunden
-
-Beim Onboarding neuer Kunden reicht es nicht, nur Namespaces und Anwendungen anzulegen. Plattform-Alerts können sofort für diese Namespaces feuern, z.B. Kubernetes-, Quota-, Pending-Pod-, Restart- oder HPA-Alerts. Ohne zusätzliche Automation müsste das Observability- oder Cust-Cluster-Team jedes Mal manuell Contact Points und Notification-Routen anlegen.
-
-Deshalb braucht jeder Kunde ein **Notification-Onboarding-Profil**.
-
-Empfohlener Mindeststandard:
-
-1. Jeder Customer-Namespace ist eindeutig einem Kunden zuordenbar.
-   - bevorzugt über Namespace-Label, z.B. `observability.bwcloud.io/customer=<customer-id>`
-   - alternativ über Namenskonvention, z.B. `<customer-id>-*`
-2. Jeder Kunde pflegt ein `CustomerNotificationProfile` oder `CustomerAlertRoute` in seinem eigenen GitOps-Repository.
-3. Dieses Profil enthält Contact Points und erlaubte Namespace-Pattern.
-4. Plattform-Alerts mit Customer-Bezug routen über `namespace` oder `k8s_namespace_name`.
-5. Fehlt ein Profil, gehen Alerts nicht verloren, sondern landen bei `ch-cust-cluster` und `ch-platform-all`.
-
-Kurzfristig kann dies über einen zentralen Customer-Notification-Router umgesetzt werden:
-
-- Mimir Alertmanager routet customer-bezogene Alerts an einen generischen `customer-router-webhook`.
-- Der Router liest `namespace`, `k8s_namespace_name` oder Customer-Labels aus dem Alert.
-- Der Router sucht den passenden Customer Contact Point aus `CustomerNotificationProfile`-Daten.
-- Der Router sendet die Notification an die Kundenadresse oder fällt auf Cust-Cluster/Plattform zurück.
-
-Damit muss der Mimir Alertmanager nicht für jeden neuen Kunden manuell neue Receiver bekommen. Neue Kunden können ihre Notification-Daten über ihr eigenes GitOps-Repository pflegen, während globale Plattform-Routen geschützt bleiben.
-
-### 8.8 Delegierte Customer Notification Policy
-
-Wenn ein Kunde seine Notification Policy selbst ändern möchte, sollte er nicht die globale Alertmanager-Root-Policy bearbeiten. Stattdessen bekommt er einen **delegierten Policy-Subtree** unterhalb seines eigenen Customer-/Namespace-Matchers.
-
-Beispielhafte logische Struktur:
-
-```text
-global root
-├── severity=critical → ch-platform-all, continue=true
-├── namespace=~"customer-a-.*" → customer-a subtree, continue=true
-│   ├── severity=critical, service=frontend → customer-a-frontend-oncall
-│   ├── severity=critical                  → customer-a-critical
-│   ├── severity=warning                   → customer-a-default
-│   └── fallback                           → customer-a-default
-└── fallback → ch-platform-all
+## 1. Intro: Begriffe und Komponenten
+
+### 1.1 Alert Rules — Prometheus vs. Grafana
+
+Es gibt zwei grundlegend verschiedene Typen von Alert Rules:
+
+#### Prometheus-based Alert Rules (Datasource-managed)
+
+- Format: natives Prometheus YAML (`groups[].rules[].alert`)
+- Evaluation liegt **in der Datenquelle** — entweder im Prometheus-Server oder im Mimir Ruler
+- Offizielle Upstream-Mixins (kubernetes-mixin, argocd-mixin, mimir-mixin) liefern dieses Format
+- Regeln sind unabhängig von Grafana — keine UID-Bindung, keine Folder-ID
+- Grafana kann diese Regeln in der UI anzeigen (read-only über Datasource-Dropdown), aber nicht besitzen
+
+```yaml
+groups:
+  - name: kubernetes.rules
+    rules:
+      - alert: NodeNotReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "Node {{ $labels.node }} is NotReady"
 ```
 
-Der Kunde pflegt in seinem eigenen GitOps-Repository ein Objekt wie `CustomerNotificationPolicy`. Dieses Objekt beschreibt nur Receiver und Routen innerhalb seines eigenen Scopes.
+#### Grafana-managed Alert Rules
 
-Erlaubt:
+- Regeln liegen in Grafana (intern), laufen aber gegen beliebige Datasources per PromQL
+- Evaluation durch den Grafana Alerting Engine
+- Gebunden an: Datasource-UID, Folder-ID, Org-Kontext — nicht generisch portierbar
+- GitOps-fähig via Grafana Operator CR `GrafanaAlertRuleGroup`
+- Keine offiziellen Upstream-Bundles: Grafana veröffentlicht absichtlich keine fertigen Rule-Sets,
+  weil Datasource-UIDs und Folder-IDs pro Installation individuell sind
 
-- eigene Receiver definieren
-- eigene Routen unterhalb des Customer-Matchers definieren
-- nach `severity`, `service`, `alertname`, `component`, `namespace` routen
-- eigene Wiederholintervalle und Gruppierung setzen
-
-Nicht erlaubt:
-
-- globale Plattform-Routen ändern
-- fremde Namespaces matchen
-- zentrale Fallback-Receiver überschreiben
-- fremde Kundenreceiver referenzieren
-
-Technische Umsetzungsoptionen:
-
-1. **Controller rendert Customer-Subtrees in den Mimir Alertmanager.**
-   - Vorteil: ein zentraler Runtime-Alertmanager
-   - Nachteil: eigener Controller/Operator nötig
-2. **Customer-Router wertet Customer-Subtrees selbst aus.**
-   - Vorteil: Mimir Alertmanager bleibt stabil und braucht nur eine generische Customer-Route
-   - Nachteil: Router muss Matching, Grouping und Repeat-Logik nachbauen
-3. **Für Customer-owned Grafana Alerts bleibt Grafana Notification Policy aktiv.**
-   - Vorteil: sofort nutzbar mit Grafana Operator und Customer-GitOps
-   - Nachteil: zweite Notification-Plane, aber fachlich auf Customer-owned Alerts begrenzt
-
-Empfehlung:
-
-- kurzfristig Customer-owned Grafana Policies für Customer-owned Alerts zulassen
-- mittelfristig `CustomerNotificationProfile` für einfache Plattform-Alert-Zustellung einführen
-- langfristig `CustomerNotificationPolicy` als delegierten Subtree einführen
-
-#### Ablauf beim `customer-router-webhook`
-
-Der `customer-router-webhook` ist aus Sicht des Mimir Alertmanagers ein finaler Receiver. Der Mimir Alertmanager sendet eine Webhook-Notification an den Router; danach wertet nicht mehr der Alertmanager, sondern der Router weiter aus.
-
-```text
-Mimir Alertmanager
-   → receiver customer-router-webhook
-      → HTTP POST mit Alertmanager-Webhook-Payload
-         → Router liest Alert-Labels (`namespace`, `k8s_namespace_name`, `severity`, `service`, `alertname`)
-         → Router bestimmt Customer über Namespace-Mapping
-         → Router lädt `CustomerNotificationProfile` oder `CustomerNotificationPolicy`
-         → Router bestimmt Zielreceiver
-         → Router sendet E-Mail/Teams/Webhook an Kunden
-         → bei unbekanntem Customer fallback an Cust-Cluster/Plattform
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaAlertRuleGroup
+metadata:
+  name: node-alerts
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+  folderRef: cluster-health
+  rules:
+    - uid: node-not-ready
+      title: "Node NotReady"
+      condition: B
+      data:
+        - refId: A
+          datasourceUid: "<mimir-uid>"
+          model:
+            expr: 'kube_node_status_condition{condition="Ready",status="true"}'
+        - refId: B
+          datasourceUid: "__expr__"
+          model:
+            type: threshold
+            conditions:
+              - evaluator: { params: [1], type: lt }
+      for: 5m
+      labels:
+        severity: critical
+        service: kubernetes
 ```
 
-Für einfache Profile reicht Customer-Lookup plus Zustellung. Wenn Kunden eigene komplexe Policy-Bäume mit `continue`, eigenen Gruppierungen und Wiederholintervallen wollen, muss der Router diese Alertmanager-Semantik selbst nachbauen. In diesem Fall ist langfristig ein Controller, der validierte Customer-Subtrees direkt in den Mimir Alertmanager rendert, robuster.
+### 1.2 Backends: Mimir Ruler und Alertmanager
+
+#### Mimir Ruler
+
+- Komponente innerhalb von Mimir; evaluiert Prometheus-Alert-Regeln tenant-spezifisch
+- Regeln werden via `mimirtool rules load` in die Mimir API gepusht
+- Sendet Firing Alerts **ausschliesslich** an einen konfigurierten Alertmanager-Endpoint (Mimir AM oder kompatibler Prometheus AM)
+- Grafana Alertmanager ist kein offiziell supported Ziel für Mimir Ruler
+
+```text
+Prometheus-Regeln → mimirtool → Mimir API (Tenant 1)
+→ Mimir Ruler evaluiert PromQL → Alert firing
+→ Mimir Ruler → Alertmanager-Endpoint (nur Mimir AM)
+```
+
+#### Mimir Alertmanager (extern)
+
+- Vollständig Prometheus-kompatibler Alertmanager als Teil von Mimir
+- Konfiguration tenant-spezifisch via API (mimirtool oder Crossplane Mimir Provider)
+- Format: Standard Alertmanager v2 YAML — identisch zu Prometheus Alertmanager
+- Routing auf beliebige Labels möglich: `alertname`, `namespace`, `cluster`, `severity`, etc.
+- Konfiguration per Grafana Operator **nicht möglich** (API fehlt, GitHub Issue > 1 Jahr offen)
+
+#### Grafana Alertmanager (intern)
+
+- In Grafana eingebaut; wird automatisch gestartet
+- Empfängt Alerts von Grafana-managed Alert Rules (nicht von Mimir Ruler)
+- Konfiguration via Grafana Operator CRs: `GrafanaContactPoint`, `GrafanaNotificationPolicy`
+- Routing-Modell: identisch zu Prometheus Alertmanager v2
+- Grafana UI zeigt Alertmanager-Dropdown: `Grafana` (intern) und `Mimir` (extern, read-only View)
+
+### 1.3 Notification Policies und Contact Points
+
+#### Contact Point
+
+Definiert **wohin** eine Notification geht — Receiver-Konfiguration.
+
+Unterstützte Typen: Email, Slack, Teams, Webhook, PagerDuty, Telegram, etc.
+
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaContactPoint
+metadata:
+  name: gitops-team-email
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+  name: gitops-team-email
+  type: email
+  settings:
+    addresses: "gg@company.com"
+```
+
+#### Notification Policy
+
+Definiert **Routing-Regeln** — welche Alerts gehen zu welchem Contact Point.
+
+- Baum-Struktur: Root Policy mit verschachtelten Routes
+- Matching via Label-Matchers: `alertname`, `namespace`, `severity`, `service`, etc.
+- Jede Route hat: `receiver`, `matchers`, `group_by`, `group_wait`, `group_interval`, `repeat_interval`
+- Routing auf alle Labels möglich die ein Alert trägt — inkl. Labels aus Prometheus-Zeitreihen
+
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicy
+metadata:
+  name: main-policy
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+  subject:
+    receiver: platform-all        # Root fallback
+    groupBy: [alertname, namespace]
+    routes:
+      - receiver: gitops-team-email
+        matchers:
+          - name: service
+            value: argocd
+      - receiver: crossplane-team
+        matchers:
+          - name: service
+            value: crossplane
+```
+
+#### Grafana OSS RBAC-Constraint
+
+| Rolle | Contact Points | Notification Policies | Alert-Regeln |
+|---|---|---|---|
+| Admin | Lesen + Schreiben (UI + GitOps) | Lesen + Schreiben (UI + GitOps) | Lesen + Schreiben |
+| Editor | Lesen (read-only UI) | Lesen (read-only UI) | Lesen + Schreiben |
+| Viewer | Kein Zugriff auf Alerting-Menü | Kein Zugriff auf Alerting-Menü | Kein Zugriff |
+
+> **REQUIREMENT:** Editor-User können Notification Policies und Contact Points nicht per UI anlegen
+> oder ändern. Kunden (als Editor) können die Konfiguration lesen, aber kein UI-Self-Service für
+> Notification Routing. Alle Notification-Konfigurationen laufen über GitOps (Admin-only).
 
 ---
 
-## 9. Betriebsmodell und GitOps-Workflow
+## 2. Architekturentscheidung
 
-### 9.1 Grundsatz
+### 2.1 Evaluierte Optionen
 
-Alerting wird wie Anwendungskonfiguration behandelt:
+#### Option 1: Mimir Ruler + Mimir Alertmanager (abgelehnt)
 
-- änderungen per Pull Request
-- Review durch Plattform-/Service-Verantwortliche
-- Merge in Git
-- Deployment durch Argo CD
+Prometheus-Regeln → Mimir Ruler → Mimir Alertmanager → Notification.
 
-### 9.2 Workflow für Mimir-Regeln
+**Blocker:**
+- Grafana Operator kann Mimir Alertmanager nicht konfigurieren (keine API für externe AM)
+- mimirtool-Job oder Crossplane Mimir Provider nötig — beides inoffiziell oder eigener Controller
+- Split-Dependencies: Dashboards via Grafana Operator, Alerts via mimirtool, Notification via separatem Controller
 
-1. Regeldatei unter `apps/mimir/prod/files/.../alerts*.yaml` anlegen oder ändern.
-2. PR mit Query, Labels, Annotationen und Runbook-Kontext erstellen.
-3. Nach Merge synchronisiert Argo CD den Mimir-Release.
-4. Argo CD erkennt den neuen Job `mimir-rules-sync-<checksum>` und führt diesen aus.
-5. Der Job lädt die Regeln in die Mimir-API.
-6. Regelstatus wird in Grafana (Dropdown: `mimir`) und über Mimir sichtbar.
+#### Option 2: Mimir Ruler + Grafana Alertmanager (abgelehnt)
 
-### 9.3 Workflow für Grafana-managed Regeln
+Prometheus-Regeln → Mimir Ruler → Grafana Alertmanager als Forwarding-Ziel.
 
-1. Regel in Grafana iterativ erstellen oder ändern.
-2. Vor produktivem Einsatz Export in `alert-rules*.yaml`.
-3. Datei im Repo versionieren.
-4. Provisionierung über Grafana Operator.
+**Blocker:**
+- Grafana Alertmanager ist kein offiziell supported Ziel für Mimir Ruler — Kompatibilität nicht garantiert
 
-### 9.4 DoD für jede produktive Regel
+#### Option 3: Grafana-managed Alerts + Mimir Alertmanager extern (abgelehnt)
 
-Eine Regel gilt erst als produktionsreif, wenn:
+Grafana evaluiert Regeln, sendet Alerts an Mimir Alertmanager.
 
-- Query fachlich nachvollziehbar ist
-- `severity`, `service`, `component` gesetzt sind
-- `domain` und `owner` gepflegt sind, sofern Routing darauf basiert
-- `summary` und `description` vorhanden sind
-- ein Test für Firing und Resolve durchgeführt wurde
-- der Empfängerpfad verifiziert wurde
+**Blocker:**
+- `GrafanaNotificationPolicy` CR greift ausschliesslich auf internen Grafana Alertmanager zu
+- Programmatische GitOps-Konfiguration von Notification Policies für externen AM nicht möglich
+- Grafana kann Mimir AM in der UI als Datasource anzeigen, aber nicht als Notification-Plane konfigurieren
 
----
+#### Option 4: Grafana-managed Alerts + Grafana Alertmanager intern (gewählt)
 
-## 10. Validierung und Teststrategie
+Grafana evaluiert Regeln gegen Mimir (PromQL-Datasource). Interner Grafana Alertmanager übernimmt Routing.
+Alles via Grafana Operator GitOps-fähig.
 
-### Technische Validierung
+**Warum:**
+- `GrafanaAlertRuleGroup`, `GrafanaContactPoint`, `GrafanaNotificationPolicy` — alle vom Grafana Operator supported
+- Eine einzige Dependency-Kette: Argo CD → Grafana Operator → Grafana
+- Dashboards und Alerts laufen über denselben Operator
 
-- Regeldatei ist syntaktisch gültig.
-- Tenant `1` wird konsistent verwendet.
-- `mimir-rules-sync-<checksum>` Job läuft erfolgreich durch.
-- Regeln sind über die Mimir Rules API (Dropdown in Grafana) sichtbar.
-- Regeln erscheinen in Grafana Alerting (Datenquelle: `mimir`).
+### 2.2 Entscheidungsmatrix
 
-### Funktionale Validierung
-
-- Test-Alert feuert wie erwartet.
-- Notification kommt beim richtigen Empfänger an.
-- Resolve-Nachricht wird korrekt verarbeitet.
-- Labels sind konsistent genug für Routing und Filterung.
-
-### Operative Validierung
-
-- Kein massiver Alert-Noise.
-- Kein unerwartetes `NoData` bei Standardmetriken.
-- Keine unklaren Alerts ohne Handlungsanweisung.
+| Aspekt | Entscheidung |
+|---|---|
+| Regelquelle | Grafana-managed Rules (`GrafanaAlertRuleGroup`) |
+| Evaluierung | Grafana Alerting Engine |
+| Datasource | Mimir (PromQL), Tenant `1` |
+| Notification-Plane | Grafana Alertmanager (intern) |
+| GitOps-Mechanismus | Grafana Operator CRs |
+| Mimir Ruler | Nicht verwendet für Alert-Regeln |
+| Mimir Alertmanager | Nicht primäre Plane; läuft passiv |
 
 ---
 
-## 11. Offene Entscheidungen und Risiken
+## 3. Alert Rules: Konzeption und Implementation
 
-### Offene Entscheidungen
+### 3.1 Alert-Domänen
 
-1. Wie wird die Weiterleitung von Grafana-managed Alerts an den Mimir Alertmanager zuverlässig GitOps-fähig umgesetzt und validiert?
-2. Wo sollen Recording Rules dauerhaft verwaltet werden?
-3. Welche Alert-Domänen gelten als verpflichtender Plattform-Standard und welche nur als Referenzkatalog?
-4. Wie wird später Multi-Cluster-Routing abgebildet?
-5. Welche Empfänger und Teams-Channel sind produktiv verbindlich?
+| Domäne | Beispiele |
+|---|---|
+| Cluster Health | Node NotReady, Disk/Memory Pressure, Kubelet down, API-Server Error Rate, CrashLoopBackOff |
+| GitOps / Argo CD | App OutOfSync, App Degraded, AppSet Generation Error, Repo-Server down |
+| Kargo | Promotion Failed, Warehouse stale, Freight not verified, Stage unhealthy |
+| Observability | Grafana down, Mimir Distributor/Ingester down, Ingestion Drop, Alloy Export Fehler |
+| Infrastruktur | Crossplane Provider down, Managed Resource not Ready, Kyverno Webhook failures, Cert Renewal failed |
+| Customer Workloads | Rollout stuck, HPA at Max, Quota > 90%, Pod Restarts |
 
-### Risiken
+**Rollout-Reihenfolge:** Observability → Cluster Health → Argo CD / Kargo → Zertifikate → Customer → Security
 
-- Platzhalter-Receiver fuehren zu Scheinsicherheit.
-- UI-änderungen ohne Rueckfuehrung ins Repo fuehren zu Drift.
-- Nicht vorhandene Metriken können geplante Alerts unbrauchbar machen.
-- Zu viele `critical` Alerts fuehren zu Alarm-Fatigue.
-- Unklare Ownership macht Alerts operativ wertlos.
+### 3.2 Label-Standard
+
+#### Pflicht-Labels
+
+| Label | Werte |
+|---|---|
+| `severity` | `critical` / `warning` / `info` |
+| `service` | `kubernetes`, `argocd`, `kargo`, `crossplane`, `kyverno`, `mimir`, `grafana`, `otel` |
+| `component` | `node`, `controller`, `api-server`, `ingester`, `deployment`, `promotion` |
+
+#### Routing-Labels (empfohlen)
+
+| Label | Werte |
+|---|---|
+| `domain` | `platform`, `gitops`, `devexperience`, `customer`, `observability`, `security` |
+| `owner` | `S`, `GG`, `L`, `M`, `B`, `distribution` |
+| `clusterTier` | `customer`, `non-customer` |
+| `namespace` | Kubernetes-Namespace (aus Zeitreihen-Labels automatisch verfügbar) |
+| `cluster` | Cluster-Identifier (von Alloy als `external_label` gesetzt) |
+
+#### Pflicht-Annotations
+
+- `summary` — Kurzbeschreibung
+- `description` — Kontext und mögliche Ursache
+
+#### Optionale Annotations
+
+- `runbook_url`, `dashboard_uid`, `panel_id`
+
+### 3.3 Label-Vererbung aus Zeitreihen
+
+Wenn eine PromQL-Query Zeitreihen mit Labels zurückgibt, erbt jede Alert-Instanz diese Labels automatisch.
+Routing auf diese Labels funktioniert ohne manuelle Konfiguration.
+
+```text
+kube_pod_info{namespace="customer-a", pod="my-pod"}
+→ Alert hat automatisch: namespace=customer-a, pod=my-pod
+→ Routing auf namespace=~"customer-a-.*" funktioniert
+```
+
+**Wichtig bei Aggregationen:** Labels gehen bei `count()`, `sum()` etc. verloren wenn `by(label)` fehlt.
+
+| Label | Herkunft |
+|---|---|
+| `alertname` | Alert-Regel selbst |
+| `namespace` | kube-state-metrics Zeitreihen-Label |
+| `cluster` | Alloy external_label |
+| `severity`, `service`, `owner`, `domain`, `clusterTier` | Statisch in Alert-Regel gesetzt |
+
+### 3.4 Optionen für Standard-Alerts (Prometheus-Format → Grafana-Format)
+
+Upstream-Mixins liefern Prometheus-Format. Grafana veröffentlicht keine fertigen Bundles (UID-Portabilitätsproblem).
+Konvertierung ist einmalig erforderlich.
+
+#### Option A: Mimir Ruler (abgelehnt)
+
+Prometheus-Regeln direkt in Mimir Ruler laden — kein Konvertierungsaufwand.
+
+**Abgelehnt:** Mimir Ruler hat keinen kompatiblen AM-Endpoint für Grafana Alertmanager (Abschnitt 2).
+
+#### Option B: Import via Grafana-UI, dann exportieren
+
+Prometheus-Regeln per UI importieren, als Grafana-managed Rules speichern, exportieren, versionieren.
+
+**Nachteil:** UI-basierter Schritt; einmalig akzeptabel, nicht skalierbar.
+
+#### Option C: Manuelle Konvertierung in `GrafanaAlertRuleGroup` YAML
+
+Prometheus-Regeldatei manuell in `GrafanaAlertRuleGroup` CR umschreiben.
+
+**Vorteil:** Volle Kontrolle, direkt GitOps-fähig.
+**Nachteil:** Upstream-Updates müssen manuell nachgezogen werden.
+
+#### Option D: Helm-Template-Konvertierung (empfohlen)
+
+Helm-Template rendert Prometheus-Regeldateien on-the-fly in `GrafanaAlertRuleGroup` CRs.
+Originaldateien bleiben im Prometheus-Format erhalten — portabel und als Referenz nutzbar.
+
+```
+apps/grafana/noctua/
+├── files/
+│   └── prometheus-rules/               # Prometheus-Format (Referenz, portabel)
+│       ├── kubernetes-alerts.yaml
+│       └── argocd-alerts.yaml
+└── templates/
+    └── grafana-alert-rule-groups.yaml  # Helm → GrafanaAlertRuleGroup CRs
+```
+
+```yaml
+# values.yaml
+grafana:
+  mimirDatasourceUID: "mimir-prod-uid"   # Konstante — ändert sich nicht ohne Neuinstallation
+
+# Helm-Template
+- refId: A
+  datasourceUid: {{ .Values.grafana.mimirDatasourceUID | quote }}
+```
+
+**Vorteil:** Originaldateien bleiben portabel; Konvertierung automatisiert.
+**Nachteil:** Helm-Template-Komplexität; UID muss als Variable gepflegt werden.
+
+> **Risiko:** Datasource-UID ändert sich bei Neuanlage der Grafana-Instanz. Alle `GrafanaAlertRuleGroup`
+> Ressourcen müssen dann aktualisiert werden. UID als versionierte Konstante in `values.yaml` behandeln.
+
+### 3.5 GitOps-Workflow Alert Rules
+
+```text
+1. GrafanaAlertRuleGroup CR anlegen
+   → manuell oder via Helm-Template aus Prometheus-Regeldatei
+   → Ablegen in apps/grafana/noctua/files/alert-rules/ oder als Template
+
+2. PR mit: Query, Labels, Annotations, Runbook-Kontext
+
+3. Merge → Argo CD sync → Grafana Operator reconcile → Grafana
+
+4. Validierung:
+   → kubectl get grafanaalertrulegroup -n grafana (Status prüfen)
+   → Grafana UI: Alerting → Alert Rules
+```
+
+### 3.6 Definition of Done (pro Regel)
+
+- [ ] Query fachlich validiert
+- [ ] `severity`, `service`, `component` gesetzt
+- [ ] `owner` und `domain` gesetzt (Routing-relevant)
+- [ ] `summary` und `description` vorhanden
+- [ ] Firing und Resolve getestet
+- [ ] Empfängerpfad verifiziert
 
 ---
 
-## 12. Konkrete Empfehlungen für die nächsten Schritte
+## 4. Notification Policy & Contact Points
 
-### Kurzfristig
+### 4.1 Infra-Team Routing (Plattform-eigene Alerts)
 
-1. Echte Grafana Contact Points und Notification Policies hinterlegen.
-2. Kernalerts für Observability und Cluster Health produktiv verdrahten.
-3. Alert-Labels vereinheitlichen.
-4. Den Tenant-Standard `1` in allen Alerting-Pfaden beibehalten.
+Routing basiert auf Labels, die in den Alert Rules statisch gesetzt werden.
+Grafana Alertmanager v2 — Routing identisch zu Prometheus Alertmanager.
 
-### Mittelfristig
+#### Routing-Matrix
 
-1. Recording Rules sauber von Alert Rules trennen.
-2. Grafana-Exportpfad für Team-Alerts etablieren.
-3. Argo CD- und Kargo-Alerts schrittweise produktiv machen.
-4. Runbook-Links pro Kernalert nachziehen.
+| Bereich | Verantwortlich | Route-Matcher | Empfänger |
+|---|---|---|---|
+| DevExperience | S | `owner=S` | S-direkt + devex-verteiler + devex-teams |
+| GitOps / Argo CD / Kargo | GG | `service=argocd` oder `service=kargo` | GG-direkt + gitops-verteiler + gitops-teams |
+| Crossplane | L | `service=crossplane` | L-direkt + infra-verteiler + infra-teams |
+| Kyverno | Verteiler | `service=kyverno` | kyverno-verteiler + security-teams |
+| Customer-Cluster | M | `clusterTier=customer` | M-direkt + customer-verteiler + customer-teams |
+| Non-Customer-Cluster | B | `clusterTier=non-customer` | B-direkt + platform-verteiler + platform-teams |
+| Fallback | — | — | platform-all |
 
-### Später
+#### Ziel-Routing-Struktur
 
-1. Multi-Cluster-Routing einfuehren.
-2. Nicht-Metrik-Signale mit Loki/Tempo bewerten.
-3. Eskalationslogik ueber E-Mail hinaus erweitern.
+```text
+Root Policy (receiver: platform-all)
+├── service=argocd OR service=kargo  → GG + gitops-verteiler + gitops-teams
+├── owner=S                          → S + devex-verteiler + devex-teams
+├── service=crossplane               → L + infra-verteiler + infra-teams
+├── service=kyverno                  → kyverno-verteiler + security-teams
+├── clusterTier=customer
+│   ├── namespace=~customer-a-.*    → customer-a-contact-point     ← Customer-eigener CP
+│   ├── namespace=~customer-b-.*    → customer-b-contact-point
+│   └── fallback                    → M + customer-verteiler + customer-teams
+├── clusterTier=non-customer         → B + platform-verteiler + platform-teams
+└── fallback                         → platform-all
+```
+
+#### Severity-Intervalle
+
+| Severity | group_wait | group_interval | repeat_interval |
+|---|---|---|---|
+| `critical` | 30s | 5m | 30m |
+| `warning` | 2m | 15m | 4h |
+| `info` | 5m | 1h | 24h |
+
+**Fallback-Pflicht:** Jede Route braucht eine Fallback-Route auf `platform-all`. Kein Alert ohne Empfänger.
+
+### 4.2 GitOps-Implementierung
+
+Contact Points und Notification Policies werden ausschliesslich via Grafana Operator deployed.
+Manuelle UI-Änderungen werden von Argo CD überschrieben.
+
+```text
+apps/grafana/noctua/templates/
+├── grafana-operator-contactpoints.yaml         # GrafanaContactPoint CRs
+└── grafana-operator-notification-policies.yaml # GrafanaNotificationPolicy CR
+```
+
+```yaml
+# GrafanaContactPoint Beispiel
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaContactPoint
+metadata:
+  name: gitops-team-gg
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+  name: gitops-team-gg
+  type: email
+  settings:
+    addresses: "gg@company.com;gitops-verteiler@company.com"
+```
+
+```text
+Workflow:
+1. GrafanaContactPoint / GrafanaNotificationPolicy CR bearbeiten
+2. PR → Merge
+3. Argo CD sync → Grafana Operator reconcile → Grafana Alertmanager
+```
+
+### 4.3 Optionen für Notification-Konfiguration (evaluiert)
+
+#### Option A: Mimir Alertmanager + mimirtool-Job (abgelehnt)
+
+Job liest ConfigMap mit AM-Konfiguration und pusht via `mimirtool rules load`.
+
+**Abgelehnt:** Eigene Controller-Komponente nötig; Mimir AM per Grafana Operator nicht konfigurierbar.
+
+#### Option B: Crossplane Mimir Provider (abgelehnt)
+
+Community-Port des Terraform-Providers; verwaltet Mimir AM Konfiguration als CR.
+
+**Abgelehnt:** Inoffiziell, nicht supported; splitted Dependencies zu Grafana Operator.
+
+#### Option C: Grafana Operator CRs auf internen AM (gewählt)
+
+`GrafanaContactPoint` + `GrafanaNotificationPolicy` CRs via Grafana Operator.
+
+**Warum:** Einzige vollständig GitOps-fähige Option; keine zusätzliche Dependency.
 
 ---
 
-## 13. Verbindliche Leitlinie
+## 5. Self-Service: Customer Alert Rules & Routing
 
-Bis zu einer späteren Architekturentscheidung gilt für dieses Repository:
+### 5.1 Überblick
 
-- **Mimir-Ruler-Regeln** sind die bevorzugte Quelle für plattformweite Standard-Alerts.
-- **Grafana-managed Regeln** sind zulässig für teamnahe und iterativ gepflegte Alerts, muessen aber versioniert werden.
-- **Mimir Alertmanager** ist die bevorzugte zentrale Notification-Plane.
-- **Grafana** ist die zentrale Sicht auf Alerting, Regeln, Silences und Alertmanager-Status.
-- **Tenant `1`** ist der verbindliche Standard für interne Metriken und Alerts.
-- **Produktive Alerts ohne klare Labels, Ownership und Notification-Ziel sind nicht fertig.**
+Kunden deployen Alert Rules aus ihrem eigenen GitOps-Repository.
+Der Grafana Operator picked CRs aus beliebigen Namespaces auf (via `instanceSelector`).
+Notification Routing wird vom Plattform-Team verwaltet und ergänzt die zentrale Policy.
+
+```text
+Customer-GitOps-Repo
+  └── namespaces/customer-a/
+      ├── grafana-folder.yaml            # GrafanaFolder CR
+      ├── grafana-alert-rule-group.yaml  # GrafanaAlertRuleGroup CR
+      └── grafana-contact-point.yaml     # GrafanaContactPoint CR (optional)
+
+Grafana Operator (im Plattform-Cluster)
+  → watched namespace: customer-a-namespace
+  → picked up CRs mit instanceSelector: dashboards=grafana
+  → provisioniert in zentraler Grafana-Instanz
+
+Plattform-Repo
+  └── apps/grafana/noctua/templates/
+      └── grafana-operator-notification-policies.yaml
+          → Route für namespace=~"customer-a-.*" ergänzt
+```
+
+### 5.2 Was Kunden selbst deployen können
+
+#### GrafanaAlertRuleGroup (Customer-Namespace)
+
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaAlertRuleGroup
+metadata:
+  name: customer-a-app-alerts
+  namespace: customer-a-namespace
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+  folderRef: customer-a-folder
+  rules:
+    - uid: customer-a-pod-restarts
+      title: "Pod Restarts > 5/h"
+      condition: B
+      data:
+        - refId: A
+          datasourceUid: "<mimir-datasource-uid>"   # Konstante, vom Plattform-Team dokumentiert
+          model:
+            expr: 'increase(kube_pod_container_status_restarts_total{namespace="customer-a-namespace"}[1h])'
+        - refId: B
+          datasourceUid: "__expr__"
+          model:
+            type: threshold
+            conditions:
+              - evaluator: { params: [5], type: gt }
+      for: 0s
+      labels:
+        severity: warning
+        owner: customer-a
+        namespace: customer-a-namespace   # Für Routing nutzbar
+```
+
+#### GrafanaContactPoint (Customer-Namespace, optional)
+
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaContactPoint
+metadata:
+  name: customer-a-email
+  namespace: customer-a-namespace
+spec:
+  instanceSelector:
+    matchLabels:
+      dashboards: "grafana"
+  name: customer-a-email
+  type: email
+  settings:
+    addresses: "team@customer-a.com"
+```
+
+### 5.3 Was Kunden nicht selbst deployen können
+
+- `GrafanaNotificationPolicy` — greift auf zentrale Routing-Konfiguration zu, muss Plattform-owned bleiben
+- Contact Points anderer Kunden referenzieren
+- Labels aus fremden Namespaces matchen
+
+### 5.4 Wie Customer Routing in die zentrale Policy integriert wird
+
+Das Plattform-Team ergänzt die zentrale `GrafanaNotificationPolicy` um eine Route für den Customer-Namespace.
+Die Customer-eigene Route ist ein Sub-Tree unterhalb des `clusterTier=customer`-Branches.
+
+```yaml
+# Plattform-Repo: grafana-operator-notification-policies.yaml
+routes:
+  - receiver: platform-all
+    matchers:
+      - name: clusterTier
+        value: customer
+    routes:
+      # Plattform fügt pro Customer eine Route hinzu:
+      - receiver: customer-a-email       # Customer-a hat eigenen CP deployed
+        matchers:
+          - name: namespace
+            value: "customer-a-namespace"
+            isRegex: false
+      - receiver: customer-b-email
+        matchers:
+          - name: namespace
+            value: "customer-b-.*"
+            isRegex: true
+      # Fallback für unbekannte Customer-Namespaces:
+      - receiver: customer-teams-fallback
+```
+
+**Was Customer-Labels für Routing liefern:**
+
+- `namespace` — aus kube-state-metrics Zeitreihen, automatisch vorhanden
+- `owner` — statisch in Customer-Alert-Regeln setzbar
+- `alertname` — aus Alert-Regel
+- `severity` — statisch setzbar
+
+**Routing-Fähigkeiten:**
+
+```yaml
+routes:
+  - matchers:
+      - name: namespace
+        value: "customer-a-namespace"
+    receiver: customer-a-email
+  - matchers:
+      - name: owner
+        value: "customer-a"
+    receiver: customer-a-email
+  - matchers:
+      - name: namespace
+        value: "customer-.*"
+        isRegex: true
+      - name: severity
+        value: critical
+    receiver: customer-critical-all
+```
+
+### 5.5 Ownership-Modell
+
+| Alert-Typ | Regelquelle | Routing-Verantwortung | Notification-Plane |
+|---|---|---|---|
+| Plattform-Alerts | Plattform-Repo | Plattform | Grafana Alertmanager (intern) |
+| Customer-App-Alerts | Customer-Repo | Plattform (ergänzt Route) + Kunde (Contact Point) | Grafana Alertmanager (intern) |
+| Plattform-Alerts mit Customer-Auswirkung | Plattform-Repo | Plattform (Namespace-Routing) | Grafana Alertmanager (intern) |
+
+Genau eine Notification-Plane für alle Alert-Typen.
+
+### 5.6 Constraints und offene Punkte
+
+| Constraint / Punkt | Details |
+|---|---|
+| Editor-User können Notification Policies nicht per UI ändern | Nur read-only; Routing läuft via GitOps |
+| Plattform muss pro Customer eine Route manuell hinzufügen | Kein automatisches Self-Service für Routing; Automatisierung mittelfristig möglich |
+| Datasource-UID muss dem Kunden bekannt sein | Als Konstante in Plattform-Doku / values.yaml pflegen |
+| Multi-Cluster-Routing (mehrere Cust-Cluster) | Noch nicht abgebildet |
 
 ---
 
-## 14. Referenzen im Repository
+## 6. Offene Punkte
 
-- `docs/Plan to realise alerts.md`
-- `apps/grafana/alerting-plan.md`
+| Punkt | Status |
+|---|---|
+| Standard-Alerts (Kubernetes, Argo CD) via Helm-Template konvertieren | Offen |
+| Echte Contact Points für alle Infra-Team-Empfänger hinterlegen | Offen |
+| Zentrale Notification Policy mit vollständiger Routing-Matrix deployen | Offen |
+| Datasource-UID als Konstante in `values.yaml` dokumentieren | Offen |
+| Multi-Cluster-Routing (mehrere Cust-Cluster) | Später |
+| Runbook-Links pro Kernalert | Mittelfristig |
+| Automatisches Customer-Routing (kein manuelles PR pro Kunde) | Mittelfristig |
+
+---
+
+## 7. Leitlinie
+
+- Grafana-managed Alert Rules sind die einzige primäre Regelquelle.
+- Grafana Alertmanager (intern) ist die einzige primäre Notification-Plane.
+- Mimir Ruler nicht für produktive Alert-Regeln (technischer Blocker, Abschnitt 2).
+- Mimir Alertmanager nicht als Notification-Plane (Grafana Operator API fehlt, Abschnitt 2).
+- UI-Änderungen an Contact Points und Policies sind nicht persistent — nur GitOps zählt.
+- Editor-User können Notification Policies und Contact Points nur lesen, nicht schreiben.
+- Tenant `1` ist Standard für alle Mimir-Queries.
+
+---
+
+## 8. Referenzen
+
+- `docs/alerting-plan.md` — Alert-Regelkatalog mit PromQL-Queries
 - `docs/OBSERVABILITY.md`
 - `docs/MIMIR.md`
-- `apps/mimir/prod/values.yaml`
-- `apps/mimir/base/values.yaml`
-- `apps/mimir/prod/templates/ruler-rules-sync.yaml`
-- `apps/mimir/prod/files/mimir/alerts.yaml`
-- `apps/grafana/base/values.yaml`
-- `apps/grafana/prod/values.yaml`
-- `apps/grafana/prod/templates/grafana-operator-managed-alerts-from-grafana-exports.yaml`
-- `apps/grafana/prod/templates/grafana-operator-managed-alerts-from-prometheus-files.yaml`
-- `apps/grafana/prod/templates/grafana-operator-contactpoints.yaml`
-- `apps/grafana/prod/templates/grafana-operator-notification-policies.yaml`
-- `apps/grafana/prod/files/mimir/rules.yaml`
-- `apps/alloy/config.alloy`
+- `apps/grafana/noctua/values.yaml`
+- `apps/grafana/noctua/templates/`
+- `apps/crossplane/noctua/templates/mimir-alertmanager-config.yaml` — Test-Telegram-Receiver
+
+---
+
+## Anhang A: Archiv — Alte Architektur (Mimir Ruler + Mimir Alertmanager)
+
+> **Archiv:** Dokumentiert die ursprünglich geplante Hybrid-Architektur. Abgelöst durch Abschnitt 2.
+> Bleibt als Referenz erhalten, falls sich die technischen Constraints ändern.
+
+### A.1 Geplantes Hybrid-Modell
+
+- **Pfad A:** Mimir Ruler evaluiert Prometheus-Regeln → Mimir Alertmanager
+- **Pfad B:** Grafana-managed Alerts → weitergeleitet an Mimir Alertmanager als externe Plane
+
+Ziel: Mimir Alertmanager als zentrale Notification-Plane für beide Alert-Typen.
+
+### A.2 Mimir Ruler
+
+```text
+Prometheus-Regeln → mimirtool rules load → Mimir API (Tenant 1)
+→ Mimir Ruler evaluiert PromQL → Alert firing
+→ Mimir Ruler → Alertmanager-Endpoint (nur Mimir AM)
+```
+
+### A.3 GitOps-Mechanismus: Checksum-basierter Sync-Job
+
+Kubernetes-Jobs sind immutable (Name + Selector nach Erstellung unveränderbar). Lösung: Name-Rotation via Checksum.
+
+```text
+1. Regeldateien: apps/mimir/prod/files/**/alerts*.yaml
+2. Helm-Template bündelt alle in ConfigMap: mimir-rules-bundle
+3. Job: mimir-rules-sync-<checksum>
+4. Checksum = Hash(Regeldateien + Mimir-Infrastruktur-Config)
+5. Änderung → neue Checksum → neuer Job → Argo CD erstellt ihn → mimirtool pusht Regeln
+```
+
+**Doppelte Checksum:** Mimir Ruler nutzt `emptyDir` — bei Pod-Neustart gehen Regeln verloren.
+Infrastruktur-Änderungen (Memory-Limits etc.) triggern Pod-Neustart. Checksum-Kopplung stellt sicher,
+dass Sync-Job nach jedem Ruler-Neustart erneut läuft.
+
+**Archivierte Dateien:**
+
+```
+apps/mimir/prod/
+├── files/mimir/alerts.yaml               # Prometheus-Format (Referenz, behalten)
+└── templates/
+    ├── ruler-rules-configmap.yaml         # Obsolet
+    └── ruler-rules-sync.yaml             # Obsolet
+```
+
+### A.4 Mimir Alertmanager
+
+Prometheus-kompatibler Alertmanager als Teil von Mimir. Konfiguration tenant-spezifisch via API.
+
+**Evaluierte Deployment-Optionen:**
+
+| Option | Mechanismus | Warum abgelehnt |
+|---|---|---|
+| mimirtool CLI-Job | Job liest ConfigMap, pusht via Mimir API | Eigene Controller-Komponente; Split-Dependencies |
+| Crossplane Mimir Provider | Community-Port des Terraform-Providers | Inoffiziell, nicht supported |
+| Grafana Operator | `GrafanaNotificationPolicy` CR | Greift nur auf internen Grafana AM zu — nicht Mimir AM |
+
+### A.5 Warum das Hybrid-Modell nicht funktioniert
+
+```
+Problem 1: Grafana Operator → Mimir Alertmanager
+  GrafanaNotificationPolicy CR
+    → Grafana Internal API (/api/alertmanager/grafana/...)
+    → Interner Grafana Alertmanager
+  Mimir Alertmanager
+    → Eigene API (/api/v1/alerts)
+    → KEIN Zugriff via Grafana Operator
+  GitHub Issue > 1 Jahr offen.
+
+Problem 2: Mimir Ruler → Grafana Alertmanager
+  Mimir Ruler sendet Alerts nur an konfigurierten alertmanager_url.
+  Grafana Alertmanager ist kein offiziell supported Ziel. Kompatibilität nicht garantiert.
+
+Problem 3: Split-Dependencies
+  Dashboards: Grafana Operator
+  Alert-Regeln: Mimir Ruler via mimirtool-Job
+  Notification Config: Crossplane Provider oder eigener Controller
+  → Drei verschiedene Sync-Mechanismen mit je eigenen Fehlerquellen.
+```
+
+### A.6 Datei-Status
+
+| Datei / Komponente | Status |
+|---|---|
+| `apps/mimir/prod/files/**/alerts*.yaml` | Behalten — portable Prometheus-Referenz |
+| `apps/mimir/prod/templates/ruler-rules-configmap.yaml` | Obsolet |
+| `apps/mimir/prod/templates/ruler-rules-sync.yaml` | Obsolet |
+| `apps/crossplane/noctua/templates/mimir-alertmanager-config.yaml` | Aktiv (Test-Telegram-Receiver) |
+| Mimir Ruler Deployment | Passiv — läuft, keine Regeln geladen |
+| Mimir Alertmanager | Passiv — minimale Fallback-Konfiguration |
+
+### A.7 Wann könnte Hybrid wieder relevant werden?
+
+1. Grafana Operator bekommt Support für externe Alertmanager in `GrafanaNotificationPolicy`.
+2. Offizieller, supported Crossplane Mimir Provider verfügbar.
+3. Mandatorische Tenant-Isolation pro Kunde nötig (Mimir AM unterstützt Tenant-Isolation nativ, Grafana AM nicht).
+4. Upstream-Prometheus-Mixins direkt ohne Konvertierung einsetzen.
