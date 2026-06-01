@@ -8,7 +8,7 @@ metadata:
 spec:
   package: xpkg.upbound.io/grafana/provider-grafana:v0.22.0
 ---
-apiVersion: grafana.upbound.io/v1beta1
+apiVersion: grafana.crossplane.io/v1beta1
 kind: ProviderConfig
 metadata:
   name: default
