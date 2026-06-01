@@ -15,7 +15,7 @@ spec:
           - alertname
         groupWait: 10s
         groupInterval: 10s
-        repeatInterval: 1m
+        repeatInterval: 4h
     receiver:
       - name: telegram
         telegramConfigs:
