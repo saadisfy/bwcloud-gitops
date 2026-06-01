@@ -184,14 +184,18 @@ To collect and persist cluster logs efficiently, we deployed Loki and expanded o
   * *Note:* Specifying retention requires setting `delete_request_store: filesystem` under `compactor` in Loki v3.x+.
 * **Grafana Integration:** Added Loki as a data source under `grafana.datasources.datasources.yaml` with the URL `http://loki-gateway.loki.svc.cluster.local` and UID `loki`.
 
-### Consolidated DaemonSet for Metrics & Logs
+### Consolidated DaemonSet for Metrics & Logs (OTLP-First)
 * **Challenge:** Deploying a separate collector for logs (`alloy-logs`) would spin up another 5 pods on a 5-node cluster, consuming significant node resources.
 * **Solution:** We consolidated log collection onto the existing `alloy-node` DaemonSet (Tier 1 agent).
-* **Configuration:**
-  * Enabled the `filesystem-log-reader` preset on `alloy-node`.
-  * Assigned the `podLogsViaLoki` feature to target the `alloy-node` collector.
-  * Added the `loki` destination pointing directly to `http://loki-gateway.loki.svc.cluster.local/loki/api/v1/push`.
-* **Result:** Pod logs are read directly from `/var/log/pods` by `alloy-node` and shipped to Loki without creating new workloads.
+* **Enforcing OTLP and k8sattributes:**
+  * Enabled `podLogsViaOpenTelemetry` (instead of `podLogsViaLoki`) to enforce pure OpenTelemetry log formats.
+  * Added the `loki-otlp` destination of type `otlp` (URL: `http://loki-gateway.loki.svc.cluster.local/otlp`) with `logs.enabled: true`.
+  * Routed `podLogsViaOpenTelemetry` logs to `loki-otlp` so they bypass the central Tier 2 gateway, preventing log-processing bottlenecks.
+  * Set `stabilityLevel: public-preview` on the `alloy-node` collector as required by OTel logs features.
+* **Metadata Enrichment (Local k8sattributes):**
+  * The node agents run `otelcol.processor.k8sattributes` locally, caching metadata only for pods running on their own node (filtered by environment variable `K8S_NODE_NAME` to protect the API server).
+  * This processor enriches logs with `k8s.deployment.name`, `k8s.statefulset.name`, `k8s.daemonset.name`, `k8s.node.name`, and other Kubernetes metadata using the official `k8s.pod.uid` association.
+  * The enriched logs are batched and exported directly via OTLP to Loki's native OTLP ingestion endpoint, ensuring 100% OTLP resource attribute compliance.
 
 ### Memberlist DNS Deadlock Mitigation
 * **Challenge:** During initial startup, Loki pods returned `503 Service Unavailable` on `/ready` because the `loki-memberlist` headless service selector had no endpoints. CoreDNS returned `NXDOMAIN` (No such host) because the headless service filters out unready pods. This prevented memberlist from initializing, causing a deadlock.
