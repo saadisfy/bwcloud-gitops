@@ -23,7 +23,7 @@ grafana:
           access: proxy
           url: http://mimir-gateway.mimir.svc.cluster.local
           jsonData:
-            handleGrafanaManagedAlerts: false
+            handleGrafanaManagedAlerts: true
             implementation: mimir
             httpHeaderName1: X-Scope-OrgID
           secureJsonData:
