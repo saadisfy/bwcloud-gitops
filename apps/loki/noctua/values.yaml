@@ -1,0 +1,55 @@
+# Loki monolithic wrapper chart values for noctua stage (PoC)
+loki:
+  fullnameOverride: loki
+  deploymentMode: SingleBinary
+  
+  singleBinary:
+    replicas: 1
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: local-path
+
+  # Explicitly disable scalable components
+  write:
+    replicas: 0
+  read:
+    replicas: 0
+  backend:
+    replicas: 0
+
+  loki:
+    auth_enabled: false
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: 'filesystem'
+    
+    # Configure filesystem paths
+    filesystem:
+      chunks_directory: "/var/loki/chunks"
+      rules_directory: "/var/loki/rules"
+    
+    rulerConfig:
+      storage:
+        type: local
+        local:
+          directory: /var/loki/rules
+
+    schemaConfig:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
+
+    limits_config:
+      retention_period: 24h
+    
+    compactor:
+      retention_enabled: true
+      retention_delete_delay: 2h
+      retention_delete_worker_count: 15
