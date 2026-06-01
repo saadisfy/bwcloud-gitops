@@ -1,0 +1,46 @@
+{{- /*
+Renders one Rules CR (rules.ruler.mimir.crossplane.io) per Prometheus rule file.
+Source: files/** copied from apps/mimir/noctua/files/ — raw Prometheus rule group YAML.
+Naming: mimir-rules-<sanitized-file-path>
+When rule files change in apps/mimir/noctua/files/, copy them here as well.
+*/ -}}
+{{- $ruleFiles := list
+    "files/mimir/alerts.yaml"
+    "files/mimir/alerts-custom.yaml"
+    "files/mimir/alerts-rules.yaml"
+    "files/mimir/rules.yaml"
+    "files/kubernetes/alerts-rules.yaml"
+    "files/kubernetes/alerts.yaml"
+    "files/kubernetes/kubernetesControlPlane-prometheusRule.yaml"
+    "files/kubernetes/nodeExporter-prometheusRule.yaml"
+    "files/kubernetes/kubeStateMetrics-prometheusRule.yaml"
+    "files/kubernetes/kubePrometheus-prometheusRule.yaml"
+    "files/kubernetes/prometheus-prometheusRule.yaml"
+    "files/kubernetes/prometheusOperator-prometheusRule.yaml"
+    "files/kubernetes/grafana-prometheusRule.yaml"
+    "files/loki/alerts.yaml"
+    "files/loki/rules.yaml"
+    "files/tempo/alerts.yaml"
+    "files/tempo/rules.yaml"
+}}
+{{- range $filePath := $ruleFiles }}
+{{- $fileContent := $.Files.Get $filePath }}
+{{- if $fileContent }}
+{{- $sanitized := $filePath | replace "/" "-" | replace "." "-" | replace "_" "-" | lower | trimPrefix "files-" | trimSuffix "-yaml" }}
+---
+apiVersion: ruler.mimir.crossplane.io/v1alpha1
+kind: Rules
+metadata:
+  name: mimir-rules-{{ $sanitized }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  forProvider:
+    namespace: "1"
+    content: |
+{{ $fileContent | indent 6 }}
+  providerConfigRef:
+    name: default
+{{- end }}
+{{- end }}
