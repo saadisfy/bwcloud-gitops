@@ -1,0 +1,27 @@
+apiVersion: alertmanager.mimir.crossplane.io/v1alpha1
+kind: Config
+metadata:
+  name: mimir-alertmanager-config
+  annotations:
+    argocd.argoproj.io/sync-wave: "15"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  forProvider:
+    orgId: "1"
+    route:
+      - receiver: telegram
+        groupBy:
+          - alertname
+        groupWait: 10s
+        groupInterval: 5m
+        repeatInterval: 3h
+    receiver:
+      - name: telegram
+        telegramConfigs:
+          - chatId: 462723448
+            botTokenSecretRef:
+              name: grafana-secrets
+              namespace: grafana
+              key: GF_TELEGRAM_BOT_TOKEN
+  providerConfigRef:
+    name: default
