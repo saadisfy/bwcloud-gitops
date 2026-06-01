@@ -2,7 +2,37 @@
 
 This document summarizes the technical challenges and solutions discovered during the implementation of a two-tier observability pipeline on the `noctua-k3s` cluster.
 
-## 1. Inter-Tier Connectivity (Tier 1 -> Tier 2)
+## 1. Wrapper Chart Architecture & Pod Count
+
+In `apps/alloy/noctua-kai/Chart.yaml`, we explicitly declare both `k8s-monitoring` and `alloy` as direct dependencies. This is a deliberate choice for our Two-Tier architecture:
+
+* **Tier 1 (Collectors/Scrapers):** Managed via the `k8s-monitoring` subchart. It deploys sub-Alloy instances optimized for target scraping (e.g. `alloy-node` as a DaemonSet for host/node metrics, and `alloy-metrics` as a StatefulSet/Deployment for Kubernetes cluster metrics).
+* **Tier 2 (Gateway):** Managed via the direct `alloy` dependency. It deploys a central deployment (`alloy-gateway`) that receives OTLP metrics from Tier 1 and runs our custom transformation pipeline (`groupbyattrs`, `k8sattributes` metadata enrichment, and `dual_semantics` label promotion) before forwarding to Mimir.
+
+By keeping these dependencies separate in the wrapper chart, we can configure our complex custom OTel pipeline for the gateway under the `alloy:` block while letting the `k8s-monitoring:` block dynamically manage the scrapers.
+
+### Pod Count & Layout in a 5-Node Cluster
+
+Depending on whether log scraping is consolidated or separated, the pod count changes:
+
+#### Option A: Separate DaemonSet for Logs (Default/Production)
+* **Alloy Gateway (Tier 2):** 1 Pod (Deployment)
+* **Alloy Node Scraper (`alloy-node`):** 5 Pods (DaemonSet, 1 per node)
+* **Alloy Metrics Scraper (`alloy-metrics`):** 2 Pods (Clustered StatefulSet/Deployment)
+* **Alloy Logs Scraper (`alloy-logs`):** 5 Pods (DaemonSet, 1 per node)
+* **Total:** 13 Alloy Pods + 1 Operator Pod.
+* *Note:* This provides resource isolation (log volume spikes won't crash metrics scraping) but has higher overhead.
+
+#### Option B: Consolidated DaemonSet (Used in Noctua PoC)
+* **Alloy Gateway (Tier 2):** 1 Pod (Deployment)
+* **Alloy Node Scraper (`alloy-node`):** 5 Pods (DaemonSet, 1 per node, configured with `filesystem-log-reader` preset)
+* **Alloy Metrics Scraper (`alloy-metrics`):** 2 Pods (Clustered StatefulSet/Deployment)
+* **Total:** 8 Alloy Pods + 1 Operator Pod.
+* *Note:* By assigning the `podLogsViaLoki` feature to the existing `alloy-node` collector, we avoid starting a separate `alloy-logs` DaemonSet, saving 5 pods of overhead in our PoC environment.
+
+---
+
+## 2. Inter-Tier Connectivity (Tier 1 -> Tier 2)
 
 ### Protocol Choice: HTTP vs. gRPC
 *   **Challenge:** When using gRPC (port 4317) for OTLP export from Tier 1 to Tier 2, the `k8s-monitoring` chart defaults to a secure TLS handshake even when the URL is `http://`.
@@ -13,7 +43,7 @@ This document summarizes the technical challenges and solutions discovered durin
 *   **Challenge:** The Alloy Gateway (Tier 2) often inherits `hostNetwork: true` from base values. If Tier 1 (Agent) is also running on the same node with host networking, they will conflict on port 12345 (Alloy UI/Metrics).
 *   **Solution:** Tier 2 should run with `hostNetwork: false` and `dnsPolicy: ClusterFirst`. This allows it to use its own virtual IP and avoid port collisions with host-level agents.
 
-## 2. Helm Chart Schema (grafana/k8s-monitoring v4)
+## 3. Helm Chart Schema (grafana/k8s-monitoring v4)
 
 ### Metrics Enablement
 *   **Observation:** Enabling metrics in v4 requires a specific hierarchy. Setting `telemetryServices.node-exporter.deploy: true` only starts the pod; it does **not** configure the scrape job.
@@ -31,7 +61,7 @@ This document summarizes the technical challenges and solutions discovered durin
             enabled: true
     ```
 
-## 3. Evolutionary Strategy from Single-Tier to 2-Tier
+## 4. Evolutionary Strategy from Single-Tier to 2-Tier
 
 Before adopting the 2-Tier architecture, our general pipeline concept was outlined in [data-pipeline-concept.md](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/docs/data-pipeline-concept.md). This layout relied on a flat structure where a single daemonset Alloy scraped and processed all metrics. 
 
@@ -39,7 +69,7 @@ To scale efficiently and simplify configuration, we are transitioning to a **2-T
 
 ---
 
-## 4. The 3-Stage Migration Plan
+## 5. The 3-Stage Migration Plan
 
 ### Stage 1: Out-of-the-Box `k8s-monitoring` Chart Baseline
 The goal of this stage is to build a solid baseline using standard chart features without custom routing workarounds.
@@ -74,7 +104,7 @@ The final stage bridges the gap between OTel resource attributes and Prometheus 
 
 ---
 
-## 5. Final Implementation Details (Stage 2 & 3)
+## 6. Final Implementation Details (Stage 2 & 3)
 
 The complete two-tier OTLP loopback architecture is deployed via the [noctua-kai](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/apps/alloy/noctua-kai/values.yaml) Helm chart.
 
@@ -132,7 +162,7 @@ During deployment, the legacy `alloy` Argo CD Application and its crashing `allo
 
 ---
 
-## 6. Loki & Log-Scraping Integration (Consolidated DaemonSet)
+## 7. Loki & Log-Scraping Integration (Consolidated DaemonSet)
 
 To collect and persist cluster logs efficiently, we deployed Loki and expanded our Alloy architecture:
 
