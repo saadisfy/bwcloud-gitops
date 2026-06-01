@@ -184,8 +184,10 @@ metadata:
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   forProvider:
-    # Der Ziel-Tenant in Mimir
-    namespace: "1"
+    # WICHTIG: Der Mimir Rule-Namespace ist ein logischer Pfad/Ordner in Mimir.
+    # Um Kollisionen zwischen verschiedenen Deployments/Teams zu verhindern,
+    # nutzen wir hier dynamisch den Helm Release Namen anstelle eines statischen Wertes!
+    namespace: {{ .Release.Name | quote }}
     content: |
       {{- /* Parser: Prüfen ob es sich um eine Kubernetes PrometheusRule CRD handelt */ -}}
       {{- $yaml := $fileContent | fromYaml }}
