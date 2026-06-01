@@ -93,43 +93,4 @@ grafanaOperatorCRs:
       tls:
         insecureSkipVerify: true
 
-  # Mandatory alerting configuration for the operator
-  alerting:
-    syncPrometheusRules: false
-    folders:
-      - name: "infrastruktur"
-        title: "Infrastruktur"
-        groups:
-          - name: "test-alerts"
-            interval: "1m"
-            rules:
-              - uid: "test_always_firing_rule"
-                title: "Grafana Alerting Test"
-                expr: "vector(1)"
-                for: "10s"
-                threshold: 0
-                evalOperator: "gt"
-                noDataState: "OK"
-                execErrState: "OK"
-                labels:
-                  severity: "warning"
-                annotations:
-                  summary: "Grafana Alerting is working!"
-                  description: "If you see this and receive it in Telegram, the complete Grafana Alerting notification pipeline is functional!"
-  contactPoints:
-    - name: "dummy"
-      spec:
-        receivers:
-          - disableResolveMessage: false
-            type: email
-            settings:
-              addresses: "dummy@localhost"
-  notificationPolicies:
-    - name: "root"
-      spec:
-        route:
-          receiver: "dummy"
-          group_by: ["alertname", "job"]
-          group_wait: 30s
-          group_interval: 5m
-          repeat_interval: 4h
+

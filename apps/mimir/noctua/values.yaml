@@ -63,7 +63,4 @@ queryFrontendIngress:
   host: mimir-query.saadisfy.me
   tlsSecretName: mimir-query-tls
 
-# rulerRuleSync: disabled — rules are now provisioned via Crossplane Rules CR
-# which uses the Mimir Ruler HTTP API (filesystem backend, API-enabled).
-rulerRuleSync:
-  enabled: false
+
