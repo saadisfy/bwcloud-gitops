@@ -1,0 +1,8 @@
+apiVersion: v2
+name: crossplane-wrapper
+description: Wrapper for Crossplane Helm chart
+version: 0.1.0
+dependencies:
+  - name: crossplane
+    version: "1.18.2"
+    repository: https://charts.crossplane.io/stable

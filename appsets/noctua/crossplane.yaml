@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: crossplane
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - stage: noctua
+            namespace: crossplane-system
+  template:
+    metadata:
+      name: crossplane
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: 'apps/crossplane/{{stage}}'
+        helm:
+          valueFiles:
+            - values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+        automated:
+          prune: true
+          selfHeal: true
