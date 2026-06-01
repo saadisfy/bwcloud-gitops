@@ -29,16 +29,36 @@ k8s-monitoring:
         enabled: false
       traces:
         enabled: false
+    mimir:
+      type: otlp
+      url: "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
+      protocol: http
+      auth:
+        type: none
+      tls:
+        insecure: true
+      extraHeaders:
+        X-Scope-OrgID: "1"
+      metrics:
+        enabled: true
+      logs:
+        enabled: false
+      traces:
+        enabled: false
 
   # Feature Enablement (v4 Schema)
   clusterMetrics:
     enabled: true
     collector: alloy-metrics
+    destinations:
+      - alloy-gateway
     controlPlane:
       enabled: true
   hostMetrics:
     enabled: true
     collector: alloy-node
+    destinations:
+      - alloy-gateway
     linuxHosts:
       enabled: true
   podLogsViaLoki:
@@ -53,11 +73,21 @@ k8s-monitoring:
   prometheusOperatorObjects:
     enabled: true
     collector: alloy-metrics
+    destinations:
+      - alloy-gateway
 
   # Discover Pods/Services via annotations
   annotationAutodiscovery:
     enabled: true
     collector: alloy-metrics
+    destinations:
+      - alloy-gateway
+
+  selfReporting:
+    enabled: true
+    destinations:
+      - alloy-gateway
+
 
   telemetryServices:
     kube-state-metrics:
@@ -75,41 +105,32 @@ k8s-monitoring:
       presets: [daemonset, clustered, filesystem-log-reader]
       alloy:
         stabilityLevel: public-preview
-
-# Stage 2: Alloy Gateway configured for OTLP metrics collection, enrichment & forwarding
-alloy:
-  fullnameOverride: alloy-gateway
-  controller:
-    type: deployment
-    replicas: 1
-    hostNetwork: false
-    dnsPolicy: ClusterFirst
-  
-  rbac:
-    create: true
-
-  service:
-    enabled: true
-
-  alloy:
-    extraPorts:
-      - name: grpc-otlp
-        port: 4317
-        targetPort: 4317
-        protocol: TCP
-      - name: http-otlp
-        port: 4318
-        targetPort: 4318
-        protocol: TCP
-
-    configMap:
-      create: true
-      content: |-
-        logging {
-          level  = "info"
-          format = "logfmt"
-        }
-
+    alloy-gateway:
+      enabled: true
+      presets: [deployment]
+      extraService:
+        enabled: true
+        fullname: "alloy-gateway"
+      alloy:
+        extraPorts:
+          - name: grpc-otlp
+            port: 4317
+            targetPort: 4317
+            protocol: TCP
+          - name: http-otlp
+            port: 4318
+            targetPort: 4318
+            protocol: TCP
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 4Gi
+      includeDestinations:
+        - mimir
+      extraConfig: |
         otelcol.receiver.otlp "gateway" {
           grpc {
             endpoint = "0.0.0.0:4317"
@@ -184,7 +205,7 @@ alloy:
         otelcol.processor.transform "dual_semantics" {
           error_mode = "ignore"
           output {
-            metrics = [otelcol.processor.batch.default.input]
+            metrics = [otelcol.processor.attributes.mimir.input]
           }
           metric_statements {
             context = "datapoint"
@@ -196,23 +217,5 @@ alloy:
               "set(attributes[\"cluster\"],   resource.attributes[\"k8s.cluster.name\"])   where resource.attributes[\"k8s.cluster.name\"] != nil",
               "set(attributes[\"metrics_path\"], \"/metrics/cadvisor\") where (resource.attributes[\"service.name\"] == \"cadvisor\" or resource.attributes[\"job\"] == \"cadvisor\") and IsMatch(metric.name, \"^container_\")",
             ]
-          }
-        }
-
-        otelcol.processor.batch "default" {
-          output {
-            metrics = [otelcol.exporter.otlphttp.mimir.input]
-          }
-          send_batch_size = 8192
-          send_batch_max_size = 10000
-          timeout         = "10s"
-        }
-
-        otelcol.exporter.otlphttp "mimir" {
-          client {
-            endpoint = "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
-            headers = {
-              "X-Scope-OrgID" = "1",
-            }
           }
         }

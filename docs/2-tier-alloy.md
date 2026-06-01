@@ -15,27 +15,26 @@ A fundamental requirement of our Two-Tier Observability architecture is that **A
 
 ## 2. Wrapper Chart Architecture & Pod Count
 
-In `apps/alloy/noctua-kai/Chart.yaml`, we explicitly declare both `k8s-monitoring` and `alloy` as direct dependencies. This is a deliberate choice for our Two-Tier architecture:
+In `apps/alloy/noctua-kai/Chart.yaml`, we only declare the `k8s-monitoring` Helm chart as a dependency. This is a highly consolidated and unified design choice:
 
 * **Tier 1 (Collectors/Scrapers):** Managed via the `k8s-monitoring` subchart. It deploys sub-Alloy instances optimized for target scraping (e.g. `alloy-node` as a DaemonSet for host/node metrics, and `alloy-metrics` as a StatefulSet/Deployment for Kubernetes cluster metrics).
-* **Tier 2 (Gateway):** Managed via the direct `alloy` dependency. It deploys a central deployment (`alloy-gateway`) that receives OTLP metrics from Tier 1 and runs our custom transformation pipeline (`groupbyattrs`, `k8sattributes` metadata enrichment, and `dual_semantics` label promotion) before forwarding to Mimir.
+* **Tier 2 (Gateway):** Managed as a **custom collector** (called `alloy-gateway`) directly within the `k8s-monitoring` collectors map. It deploys a central deployment (`alloy-gateway`) via the Alloy Operator that receives OTLP metrics from Tier 1 and runs our custom transformation pipeline (`groupbyattrs`, `k8sattributes` metadata enrichment, and `dual_semantics` label promotion) before forwarding to Mimir.
 
-By keeping these dependencies separate in the wrapper chart, we can configure our complex custom OTel pipeline for the gateway under the `alloy:` block while letting the `k8s-monitoring:` block dynamically manage the scrapers.
+By managing the gateway as a custom collector within `k8s-monitoring`, we eliminate the need for a separate `alloy` subchart dependency. We can configure the custom pipeline under the collector's `extraConfig` and let the operator provision the Service and Pods automatically.
 
 ### Pod Count & Layout in a 5-Node Cluster
 
 Depending on whether log scraping is consolidated or separated, the pod count changes:
 
 #### Option A: Separate DaemonSet for Logs (Default/Production)
-* **Alloy Gateway (Tier 2):** 1 Pod (Deployment)
+* **Alloy Gateway (Tier 2):** 1 Pod (Deployment, managed by Alloy Operator)
 * **Alloy Node Scraper (`alloy-node`):** 5 Pods (DaemonSet, 1 per node)
 * **Alloy Metrics Scraper (`alloy-metrics`):** 2 Pods (Clustered StatefulSet/Deployment)
 * **Alloy Logs Scraper (`alloy-logs`):** 5 Pods (DaemonSet, 1 per node)
 * **Total:** 13 Alloy Pods + 1 Operator Pod.
-* *Note:* This provides resource isolation (log volume spikes won't crash metrics scraping) but has higher overhead.
 
 #### Option B: Consolidated DaemonSet (Used in Noctua PoC)
-* **Alloy Gateway (Tier 2):** 1 Pod (Deployment)
+* **Alloy Gateway (Tier 2):** 1 Pod (Deployment, managed by Alloy Operator)
 * **Alloy Node Scraper (`alloy-node`):** 5 Pods (DaemonSet, 1 per node, configured with `filesystem-log-reader` preset)
 * **Alloy Metrics Scraper (`alloy-metrics`):** 2 Pods (Clustered StatefulSet/Deployment)
 * **Total:** 8 Alloy Pods + 1 Operator Pod.
