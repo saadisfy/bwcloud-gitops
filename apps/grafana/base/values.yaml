@@ -21,10 +21,10 @@ grafana:
           type: alertmanager
           uid: mimir-am
           access: proxy
-          url: http://mimir-alertmanager.mimir.svc.cluster.local:8080
+          url: http://mimir-alertmanager.mimir.svc.cluster.local:8080/alertmanager
           jsonData:
             handleGrafanaManagedAlerts: false
-            implementation: prometheus
+            implementation: mimir
             httpHeaderName1: X-Scope-OrgID
           secureJsonData:
             httpHeaderValue1: "1"
