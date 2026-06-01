@@ -1,3 +1,37 @@
-# Tempo noctua values
-# Keep empty to use upstream chart defaults.
-{}
+# Tempo monolithic values for noctua stage (low resources)
+tempo:
+  fullnameOverride: tempo
+  
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: local-path
+
+  tempo:
+    reporting_enabled: false
+    
+    # Filesystem-based storage (Loki logic)
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /var/tempo/traces
+        wal:
+          path: /var/tempo/wal
+    
+    # OTLP support is the baseline requirement
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+  # Minimal resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

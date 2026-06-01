@@ -48,6 +48,29 @@ grafana:
           access: proxy
           uid: loki
           url: http://loki.loki.svc.cluster.local:3100
+        - name: Tempo
+          type: tempo
+          access: proxy
+          uid: tempo
+          url: http://tempo.tempo.svc.cluster.local:3100
+          jsonData:
+            httpMethod: POST
+            tracesToLogsV2:
+              # Link traces to Loki logs using the 'traceID' label
+              datasourceUid: loki
+              spanStartTimeShift: '1h'
+              spanEndTimeShift: '1h'
+              tags: [{ key: 'service.name', value: 'service' }]
+              filterByTraceID: true
+              filterBySpanID: false
+            serviceMap:
+              datasourceUid: mimir
+            nodeGraph:
+              enabled: true
+            search:
+              hide: false
+            lokiSearch:
+              datasourceUid: loki
   ingress:
     enabled: true
     ingressClassName: nginx
