@@ -39,7 +39,13 @@ spec:
   forProvider:
     namespace: "1"
     content: |
-{{ $fileContent | indent 6 }}
+      {{- $yaml := $fileContent | fromYaml }}
+      {{- if and $yaml.spec $yaml.spec.groups }}
+      groups:
+      {{- toYaml $yaml.spec.groups | nindent 6 }}
+      {{- else }}
+      {{- $fileContent | nindent 6 }}
+      {{- end }}
   providerConfigRef:
     name: default
 {{- end }}
