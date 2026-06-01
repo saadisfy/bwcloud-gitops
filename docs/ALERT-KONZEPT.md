@@ -772,3 +772,58 @@ Problem 3: Split-Dependencies
 2. Offizieller, supported Crossplane Mimir Provider verfügbar.
 3. Mandatorische Tenant-Isolation pro Kunde nötig (Mimir AM unterstützt Tenant-Isolation nativ, Grafana AM nicht).
 4. Upstream-Prometheus-Mixins direkt ohne Konvertierung einsetzen.
+
+---
+
+## Anhang B: Technischer PoC — Provisionierung mit Crossplane
+
+Im Rahmen eines technischen PoC wurde die deklarative Bereitstellung von Alerting Rules und Recording Rules via Crossplane untersucht und erfolgreich implementiert.
+
+### B.1 Geplante Struktur & Ablauf
+
+Die Provisionierung nutzt den Crossplane Mimir Provider (`rules.ruler.mimir.crossplane.io`) zur direkten Interaktion mit der Mimir Ruler HTTP API.
+
+```text
+Argo CD (GitOps) -> Crossplane Rules CR (noctua namespace)
+                 -> Reconcile Loop (Crossplane Provider-Mimir)
+                 -> Mimir Ruler HTTP API (SetRuleGroup API)
+                 -> Writes to filesystem backend (/rules-storage)
+                 -> Mimir Ruler evaluates rules
+```
+
+Dabei werden die bestehenden Rohdateien unter `apps/crossplane/noctua/files/` importiert und automatisch als Crossplane `Rules` Manifeste gerendert.
+
+### B.2 Aufgetretene Probleme und Lösungen
+
+Während der Implementierung des PoC traten zwei wesentliche Probleme auf:
+
+#### 1. Mimir Ruler Schreibfehler (`read-only file system`)
+- **Problem:** Das Standard-Deployment des Mimir Rulers lief mit `readOnlyRootFilesystem: true`. Da Mimir Ruler bei Nutzung des `filesystem`-Speicherbackends unter dem Pfad `/rules-storage` versuchen muss, Regeldateien zu schreiben, stürzte der Pod mit der Fehlermeldung `mkdir /rules-storage: read-only file system` ab.
+- **Lösung:** In `apps/mimir/noctua/values.yaml` wurde das nicht vom Upstream-Chart unterstützte Feld `persistentVolume` entfernt. Stattdessen wurde über `extraVolumes` und `extraVolumeMounts` ein schreibbares `emptyDir`-Volume mit dem Namen `rules-storage` gemountet:
+  ```yaml
+  extraVolumes:
+    - name: rules-storage
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: rules-storage
+      mountPath: /rules-storage
+  ```
+  Da Crossplane den Zustand kontinuierlich vergleicht, führt ein Pod-Neustart (und damit das Leeren des `emptyDir`) nicht zum permanenten Verlust der Regeln, da Crossplane diese automatisch neu per API anlegt.
+
+#### 2. Ungültiges Dateiformat bei `PrometheusRule` CRs
+- **Problem:** Ein Teil der Regeldateien (z.B. für Kubernetes-Infrastruktur wie `grafana-prometheusRule.yaml`) lag im Kubernetes `PrometheusRule`-Custom-Resource-Format (von `monitoring.coreos.com/v1`) vor. Mimir's Ruler API erwartet jedoch rohes Prometheus Rule-Group-YAML (beginnend mit `groups:` auf Root-Ebene). Dies führte bei Crossplane zu Validierungsfehlern (`content validation failed: at least one rule group is required`).
+- **Lösung:** Im Helm-Template `apps/crossplane/noctua/templates/mimir-ruler-rules.yaml` wurde eine automatische Konvertierung eingebaut. Mithilfe der Helm-Funktion `fromYaml` wird geprüft, ob die Datei ein Kubernetes Custom Resource Format mit `.spec.groups` besitzt. Falls ja, wird dieses extrahiert und on-the-fly in das rohe Prometheus Rule-Format umgewandelt:
+  ```yaml
+  {{- $yaml := $fileContent | fromYaml }}
+  {{- if and $yaml.spec $yaml.spec.groups }}
+  groups:
+  {{- toYaml $yaml.spec.groups | nindent 6 }}
+  {{- else }}
+  {{- $fileContent | nindent 6 }}
+  {{- end }}
+  ```
+
+### B.3 Validierung und Status
+
+Nach dem Einspielen der Fixes wurden 17 `Rules` CRs erfolgreich synchronisiert. Die Abfrage der internen Mimir Ruler API ergab, dass alle 74 Regelgruppen (inklusive der dynamisch konvertierten Kubernetes-Regeln) geladen wurden und evaluiert werden.
+
