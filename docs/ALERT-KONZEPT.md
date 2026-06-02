@@ -723,6 +723,7 @@ mimir:
 
 ##### 4. Bewertung
 * **Vorteil:** Maximale Isolation. Neue Kunden erhalten eigene Rule- und Notification-Ressourcen, die sie selbst (oder das GitOps-System) deklarieren können, ohne die globale Konfiguration zu beeinträchtigen. Die Ingestion muss nicht aufgesplittet werden.
+* **Keine manuelle Mandantenregistrierung nötig:** Grafana Mimir verwaltet Mandanten (Tenants) vollständig dynamisch. Es gibt keine Datenbank oder Registrierungs-API, um Tenants anzulegen. Der Tenant `tenant-b` existiert automatisch in dem Moment, in dem die erste Rule oder Alertmanager-Konfiguration mit dem HTTP-Header `X-Scope-OrgID: tenant-b` (oder dem Crossplane-Feld `orgId: tenant-b`) an die Mimir-API gesendet wird. Mimir legt die entsprechenden Pfade im Storage-Backend on-the-fly an.
 * **Einschränkung:** Erfordert die Aktivierung der Tenant-Federation in der Mimir-Cluster-Konfiguration.
 
 ### 5.5 Ownership-Modell
