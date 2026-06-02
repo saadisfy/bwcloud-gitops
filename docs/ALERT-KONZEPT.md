@@ -554,61 +554,83 @@ spec:
 - Contact Points anderer Kunden referenzieren
 - Labels aus fremden Namespaces matchen
 
-### 5.4 Wie Customer Routing in die zentrale Policy integriert wird
+### 5.4 Dynamisches & wartungsfreies Customer Routing (Self-Service)
 
-Das Plattform-Team ergänzt die zentrale `GrafanaNotificationPolicy` um eine Route für den Customer-Namespace.
-Die Customer-eigene Route ist ein Sub-Tree unterhalb des `clusterTier=customer`-Branches.
+Da die Alertmanager-Konfiguration von Mimir monolithisch ist und eine manuelle Pflege von Routen pro Kunde einen hohen Wartungsaufwand bedeutet, nutzen wir dynamische Routing-Strategien, um echten Self-Service ohne manuelle GitOps-Änderungen an der zentralen Policy zu ermöglichen.
 
-```yaml
-# Plattform-Repo: grafana-operator-notification-policies.yaml
-routes:
-  - receiver: platform-all
-    matchers:
-      - name: clusterTier
-        value: customer
-    routes:
-      # Plattform fügt pro Customer eine Route hinzu:
-      - receiver: customer-a-email       # Customer-a hat eigenen CP deployed
-        matchers:
-          - name: namespace
-            value: "customer-a-namespace"
-            isRegex: false
-      - receiver: customer-b-email
-        matchers:
-          - name: namespace
-            value: "customer-b-.*"
-            isRegex: true
-      # Fallback für unbekannte Customer-Namespaces:
-      - receiver: customer-teams-fallback
-```
+#### Strategie A: Dynamisches Go-Template Routing (Für neue Rules)
 
-**Was Customer-Labels für Routing liefern:**
+Wenn Kunden neue Prometheus-Rules deployen, können sie die Empfänger-E-Mails direkt als Label an der Alert-Rule definieren. 
 
-- `namespace` — aus kube-state-metrics Zeitreihen, automatisch vorhanden
-- `owner` — statisch in Customer-Alert-Regeln setzbar
-- `alertname` — aus Alert-Regel
-- `severity` — statisch setzbar
+1. **Die Prometheus-Rule des Kunden:**
+   Der Kunde fügt das Label `email_to` hinzu (unterstützt auch kommagetrennte Listen für mehrere Empfänger):
+   ```yaml
+   labels:
+     severity: critical
+     email_to: "saadmasood@web.de, team-alerts@company.com"
+   ```
 
-**Routing-Fähigkeiten:**
+2. **Das Mimir-Alertmanager-Routing (Zentral):**
+   Die zentrale Notification Policy gruppiert nach `email_to` und nutzt ein Go-Template zur dynamischen Auflösung des Empfängers zur Laufzeit:
+   ```yaml
+   route:
+     receiver: dynamic-email-receiver
+     groupBy: [alertname, namespace, email_to]
+   receiver:
+     - name: dynamic-email-receiver
+       emailConfigs:
+         - to: '{{ if .GroupLabels.email_to }}{{ .GroupLabels.email_to }}{{ else if .GroupLabels.namespace }}{{ .GroupLabels.namespace }}@web.de{{ else }}admin-fallback@web.de{{ end }}'
+   ```
+   *Vorteil:* Komplett dynamisch. Der neue Kunde deployed seine Rule und erhält sofort E-Mails über den zentralen SMTP-Server, ohne dass das Plattform-Team etwas anpassen muss.
 
-```yaml
-routes:
-  - matchers:
-      - name: namespace
-        value: "customer-a-namespace"
-    receiver: customer-a-email
-  - matchers:
-      - name: owner
-        value: "customer-a"
-    receiver: customer-a-email
-  - matchers:
-      - name: namespace
-        value: "customer-.*"
-        isRegex: true
-      - name: severity
-        value: critical
-    receiver: customer-critical-all
-```
+#### Strategie B: Namespace-basiertes Webhook-Forwarding (Für vorhandene Rules)
+
+Bei bereits vorhandenen Rules (z. B. Upstream-Mixins für Kubernetes/Argo CD) können wir das `email_to`-Label nicht nachträglich in die Regeln einbringen. Hier nutzen wir einen **Webhook-Forwarder-Proxy**:
+
+1. **Der Datenfluss:**
+   ```text
+   Alert (namespace="customer-a") → Mimir Alertmanager 
+   → Webhook Receiver (zentraler Forwarder-Dienst)
+   → Forwarder liest "namespace"-Label aus
+   → Forwarder sucht ConfigMap "alert-recipients" im Namespace "customer-a"
+   → Forwarder liest E-Mail-Adressen und sendet E-Mail
+   ```
+
+2. **Das Customer-Manifest (Self-Service im eigenen Namespace):**
+   Jeder Kunde legt in seinem Namespace eine einfache ConfigMap mit seinen E-Mail-Adressen an. Da Benutzer nur Zugriff auf ihren eigenen Namespace haben, ist dies vollkommen isoliert:
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: alert-recipients
+     namespace: customer-a
+   data:
+     emails: "saadmasood@web.de, another@domain.com"
+   ```
+
+3. **Der Vorteil:**
+   Die zentrale Notification Policy leitet einfach jeden Alert an den Webhook-Dienst weiter. Dieser löst die Empfänger dynamisch über die Kubernetes-API auf. Es müssen keine Secrets oder E-Mail-Listen im Plattform-Repo gepflegt werden.
+
+#### 5.4.3 Vergleich & Analyse: Monolithisches Mimir vs. Grafana Operator
+
+Hier analysieren wir das Problem der dezentralen Konfiguration bei beiden Ansätzen:
+
+##### 1. Mimir / Prometheus Alertmanager (Crossplane-managed)
+Bei Mimir's nativem Alertmanager gibt es **keinen** Operator, der einzelne Routing-CRDs mergt. Die Alertmanager-Konfiguration ist zwingend ein **Monolith** pro Tenant (in unserem Fall Tenant `1`).
+* **Das Problem:** Kunden können keine eigenen Notification Policies oder Routing-Bäume deployen. Jede Änderung erfordert das Editieren des monolithischen Mimir-Alertmanager-Manifests (z. B. im Plattform-Repo).
+* **Die Lösung:**
+  * **Für neue Rules:** `email_to` Go-Template Strategie (Strategie A). Hier spart man sich jegliche Notification Policy Definition im Plattform-Repo.
+  * **Für vorhandene/Upstream-Rules (z. B. Mixins ohne `email_to` Label):** Webhook-Forwarder-Proxy (Strategie B). Der Proxy sucht die ConfigMap `alert-recipients` im jeweiligen Target-Namespace (den er aus dem Alert-Label `namespace` ausliest). Somit bleibt das Mimir-Manifest statisch und Kunden steuern die Empfänger komplett dynamisch via ConfigMap in ihrem Namespace.
+
+##### 2. Grafana Alertmanager (Grafana Operator-managed)
+Gibt es dieses Monolithen-Problem auch beim Grafana Operator? **Nein, hier ist das gelöst!**
+* **Wie es funktioniert:** Der Grafana Operator unterstützt neben der Haupt-`GrafanaNotificationPolicy` auch die Namespaced CRDs `GrafanaNotificationPolicyRoute` und `GrafanaContactPoint`.
+* **Self-Service Ablauf:**
+  1. Der Kunde deployed in seinem Namespace einen eigenen `GrafanaContactPoint` und eine `GrafanaNotificationPolicyRoute`.
+  2. Die Route referenziert seinen Contact Point und matched nur auf Alerts aus seinem Namespace (`namespace = "customer-a"`).
+  3. In der zentralen `GrafanaNotificationPolicy` der Plattform wird ein `routeSelector` definiert (z. B. `matchLabels: type: customer-route`).
+  4. Der Grafana Operator sammelt alle passenden `GrafanaNotificationPolicyRoute` CRDs clusterweit ein und baut die finale, hierarchische Routing-Tree-Struktur in Grafana dynamisch zusammen.
+* **Vorteil:** Volle GitOps-Dekopplung. Neue Kunden können eigenständig neue Benachrichtigungswege definieren, ohne das Plattform-Repository zu berühren.
 
 ### 5.5 Ownership-Modell
 
