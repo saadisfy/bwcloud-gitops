@@ -632,6 +632,99 @@ Gibt es dieses Monolithen-Problem auch beim Grafana Operator? **Nein, hier ist d
   4. Der Grafana Operator sammelt alle passenden `GrafanaNotificationPolicyRoute` CRDs clusterweit ein und baut die finale, hierarchische Routing-Tree-Struktur in Grafana dynamisch zusammen.
 * **Vorteil:** Volle GitOps-Dekopplung. Neue Kunden können eigenständig neue Benachrichtigungswege definieren, ohne das Plattform-Repository zu berühren.
 
+#### 5.4.4 Mandanten-Föderation: Separater Tenant für Alerting & Routing
+
+Wenn die Ingestion (die Metrik-Daten) vollständig über einen einzigen Mandanten (z. B. `anonymous` oder `1`) läuft, können wir dennoch **vollständig isolierte Rules und Routing-Policies für neue Kunden** in separaten Tenants definieren. Dies geschieht über die native **Mimir Tenant Federation (Cross-Tenant Querying / Federated Rule Groups)**.
+
+##### 1. Funktionsweise & Datenfluss
+```text
+[ Metrics Ingestion ]
+          │
+          ▼
+    Tenant: "anonymous" (Enthält alle Metrik-Zeitreihen)
+
+[ Rule Evaluation ]
+    Tenant: "tenant-b" (Eigener Kunden-Tenant für Alerts)
+          │
+          ├─► Mimir Ruler (tenant-b) führt Rule-Query aus
+          │   mit "source_tenants: [anonymous]"
+          │
+          ├─► Query liest Daten aus dem "anonymous" Backend
+          │
+          ├─► Firing Alert wird unter "tenant-b" erzeugt
+          │
+          ▼
+[ Notification Routing ]
+    Tenant: "tenant-b" Alertmanager
+          │
+          ▼
+    Nutzt die isolierte Alertmanager-Config von "tenant-b"
+```
+
+##### 2. Benötigte Konfiguration in Mimir (Infrastruktur)
+Um dieses Feature freizuschalten, müssen in Mimir die entsprechenden Feature-Flags aktiviert werden (z. B. in den Helm `values.yaml` oder CLI-Argumenten für Ruler, Querier und Query-Frontend):
+```yaml
+mimir:
+  config:
+    limits:
+      tenant_federation:
+        enabled: true  # Erlaubt Querier/Query-Frontend mandantenübergreifende Abfragen
+    ruler:
+      tenant_federation:
+        enabled: true  # Erlaubt dem Ruler die Auswertung von source_tenants
+```
+*(CLI-Flags: `-tenant-federation.enabled=true` und `-ruler.tenant-federation.enabled=true`)*
+
+##### 3. Definition der Ressourcen via Crossplane
+
+* **Alerting Rule für den Kunden-Tenant (`orgId: tenant-b`):**
+  Die Rules werden dem neuen Tenant zugewiesen, greifen aber über `source_tenants` auf die Metriken von `anonymous` zu.
+  ```yaml
+  apiVersion: ruler.mimir.crossplane.io/v1alpha1
+  kind: Rules
+  metadata:
+    name: tenant-b-alerts
+  spec:
+    forProvider:
+      orgId: "tenant-b"  # Der Tenant, der den Alert erzeugt
+      namespace: "customer-alerts"
+      content: |
+        groups:
+          - name: kubernetes-alerts
+            source_tenants:
+              - "anonymous"  # Holt sich die Daten aus dem anonymous-Tenant
+            rules:
+              - alert: PodDown
+                expr: up{job="kube-state-metrics"} == 0
+                for: 5m
+                labels:
+                  severity: critical
+  ```
+
+* **Alertmanager Config für den Kunden-Tenant (`orgId: tenant-b`):**
+  Diese Konfiguration ist für andere Mandanten komplett unsichtbar und isoliert.
+  ```yaml
+  apiVersion: alertmanager.mimir.crossplane.io/v1alpha1
+  kind: Config
+  metadata:
+    name: tenant-b-alertmanager-config
+  spec:
+    forProvider:
+      orgId: "tenant-b"  # Isoliert die Routing-Richtlinien komplett für tenant-b
+      route:
+        - receiver: tenant-b-email
+          matchers:
+            - severity = critical
+      receiver:
+        - name: tenant-b-email
+          emailConfigs:
+            - to: "saadmasood@web.de"
+  ```
+
+##### 4. Bewertung
+* **Vorteil:** Maximale Isolation. Neue Kunden erhalten eigene Rule- und Notification-Ressourcen, die sie selbst (oder das GitOps-System) deklarieren können, ohne die globale Konfiguration zu beeinträchtigen. Die Ingestion muss nicht aufgesplittet werden.
+* **Einschränkung:** Erfordert die Aktivierung der Tenant-Federation in der Mimir-Cluster-Konfiguration.
+
 ### 5.5 Ownership-Modell
 
 | Alert-Typ | Regelquelle | Routing-Verantwortung | Notification-Plane |
