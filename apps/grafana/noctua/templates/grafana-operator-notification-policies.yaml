@@ -1,0 +1,61 @@
+{{- $grafanaOperatorCRs := .Values.grafanaOperatorCRs | default dict }}
+{{- if ($grafanaOperatorCRs.enabled | default false) }}
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaContactPoint
+metadata:
+  name: dummy-contact-point
+spec:
+  instanceSelector:
+    matchLabels:
+      {{- toYaml $grafanaOperatorCRs.instanceSelector.matchLabels | nindent 6 }}
+  name: dummy-contact-point
+  type: email
+  settings:
+    addresses: "dummy@example.com"
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicy
+metadata:
+  name: subroot-policy-1
+spec:
+  instanceSelector:
+    matchLabels:
+      {{- toYaml $grafanaOperatorCRs.instanceSelector.matchLabels | nindent 6 }}
+  route:
+    receiver: dummy-contact-point
+    group_wait: 10s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: dummy-contact-point
+        object_matchers:
+          - - severity
+            - =
+            - critical
+          - - service
+            - =
+            - argocd
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicy
+metadata:
+  name: subroot-policy-2
+spec:
+  instanceSelector:
+    matchLabels:
+      {{- toYaml $grafanaOperatorCRs.instanceSelector.matchLabels | nindent 6 }}
+  route:
+    receiver: dummy-contact-point
+    group_wait: 10s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: dummy-contact-point
+        object_matchers:
+          - - severity
+            - =
+            - warning
+          - - service
+            - =
+            - crossplane
+{{- end }}
