@@ -16,7 +16,7 @@ spec:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicy
 metadata:
-  name: subroot-policy-1
+  name: root-notification-policy
 spec:
   instanceSelector:
     matchLabels:
@@ -26,36 +26,40 @@ spec:
     group_wait: 10s
     group_interval: 5m
     repeat_interval: 4h
-    routes:
-      - receiver: dummy-contact-point
-        object_matchers:
-          - - severity
-            - =
-            - critical
-          - - service
-            - =
-            - argocd
+    routeSelector:
+      matchLabels:
+        app: grafana-notification-policy-route
 ---
 apiVersion: grafana.integreatly.org/v1beta1
-kind: GrafanaNotificationPolicy
+kind: GrafanaNotificationPolicyRoute
 metadata:
-  name: subroot-policy-2
+  name: subroot-route-1
+  labels:
+    app: grafana-notification-policy-route
 spec:
-  instanceSelector:
-    matchLabels:
-      {{- toYaml $grafanaOperatorCRs.instanceSelector.matchLabels | nindent 6 }}
-  route:
-    receiver: dummy-contact-point
-    group_wait: 10s
-    group_interval: 5m
-    repeat_interval: 4h
-    routes:
-      - receiver: dummy-contact-point
-        object_matchers:
-          - - severity
-            - =
-            - warning
-          - - service
-            - =
-            - crossplane
+  receiver: dummy-contact-point
+  object_matchers:
+    - - severity
+      - =
+      - critical
+    - - service
+      - =
+      - argocd
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: subroot-route-2
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: dummy-contact-point
+  object_matchers:
+    - - severity
+      - =
+      - warning
+    - - service
+      - =
+      - crossplane
 {{- end }}
+
