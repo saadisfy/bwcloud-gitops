@@ -17,12 +17,12 @@ spec:
         botToken: ""
         chatId: ""
       valuesFrom:
-        - targetPath: settings.botToken
+        - targetPath: botToken
           valueFrom:
             secretKeyRef:
               name: grafana-secrets
               key: GF_TELEGRAM_BOT_TOKEN
-        - targetPath: settings.chatId
+        - targetPath: chatId
           valueFrom:
             secretKeyRef:
               name: grafana-secrets
