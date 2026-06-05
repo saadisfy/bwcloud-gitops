@@ -285,6 +285,7 @@ Vor Umsetzung als Zielarchitektur müssen diese Punkte praktisch geprüft werden
 1. Kann der Grafana Operator Prometheus-basierte Alert Rules vollständig genug als `GrafanaAlertRuleGroup` abbilden?
 2. Können benötigte Recording Rules über `record` in `GrafanaAlertRuleGroup` sauber erstellt werden?
 3. Funktionieren `GrafanaNotificationPolicy` + `GrafanaNotificationPolicyRoute` als dezentrales Subroot-Modell über Namespaces hinweg?
+   * **Ja!** (Erfolgreich im PoC verifiziert). Wenn `spec.allowCrossNamespaceImport: true` auf der zentralen `GrafanaNotificationPolicy` gesetzt ist, scannt der Operator alle Namespaces nach passenden `GrafanaNotificationPolicyRoute` Ressourcen.
 4. Ist das Merge-Verhalten von `routeSelector` deterministisch und GitOps-tauglich?
 5. Wie geht Grafana mit UI-Änderungen an operator-managed Alerting-Ressourcen um?
 6. Welche bestehenden PrometheusRule-Dateien können automatisiert konvertiert werden?
@@ -341,3 +342,69 @@ spec:
    * **Treffer:** Der Alert wird an `cp-christian-saad` geroutet. Die Auswertung stoppt.
    * **Kein Treffer (z. B. `severity=warning`):** Es passt keine der spezifischen Unterregeln.
 3. **Fallback:** Da kein Child-Matcher zutrifft, fällt die Route auf den Standard-Empfänger des übergeordneten Knotens (`receiver: cp-christian`) zurück.
+
+### B. Wie funktioniert die dezentrale Konfiguration über Namespaces hinweg?
+Damit Teams ihre Routen und Contact Points eigenständig in ihren Namespaces deklarieren können, müssen zwei Cross-Namespace-Features des Grafana Operators v5 aktiviert sein:
+
+1. **Zentraler Policy Root (`GrafanaNotificationPolicy`):**
+   * Muss `spec.allowCrossNamespaceImport: true` besitzen.
+   * Dadurch sucht der `routeSelector` die passenden `GrafanaNotificationPolicyRoute` Ressourcen **clusterweit** (über alle Namespaces hinweg) statt nur im eigenen Namespace.
+
+2. **Dezentraler Contact Point (`GrafanaContactPoint`):**
+   * Wenn Teams eigene Contact Points (z.B. Slack-Kanäle, Webhooks) im eigenen Namespace definieren, müssen diese ebenfalls `spec.allowCrossNamespaceImport: true` haben.
+   * Dadurch importiert der Operator den Contact Point in die zentrale Grafana-Instanz.
+   * Der dezentrale Route-Eintrag kann dann auf diesen Contact Point verweisen.
+
+#### Konfigurations-Beispiel
+
+**1. Zentral im Plattform-Namespace (`grafana`):**
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicy
+metadata:
+  name: root-notification-policy
+  namespace: grafana
+spec:
+  allowCrossNamespaceImport: true  # WICHTIG: Erlaubt das Scannen aller Namespaces
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  route:
+    receiver: platform-catchall
+    routeSelector:
+      matchLabels:
+        app: grafana-notification-policy-route  # Label nach dem gesucht wird
+```
+
+**2. Dezentral im Team-Namespace (z. B. `springdemo`):**
+```yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaContactPoint
+metadata:
+  name: cp-team-slack
+  namespace: springdemo
+spec:
+  name: cp-team-slack
+  allowCrossNamespaceImport: true  # WICHTIG: Macht den Contact Point global in Grafana verfügbar
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana
+  receivers:
+    - type: slack
+      settings:
+        recipient: "#team-alerts"
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-team-springdemo
+  namespace: springdemo
+  labels:
+    app: grafana-notification-policy-route  # WICHTIG: Passt auf den central routeSelector
+spec:
+  receiver: cp-team-slack  # Referenziert den dezentralen Contact Point
+  object_matchers:
+    - - namespace
+      - =
+      - "springdemo"
+```
