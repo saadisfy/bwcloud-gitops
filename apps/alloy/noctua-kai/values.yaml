@@ -256,7 +256,7 @@ k8s-monitoring:
         // Notwendig weil k8sattributes (im Modul) OTel-Resource-Attributes für den IP-Lookup braucht.
         otelcol.processor.transform "promote_meta" {
           output {
-            metrics = [enrich.metrics_enrichment.main.exports.input]
+            metrics = [enrich.metrics_enrichment.main.input]
           }
           metric_statements {
             context = "resource"
