@@ -311,3 +311,33 @@ Der nächste Schritt sollte ein fokussierter PoC für das Grafana-Operator-Subro
 * Kyverno-Policies für Pflichtlabels, Root-Policy-Verbot für Teams und Matcher-Pflicht
 
 Wenn dieser PoC funktioniert, ist dieser Weg gegenüber Mimir-Tenant-Routing, Alertmanager-UI-Proxies und Header-Rewrite deutlich einfacher und passender.
+
+---
+
+## 9. FAQ / Best-Practice-Beispiele
+
+### A. Wie funktioniert das Parent-Child-Routing (Sub-Routen)?
+Das dezentrale Routing über `GrafanaNotificationPolicyRoute`-Objekte ermöglicht es, team-spezifische Kanäle und Eskalationen zu strukturieren, ohne den globalen Routing-Baum zu verändern.
+
+Beispiel:
+```yaml
+spec:
+  receiver: cp-christian                  # Parent-Receiver (Standard-Empfänger)
+  object_matchers:
+    - - service
+      - =
+      - "r2d-adapter"                     # Parent-Matcher (Einstiegs-Filter)
+  routes:
+    - receiver: cp-christian-saad         # Child-Receiver (Kritischer Empfänger)
+      object_matchers:
+        - - severity
+          - =
+          - critical                      # Child-Matcher
+```
+
+**Ablauf der Auswertung:**
+1. **Zweig-Einstieg:** Zuerst wird geprüft, ob der Alert das Label `service="r2d-adapter"` besitzt. Wenn ja, tritt der Alert in diesen Team-Routing-Zweig ein.
+2. **Unterregel-Check:** Innerhalb dieses Zweigs wird geprüft, ob der Alert `severity="critical"` besitzt.
+   * **Treffer:** Der Alert wird an `cp-christian-saad` geroutet. Die Auswertung stoppt.
+   * **Kein Treffer (z. B. `severity=warning`):** Es passt keine der spezifischen Unterregeln.
+3. **Fallback:** Da kein Child-Matcher zutrifft, fällt die Route auf den Standard-Empfänger des übergeordneten Knotens (`receiver: cp-christian`) zurück.

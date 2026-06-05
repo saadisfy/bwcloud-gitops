@@ -1,6 +1,6 @@
 {{- $grafanaOperatorCRs := .Values.grafanaOperatorCRs | default dict }}
 {{- if ($grafanaOperatorCRs.enabled | default false) }}
-{{- $contactPoints := list "ch-platform-all" "cp-gerrit-albert" "ch-gitops" "cp-lennard" "ch-infra" "cp-metehan-saad" "ch-observability" "cp-christian-saad" "cp-christian" "cp-sebastian-saad" "cp-sebastian" "cp-benedikt-bastian" "ch-releng-cluster" "cp-max-nicolai" "ch-cust-cluster" "cp-max" }}
+{{- $contactPoints := list "ch-platform-all" "cp-gerrit-albert" "ch-gitops" "cp-lennard" "ch-infra" "ch-observability" "cp-christian" "cp-sebastian" "cp-benedikt-bastian" "ch-releng-cluster" "cp-max-nicolai" "ch-cust-cluster" "cp-max" }}
 {{- range $cpName := $contactPoints }}
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaContactPoint
@@ -72,12 +72,13 @@ spec:
     - - service
       - =~
       - "argocd|kargo"
-  routes:
-    - receiver: cp-gerrit-albert
-      object_matchers:
-        - - severity
-          - =
-          - critical
+  # Example: Critical alerts can be routed to specific contact points, while normal alerts fall back to the parent receiver.
+  # routes:
+  #   - receiver: cp-gerrit-albert
+  #     object_matchers:
+  #       - - severity
+  #         - =
+  #         - critical
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
@@ -91,12 +92,13 @@ spec:
     - - service
       - =~
       - "crossplane|vault|external-secrets"
-  routes:
-    - receiver: cp-lennard
-      object_matchers:
-        - - severity
-          - =
-          - critical
+  # Example: Critical alerts can be routed to specific contact points, while normal alerts fall back to the parent receiver.
+  # routes:
+  #   - receiver: cp-lennard
+  #     object_matchers:
+  #       - - severity
+  #         - =
+  #         - critical
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
@@ -110,12 +112,13 @@ spec:
     - - service
       - =~
       - "mimir|grafana|tempo|loki|alloy|otel.*"
-  routes:
-    - receiver: cp-metehan-saad
-      object_matchers:
-        - - severity
-          - =
-          - critical
+  # Example: Critical alerts can be routed to specific contact points, while normal alerts fall back to the parent receiver.
+  # routes:
+  #   - receiver: cp-observability-critical
+  #     object_matchers:
+  #       - - severity
+  #         - =
+  #         - critical
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
@@ -129,12 +132,13 @@ spec:
     - - service
       - =
       - "r2d-adapter"
-  routes:
-    - receiver: cp-christian-saad
-      object_matchers:
-        - - severity
-          - =
-          - critical
+  # Example: Critical alerts can be routed to specific contact points, while normal alerts fall back to the parent receiver.
+  # routes:
+  #   - receiver: cp-christian-critical
+  #     object_matchers:
+  #       - - severity
+  #         - =
+  #         - critical
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
@@ -148,12 +152,13 @@ spec:
     - - service
       - =~
       - "idp|backstage"
-  routes:
-    - receiver: cp-sebastian-saad
-      object_matchers:
-        - - severity
-          - =
-          - critical
+  # Example: Critical alerts can be routed to specific contact points, while normal alerts fall back to the parent receiver.
+  # routes:
+  #   - receiver: cp-sebastian-critical
+  #     object_matchers:
+  #       - - severity
+  #         - =
+  #         - critical
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
@@ -167,12 +172,13 @@ spec:
     - - k8s_cluster_name
       - =~
       - "releng-.*"
-  routes:
-    - receiver: cp-benedikt-bastian
-      object_matchers:
-        - - severity
-          - =
-          - critical
+  # Example: Critical alerts can be routed to specific contact points, while normal alerts fall back to the parent receiver.
+  # routes:
+  #   - receiver: cp-benedikt-bastian
+  #     object_matchers:
+  #       - - severity
+  #         - =
+  #         - critical
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
@@ -186,12 +192,13 @@ spec:
     - - k8s_cluster_name
       - =~
       - "cust-.*"
-  routes:
-    - receiver: cp-max-nicolai
-      object_matchers:
-        - - severity
-          - =
-          - critical
+  # Example: Critical alerts can be routed to specific contact points, while normal alerts fall back to the parent receiver.
+  # routes:
+  #   - receiver: cp-max-nicolai
+  #     object_matchers:
+  #       - - severity
+  #         - =
+  #         - critical
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
