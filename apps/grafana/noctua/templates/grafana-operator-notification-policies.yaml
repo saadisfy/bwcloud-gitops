@@ -1,18 +1,34 @@
 {{- $grafanaOperatorCRs := .Values.grafanaOperatorCRs | default dict }}
 {{- if ($grafanaOperatorCRs.enabled | default false) }}
+{{- $contactPoints := list "ch-platform-all" "cp-gerrit-albert" "ch-gitops" "cp-lennard" "ch-infra" "cp-metehan-saad" "ch-observability" "cp-christian-saad" "cp-christian" "cp-sebastian-saad" "cp-sebastian" "cp-benedikt-bastian" "ch-releng-cluster" "cp-max-nicolai" "ch-cust-cluster" "cp-max" }}
+{{- range $cpName := $contactPoints }}
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaContactPoint
 metadata:
-  name: dummy-contact-point
+  name: {{ $cpName }}
 spec:
   instanceSelector:
     matchLabels:
       {{- toYaml $grafanaOperatorCRs.instanceSelector.matchLabels | nindent 6 }}
-  name: dummy-contact-point
-  type: email
-  settings:
-    addresses: "dummy@example.com"
+  name: {{ $cpName }}
+  receivers:
+    - type: telegram
+      settings:
+        bot_api_token: ""
+        chat_id: ""
+      valuesFrom:
+        - targetPath: settings.bot_api_token
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secrets
+              key: GF_TELEGRAM_BOT_TOKEN
+        - targetPath: settings.chat_id
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secrets
+              key: GF_TELEGRAM_CHAT_ID
 ---
+{{- end }}
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicy
 metadata:
@@ -22,25 +38,7 @@ spec:
     matchLabels:
       {{- toYaml $grafanaOperatorCRs.instanceSelector.matchLabels | nindent 6 }}
   route:
-    receiver: dummy-contact-point
-    group_wait: 10s
-    group_interval: 5m
-    repeat_interval: 4h
-    routeSelector:
-      matchLabels:
-        app: grafana-notification-policy-route
----
-
-apiVersion: grafana.integreatly.org/v1beta1
-kind: GrafanaNotificationPolicy
-metadata:
-  name: root-notification-policy2
-spec:
-  instanceSelector:
-    matchLabels:
-      {{- toYaml $grafanaOperatorCRs.instanceSelector.matchLabels | nindent 6 }}
-  route:
-    receiver: dummy-contact-point
+    receiver: ch-platform-all
     group_wait: 10s
     group_interval: 5m
     repeat_interval: 4h
@@ -51,33 +49,164 @@ spec:
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
 metadata:
-  name: subroot-route-1
+  name: route-global-critical
   labels:
     app: grafana-notification-policy-route
 spec:
-  receiver: dummy-contact-point
+  receiver: ch-platform-all
   object_matchers:
     - - severity
       - =
       - critical
-    - - service
-      - =
-      - argocd
+  continue: true
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaNotificationPolicyRoute
 metadata:
-  name: subroot-route-2
+  name: route-team-gitops
   labels:
     app: grafana-notification-policy-route
 spec:
-  receiver: dummy-contact-point
+  receiver: ch-gitops
   object_matchers:
-    - - severity
-      - =
-      - warning
+    - - service
+      - =~
+      - "argocd|kargo"
+  routes:
+    - receiver: cp-gerrit-albert
+      object_matchers:
+        - - severity
+          - =
+          - critical
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-team-infra
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: ch-infra
+  object_matchers:
+    - - service
+      - =~
+      - "crossplane|vault|external-secrets"
+  routes:
+    - receiver: cp-lennard
+      object_matchers:
+        - - severity
+          - =
+          - critical
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-team-observability
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: ch-observability
+  object_matchers:
+    - - service
+      - =~
+      - "mimir|grafana|tempo|loki|alloy|otel.*"
+  routes:
+    - receiver: cp-metehan-saad
+      object_matchers:
+        - - severity
+          - =
+          - critical
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-team-r2d
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: cp-christian
+  object_matchers:
     - - service
       - =
-      - crossplane
+      - "r2d-adapter"
+  routes:
+    - receiver: cp-christian-saad
+      object_matchers:
+        - - severity
+          - =
+          - critical
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-team-idp
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: cp-sebastian
+  object_matchers:
+    - - service
+      - =~
+      - "idp|backstage"
+  routes:
+    - receiver: cp-sebastian-saad
+      object_matchers:
+        - - severity
+          - =
+          - critical
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-team-releng-cluster
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: ch-releng-cluster
+  object_matchers:
+    - - k8s_cluster_name
+      - =~
+      - "releng-.*"
+  routes:
+    - receiver: cp-benedikt-bastian
+      object_matchers:
+        - - severity
+          - =
+          - critical
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-team-cust-cluster
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: ch-cust-cluster
+  object_matchers:
+    - - k8s_cluster_name
+      - =~
+      - "cust-.*"
+  routes:
+    - receiver: cp-max-nicolai
+      object_matchers:
+        - - severity
+          - =
+          - critical
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaNotificationPolicyRoute
+metadata:
+  name: route-subscription-max
+  labels:
+    app: grafana-notification-policy-route
+spec:
+  receiver: cp-max
+  object_matchers:
+    - - service
+      - =
+      - argocd
+    - - k8s_cluster_name
+      - =~
+      - ".*-int"
+  continue: true
 {{- end }}
-
