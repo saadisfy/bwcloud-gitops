@@ -200,8 +200,7 @@ k8s-monitoring:
       - mimir
 
   selfReporting:
-    destinations:
-      - mimir
+    enabled: false
 
   alloy-operator:
     waitForAlloyRemoval:
@@ -221,14 +220,17 @@ k8s-monitoring:
       includeDestinations:
         - mimir
       alloy:
-        extraVolumes:
-          - name: alloy-modules
-            configMap:
-              name: alloy-modules
-        extraVolumeMounts:
-          - name: alloy-modules
-            mountPath: /etc/alloy/modules
-            readOnly: true
+        mounts:
+          extra:
+            - name: alloy-modules
+              mountPath: /etc/alloy/modules
+              readOnly: true
+      controller:
+        volumes:
+          extra:
+            - name: alloy-modules
+              configMap:
+                name: alloy-modules
       extraConfig: &metricsPipeline |
         // k8sattributes + dual_semantics kommen aus dem Modul (single source of truth).
         // Änderungen → templates/alloy-modules-configmap.yaml
@@ -290,12 +292,15 @@ k8s-monitoring:
       presets: [daemonset, clustered, filesystem-log-reader]
       alloy:
         stabilityLevel: public-preview
-        extraVolumes:
-          - name: alloy-modules
-            configMap:
-              name: alloy-modules
-        extraVolumeMounts:
-          - name: alloy-modules
-            mountPath: /etc/alloy/modules
-            readOnly: true
+        mounts:
+          extra:
+            - name: alloy-modules
+              mountPath: /etc/alloy/modules
+              readOnly: true
+      controller:
+        volumes:
+          extra:
+            - name: alloy-modules
+              configMap:
+                name: alloy-modules
       extraConfig: *metricsPipeline
