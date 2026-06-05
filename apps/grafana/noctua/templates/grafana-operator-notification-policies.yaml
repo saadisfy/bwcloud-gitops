@@ -14,15 +14,15 @@ spec:
   receivers:
     - type: telegram
       settings:
-        bottoken: ""
-        chatid: ""
+        botToken: ""
+        chatId: ""
       valuesFrom:
-        - targetPath: settings.bottoken
+        - targetPath: settings.botToken
           valueFrom:
             secretKeyRef:
               name: grafana-secrets
               key: GF_TELEGRAM_BOT_TOKEN
-        - targetPath: settings.chatid
+        - targetPath: settings.chatId
           valueFrom:
             secretKeyRef:
               name: grafana-secrets
