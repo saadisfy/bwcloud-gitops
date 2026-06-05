@@ -56,7 +56,7 @@ grafana:
       receive_external_alerts: true
     unified_alerting:
       enabled: true
-      alertmanagers_choice: internal
+      alertmanagers_choice: external
     smtp:
       enabled: false
 
