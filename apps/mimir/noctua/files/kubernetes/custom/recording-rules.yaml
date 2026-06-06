@@ -7,7 +7,7 @@ metadata:
   namespace: monitoring
 spec:
   groups:
-  - name: kubernetes-custom.rules
+  - name: kubernetes-custom-rules
     rules:
     - expr: sum by (cluster, namespace, pod, container) (rate(container_cpu_usage_seconds_total{container!=""}[5m]))
       record: node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m
