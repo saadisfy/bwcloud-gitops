@@ -1,0 +1,49 @@
+# Initializes the native security realm (.security-7) before Kibana's pre-install hook
+# creates a service account token. Without this, a fresh ES bootstrap only has the
+# reserved elastic user and Kibana stays in "server is not ready yet".
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap-elasticsearch-security
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bootstrap-security
+          image: docker.elastic.co/elasticsearch/elasticsearch:8.5.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch-master-credentials
+                  key: password
+          command:
+            - bash
+            - -ec
+            - |
+              set -euo pipefail
+              export NSS_SDB_USE_CACHE=no
+
+              echo "Waiting for Elasticsearch..."
+              for i in $(seq 1 60); do
+                if curl -sk -u "elastic:${ELASTIC_PASSWORD}" https://elasticsearch-master:9200/_cluster/health >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 5
+              done
+
+              echo "Bootstrapping kibana_system user in native security realm..."
+              curl -sk -u "elastic:${ELASTIC_PASSWORD}" \
+                -X POST "https://elasticsearch-master:9200/_security/user/kibana_system/_password" \
+                -H "Content-Type: application/json" \
+                -d "{\"password\":\"${ELASTIC_PASSWORD}\"}"
+
+              echo "Native security realm ready."

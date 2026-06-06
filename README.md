@@ -22,6 +22,8 @@ This is a modern GitOps repository managing a complete Observability and CD stac
 | **Alloy** | Telemetry Collection | (Internal Cluster DaemonSet) |
 | **Istio** | Service mesh control plane (no workloads meshed by default) | (Internal Cluster Control Plane) |
 | **OpenTelemetry Demo** | Microservices demo workload | [opentelemetry-demo.saadisfy.me](http://opentelemetry-demo.saadisfy.me) |
+| **Kibana** | Log & search UI (Elasticsearch 8.5) | [kibana.saadisfy.me](https://kibana.saadisfy.me) |
+| **Elasticsearch** | Log/metric storage backend for Kibana | (Internal: `elasticsearch-master.elk`) |
 | **Cluster Priority** | PriorityClass objects for critical control-plane apps | (Internal Cluster Resources) |
 
 ## 🔐 Security & GitOps Decoupling
@@ -37,6 +39,7 @@ This repository is designed to be **public**. We use two mechanisms to keep it s
 -   **Storage**: **Grafana Mimir** (Distributed) stores metrics with high efficiency.
 -   **Dashboarding**: **Grafana Operator** manages dashboards and alerts as code via Custom Resources (CRs).
 -   **Auto-Reload**: **Stakater Reloader** monitors Secrets and ConfigMaps to trigger zero-downtime rolling restarts on changes.
+-   **ELK (Elasticsearch + Kibana)**: Official Elastic Helm charts (8.5.1) in namespace `elk`. Elasticsearch deploys first (Argo CD sync-wave 1); a post-install hook bootstraps the native security realm (`.security-7`) before Kibana (sync-wave 2) creates its service-account token. Login: `elastic` + password from secret `elasticsearch-master-credentials`.
 
 ## 🔄 Promotion Workflow (Kargo)
 
