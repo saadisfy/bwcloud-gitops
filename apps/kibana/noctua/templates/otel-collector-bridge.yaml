@@ -1,9 +1,12 @@
+# OTLP bridge: forwards logs from Alloy/agents into Elasticsearch
+# v1beta1: spec.config must be an object, not a string
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
 metadata:
   name: otel-elk-bridge
   namespace: elk
 spec:
+  mode: deployment
   image: otel/opentelemetry-collector-contrib:0.100.0
   env:
     - name: ELASTICSEARCH_PASSWORD
@@ -19,7 +22,7 @@ spec:
     - name: elasticsearch-certs
       secret:
         secretName: elasticsearch-master-certs
-  config: |
+  config:
     receivers:
       otlp:
         protocols:
