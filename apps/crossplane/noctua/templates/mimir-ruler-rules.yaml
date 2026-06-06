@@ -18,6 +18,7 @@ When rule files change in apps/mimir/noctua/files/, copy them here as well.
     "files/kubernetes/prometheus-prometheusRule.yaml"
     "files/kubernetes/prometheusOperator-prometheusRule.yaml"
     "files/kubernetes/grafana-prometheusRule.yaml"
+    "files/kubernetes/custom/recording-rules.yaml"
     "files/loki/alerts.yaml"
     "files/loki/rules.yaml"
     "files/tempo/alerts.yaml"
