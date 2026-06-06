@@ -82,6 +82,14 @@ grafana:
               hide: false
             lokiSearch:
               datasourceUid: loki
+        - name: Elasticsearch
+          type: elasticsearch
+          access: proxy
+          uid: elasticsearch
+          url: http://elasticsearch.elk.svc.cluster.local:9200
+          jsonData:
+            timeField: "@timestamp"
+            version: "7.10.0"
   ingress:
     enabled: true
     ingressClassName: nginx
