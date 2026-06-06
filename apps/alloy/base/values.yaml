@@ -68,8 +68,9 @@ alloy:
 
     # Default mounts
     mounts:
-      varlog: true
-      dockercontainers: true
+      # metrics-only: disable host log mounts
+      varlog: false
+      dockercontainers: false
 
 kube-state-metrics:
   # Q: Why fullname override?

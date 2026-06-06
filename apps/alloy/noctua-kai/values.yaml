@@ -118,6 +118,18 @@ k8s-monitoring:
         enabled: false  # override: loki ist logs-only
       traces:
         enabled: false  # override: loki ist logs-only
+    elastic-logs:
+      type: otlp
+      url: "http://otel-elk-bridge-collector.elk.svc.cluster.local:4317"
+      protocol: grpc
+      tls:
+        insecure: true
+      logs:
+        enabled: true
+      metrics:
+        enabled: false
+      traces:
+        enabled: false
     mimir:
       type: otlp
       url: "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
@@ -175,6 +187,7 @@ k8s-monitoring:
     collector: alloy-node
     destinations:
       - loki-otlp
+      - elastic-logs
   applicationObservability:
     enabled: true
     collector: alloy-node
