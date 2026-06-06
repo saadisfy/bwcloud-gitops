@@ -187,6 +187,8 @@
                   "type": "prometheus",
                   "uid": "${datasource}"
                },
+               "editorMode": "code",
+               "exemplar": true,
                "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_bucket{job=~\"spring-petclinic.*\"}[$__rate_interval])))",
                "legendFormat": "p95",
                "refId": "A"
@@ -196,9 +198,23 @@
                   "type": "prometheus",
                   "uid": "${datasource}"
                },
+               "editorMode": "code",
+               "exemplar": true,
                "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_bucket{job=~\"spring-petclinic.*\"}[$__rate_interval])))",
                "legendFormat": "p99",
                "refId": "B"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "exemplar": true,
+               "expr": "sum by (le) (rate(http_server_request_duration_bucket{job=~\"spring-petclinic.*\"}[$__rate_interval]))",
+               "hide": true,
+               "legendFormat": "__auto",
+               "refId": "C"
             }
          ],
          "title": "Latency (click exemplars → Tempo)",
@@ -342,7 +358,7 @@
                "showLineNumbers": false,
                "showMiniMap": false
             },
-            "content": "**Pipeline:** Java Agent → Alloy (`alloy-kai-alloy-node:4318`) → Mimir/Loki/Tempo. **Logs:** `{service_name=\"spring-petclinic\"}`. **RED:** `job=~\"spring-petclinic.*\"`. **Exemplars:** `OTEL_METRICS_EXEMPLAR_FILTER=trace_based` — Latency-Punkte mit Diamant → Tempo. Pod-Filter nur CPU-Panel.",
+            "content": "**Pipeline:** Java Agent → Alloy → Mimir (remote_write + exemplars). **Logs:** `{service_name=\"spring-petclinic\"}`. **Exemplars:** Latency-Panel — Diamant-Marker auf Histogramm → Tempo. `OTEL_METRICS_EXEMPLAR_FILTER=always_on`.",
             "mode": "markdown"
          },
          "title": "Log pipeline status",

@@ -19,7 +19,7 @@ spec:
       value: "true"
     # Attach trace_id to histogram metrics → Mimir exemplars → Grafana → Tempo
     - name: OTEL_METRICS_EXEMPLAR_FILTER
-      value: "trace_based"
+      value: "always_on"
     # Ensure HTTP spans are sampled so trace_based exemplars are emitted
     - name: OTEL_TRACES_SAMPLER
       value: "always_on"
