@@ -1,6 +1,12 @@
 apiVersion: v2
 name: elk
-description: A Helm chart for open-source ELK (Elasticsearch & Kibana OSS)
+description: A Helm chart for the official Elastic Stack (Elasticsearch & Kibana) using subcharts
 type: application
-version: 0.1.0
-appVersion: "7.10.2"
+version: 0.2.0
+dependencies:
+  - name: elasticsearch
+    version: "8.5.1"
+    repository: https://helm.elastic.co
+  - name: kibana
+    version: "8.5.1"
+    repository: https://helm.elastic.co
