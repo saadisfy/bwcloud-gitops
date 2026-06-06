@@ -7,6 +7,10 @@ mimir-distributed:
         ingestion_rate: 100000
         ingestion_burst_size: 500000
         max_global_series_per_user: 1500000
+        # Default 0 disables exemplar storage → Grafana shows no clickable markers.
+        max_global_exemplars_per_user: 100000
+        out_of_order_time_window: 5m
+        ignore_ooo_exemplars: true
       ruler:
         # rule_path: writable temp dir for rule evaluation.
         # /tmp is read-only (readOnlyRootFilesystem=true on this container),
