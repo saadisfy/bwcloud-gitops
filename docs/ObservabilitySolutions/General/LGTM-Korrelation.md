@@ -122,7 +122,7 @@ flowchart TB
 
 **Wichtig für Logs:** Pods mit OTel-Injection senden Logs **nur per OTLP** (stdout wird von Alloy bewusst ausgefiltert, um Duplikate zu vermeiden). Endpoint: `http://alloy-kai-alloy-node.alloy.svc.cluster.local:4318`.
 
-**Exemplars:** Der Java-Agent setzt `OTEL_METRICS_EXEMPLAR_FILTER=trace_based`. Alloy leitet Exemplars in OTLP-Metriken unverändert an Mimir weiter; Grafana verlinkt sie über `exemplarTraceIdDestinations` zu Tempo.
+**Exemplars:** Der Java-Agent setzt `OTEL_METRICS_EXEMPLAR_FILTER=always_on`. Alloy leitet Exemplars im OTLP-Metrics-Pfad an Mimir weiter. **Mimir:** `max_global_exemplars_per_user: 100000` in `apps/mimir/noctua/values.yaml` (Default `0` = deaktiviert — ohne diese Einstellung keine klickbaren Marker in Grafana). Grafana verlinkt sie über `exemplarTraceIdDestinations` zu Tempo.
 
 *(Der separate `otel-collector` im Namespace `otel-operator` ist optional/Labor — Spring Petclinic nutzt Alloy.)*
 
