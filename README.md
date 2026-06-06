@@ -21,7 +21,7 @@ This is a modern GitOps repository managing a complete Observability and CD stac
 | **Mimir** | Long-term Metric Storage | [mimir.saadisfy.me](https://mimir.saadisfy.me) |
 | **Alloy** | Telemetry Collection | (Internal Cluster DaemonSet) |
 | **Istio** | Service mesh control plane (no workloads meshed by default) | (Internal Cluster Control Plane) |
-| **OpenTelemetry Demo** | Microservices demo workload | [opentelemetry-demo.saadisfy.me](http://opentelemetry-demo.saadisfy.me) |
+| **Spring Petclinic** | Demo app (OTel auto-instrumentation, LGTM correlation example) | [spring-petclinic.saadisfy.me](https://spring-petclinic.saadisfy.me) |
 | **Kibana** | Log & search UI (Elasticsearch 8.5) | [kibana.saadisfy.me](https://kibana.saadisfy.me) |
 | **Elasticsearch** | Log/metric storage backend for Kibana | (Internal: `elasticsearch-master.elk`) |
 | **Cluster Priority** | PriorityClass objects for critical control-plane apps | (Internal Cluster Resources) |
@@ -38,6 +38,7 @@ This repository is designed to be **public**. We use two mechanisms to keep it s
 -   **Collector**: **Grafana Alloy** runs as a DaemonSet, scraping metrics (KSM, Node-Exporter) and forwarding them via OTLP.
 -   **Storage**: **Grafana Mimir** (Distributed) stores metrics with high efficiency.
 -   **Dashboarding**: **Grafana Operator** manages dashboards and alerts as code via Custom Resources (CRs).
+-   **Korrelation (LGTM):** Mimir-Exemplars → Tempo, Tempo → Loki (`trace_id`), Loki derivedFields → Tempo. Beispiel-App: Spring Petclinic. Dashboard: *Spring Petclinic / LGTM Correlation* in Grafana. Details: [General/LGTM-Korrelation.md](docs/ObservabilitySolutions/General/LGTM-Korrelation.md).
 -   **Auto-Reload**: **Stakater Reloader** monitors Secrets and ConfigMaps to trigger zero-downtime rolling restarts on changes.
 -   **ELK (Elasticsearch + Kibana)**: Official Elastic Helm charts (8.5.1) in namespace `elk`. Elasticsearch deploys first (Argo CD sync-wave 1); a post-install hook bootstraps the native security realm (`.security-7`) before Kibana (sync-wave 2) creates its service-account token. **SSO**: GitHub via Argo CD Dex (OIDC) — gleicher GitHub-Connector wie Argo CD; `saadisfy` → superuser, alle anderen → viewer. Fallback-Login: `elastic` + Passwort aus `elasticsearch-master-credentials`. Secrets: `0day-deployment-manifests/grafana-secrets.yaml` (`kibana-oidc` für Dex, `kibana-oidc-credentials` für ES-Keystore).
 
@@ -53,6 +54,7 @@ Promotions between stages (Dev -> Int -> Prod) are handled by **Kargo**.
 Detailed information about the architecture and usage of this stack:
 
 -   **[Observability Guide](docs/OBSERVABILITY.md)**: Central source of truth for the observability stack, including architecture, onboarding, and operational know-how.
+-   **[LGTM Datenkorrelation (Grundlagen)](docs/ObservabilitySolutions/General/LGTM-Korrelation.md)**: Metrics → Traces → Logs, Schlüssel-Labels, Grafana-Navigation am Spring-Petclinic-Beispiel.
 -   **[Data Pipeline Concept (Alloy)](docs/data-pipeline-concept.md)**: Deep dive into the Grafana Alloy pipeline (Receive -> Process -> Export) and label enrichment strategy.
 -   **[Instrumentation & Pod Association](docs/OBSERVABILITY.md#24-advanced-label-enrichment--pod-association)**: How applications are identified and enriched with Kubernetes metadata.
 

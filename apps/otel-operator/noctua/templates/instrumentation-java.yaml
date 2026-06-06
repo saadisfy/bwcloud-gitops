@@ -8,8 +8,9 @@ metadata:
   namespace: otel-operator
 spec:
   env:
+    # OTLP for all signals: Alloy filters stdout for otel-injected pods (no duplicates).
     - name: OTEL_LOGS_EXPORTER
-      value: "none"
+      value: "otlp"
     - name: OTEL_TRACES_EXPORTER
       value: "otlp"
     - name: OTEL_METRICS_EXPORTER
@@ -20,7 +21,7 @@ spec:
     endpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4318
   resource:
     resourceAttributes:
-      deployment.environment: prod
+      deployment.environment.name: noctua
   propagators:
     - tracecontext
     - baggage

@@ -49,6 +49,8 @@ This document outlines the architectural comparison, evaluation, and design cons
   * Steep learning curve for configuration (Alloy configurations, PromQL, LogQL).
   * Self-hosting requires robust GitOps operators (which we have successfully bootstrapped in this repo).
 
+**Korrelation (Grundlagen):** Siehe [General/LGTM-Korrelation.md](General/LGTM-Korrelation.md) für Metrics → Traces → Logs, Schlüssel-Labels und Grafana-Navigation am Spring-Petclinic-Beispiel.
+
 ---
 
 ## 🛠 Deployed OSS ELK Implementation Details

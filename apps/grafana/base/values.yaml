@@ -71,9 +71,13 @@ grafana:
               datasourceUid: loki
               spanStartTimeShift: '1h'
               spanEndTimeShift: '1h'
-              tags: [{ key: 'service.name', value: 'service' }]
+              tags:
+                - { key: 'service.name', value: 'service' }
+                - { key: 'service.name', value: 'service_name' }
               filterByTraceID: true
               filterBySpanID: false
+            tracesToMetrics:
+              datasourceUid: mimir
             serviceMap:
               datasourceUid: mimir
             nodeGraph:

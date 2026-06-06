@@ -18,6 +18,9 @@ spec:
         # Instrumentation CR im Namespace otel-operator (cross-namespace)
         instrumentation.opentelemetry.io/inject-java: "otel-operator/java-instrumentation"
         resource.opentelemetry.io/service.name: "spring-petclinic"
+        resource.opentelemetry.io/service.namespace: "spring-petclinic"
+        resource.opentelemetry.io/service.version: "{{ .Values.image.tag }}"
+        resource.opentelemetry.io/deployment.environment.name: "noctua"
         {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}

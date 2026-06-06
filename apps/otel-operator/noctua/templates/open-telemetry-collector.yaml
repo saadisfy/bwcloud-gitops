@@ -1,4 +1,4 @@
-# OpenTelemetryCollector: OTLP-Empfang, Metrics → Mimir (otlphttp), Target Allocator (Beispiel: nur Mimir)
+# OpenTelemetryCollector: OTLP-Empfang, Metrics → Mimir, Logs → Loki, Traces → Tempo
 # v1beta1: spec.config must be an object, not a string
 apiVersion: opentelemetry.io/v1beta1
 kind: OpenTelemetryCollector
@@ -22,6 +22,10 @@ spec:
           X-Scope-OrgID: "1"
         tls:
           insecure: true
+      otlphttp/loki:
+        endpoint: http://loki-gateway.loki.svc.cluster.local/otlp
+        tls:
+          insecure: true
       otlp/tempo:
         endpoint: tempo.tempo.svc.cluster.local:4317
         tls:
@@ -31,6 +35,9 @@ spec:
         metrics:
           receivers: [otlp]
           exporters: [otlphttp]
+        logs:
+          receivers: [otlp]
+          exporters: [otlphttp/loki]
         traces:
           receivers: [otlp]
           exporters: [otlp/tempo]

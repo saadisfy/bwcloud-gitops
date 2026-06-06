@@ -1,0 +1,475 @@
+{
+   "annotations": {
+      "list": [
+         {
+            "builtIn": 1,
+            "datasource": {
+               "type": "grafana",
+               "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+         }
+      ]
+   },
+   "description": "LGTM correlation dashboard for Spring Petclinic: RED metrics, JVM, pod resources, error logs, and links to Tempo/Kubernetes.",
+   "editable": true,
+   "graphTooltip": 1,
+   "links": [
+      {
+         "icon": "external link",
+         "includeVars": true,
+         "keepTime": true,
+         "targetBlank": true,
+         "title": "Kubernetes Pod Resources",
+         "type": "link",
+         "url": "/d/6581e46e4e5c7ba40a07646395ef7b23?${datasource:queryparam}&var-cluster=${cluster}&var-namespace=${namespace}&var-pod=${pod}"
+      },
+      {
+         "icon": "bolt",
+         "includeVars": false,
+         "keepTime": true,
+         "targetBlank": true,
+         "title": "Tempo Explore",
+         "type": "link",
+         "url": "/explore?orgId=1&left=%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22%7B%20resource.service.name%20%3D%20%5C%22spring-petclinic%5C%22%20%7D%22%7D%5D%7D"
+      }
+   ],
+   "panels": [
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+         },
+         "id": 100,
+         "title": "RED Metrics (Mimir → Tempo via Exemplars)",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": true
+               },
+               "unit": "reqps"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 1
+         },
+         "id": 1,
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum(rate(http_server_duration_milliseconds_count{job=\"spring-petclinic\", cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval]))",
+               "legendFormat": "requests/s",
+               "refId": "A"
+            }
+         ],
+         "title": "Request Rate",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": true
+               },
+               "unit": "reqps"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 1
+         },
+         "id": 2,
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum(rate(http_server_duration_milliseconds_count{job=\"spring-petclinic\", cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\", http_response_status_code=~\"5..\"}[$__rate_interval]))",
+               "legendFormat": "5xx/s",
+               "refId": "A"
+            }
+         ],
+         "title": "Error Rate (5xx)",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": true
+               },
+               "unit": "ms"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 1
+         },
+         "id": 3,
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_milliseconds_bucket{job=\"spring-petclinic\", cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
+               "legendFormat": "p95",
+               "refId": "A"
+            },
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_duration_milliseconds_bucket{job=\"spring-petclinic\", cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"}[$__rate_interval])))",
+               "legendFormat": "p99",
+               "refId": "B"
+            }
+         ],
+         "title": "Latency (click exemplars → Tempo)",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 9
+         },
+         "id": 101,
+         "title": "JVM & Pod Resources",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": true
+               },
+               "unit": "bytes"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 10
+         },
+         "id": 4,
+         "options": {
+            "legend": {
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum by (jvm_memory_type, pod) (jvm_memory_used_bytes{job=\"spring-petclinic\", cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"})",
+               "legendFormat": "{{pod}} {{jvm_memory_type}}",
+               "refId": "A"
+            }
+         ],
+         "title": "JVM Heap / Memory",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": true
+               },
+               "unit": "percentunit"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 10
+         },
+         "id": 5,
+         "options": {
+            "legend": {
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum by (pod) (max by (cluster, namespace, pod, container)(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m{cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"})) / sum by (pod) (max by (cluster, namespace, pod, container)(cluster:namespace:pod_cpu:active:kube_pod_container_resource_limits{cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"}))",
+               "legendFormat": "{{pod}}",
+               "refId": "A"
+            }
+         ],
+         "title": "Pod CPU vs Limit",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 18
+         },
+         "id": 102,
+         "title": "Logs (Loki → Tempo via trace_id)",
+         "type": "row"
+      },
+      {
+         "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+         },
+         "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 19
+         },
+         "id": 6,
+         "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "loki",
+                  "uid": "${loki_datasource}"
+               },
+               "expr": "{service_name=\"spring-petclinic\", namespace=~\"$namespace\"} |~ \"(?i)error|exception|warn\"",
+               "refId": "A"
+            }
+         ],
+         "title": "Error / Warning Logs (click TraceID → Tempo)",
+         "type": "logs"
+      },
+      {
+         "datasource": {
+            "type": "loki",
+            "uid": "${loki_datasource}"
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 29
+         },
+         "id": 7,
+         "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "loki",
+                  "uid": "${loki_datasource}"
+               },
+               "expr": "{service_name=\"spring-petclinic\", namespace=~\"$namespace\", pod=~\"$pod\"}",
+               "refId": "A"
+            }
+         ],
+         "title": "All Logs",
+         "type": "logs"
+      }
+   ],
+   "refresh": "30s",
+   "schemaVersion": 41,
+   "tags": [
+      "spring-petclinic",
+      "lgtm",
+      "correlation"
+   ],
+   "templating": {
+      "list": [
+         {
+            "label": "Data Source",
+            "name": "datasource",
+            "query": "prometheus",
+            "refresh": 1,
+            "type": "datasource"
+         },
+         {
+            "label": "Loki Data Source",
+            "name": "loki_datasource",
+            "query": "loki",
+            "refresh": 1,
+            "type": "datasource"
+         },
+         {
+            "allValue": ".*",
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${datasource}"
+            },
+            "includeAll": true,
+            "label": "Cluster",
+            "multi": true,
+            "name": "cluster",
+            "query": "label_values(http_server_duration_milliseconds_count{job=\"spring-petclinic\"}, cluster)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+         },
+         {
+            "allValue": ".*",
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${datasource}"
+            },
+            "includeAll": true,
+            "label": "Namespace",
+            "multi": true,
+            "name": "namespace",
+            "query": "label_values(http_server_duration_milliseconds_count{job=\"spring-petclinic\", cluster=~\"$cluster\"}, namespace)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+         },
+         {
+            "allValue": ".*",
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${datasource}"
+            },
+            "includeAll": true,
+            "label": "Pod",
+            "multi": true,
+            "name": "pod",
+            "query": "label_values(http_server_duration_milliseconds_count{job=\"spring-petclinic\", cluster=~\"$cluster\", namespace=~\"$namespace\"}, pod)",
+            "refresh": 2,
+            "sort": 1,
+            "type": "query"
+         }
+      ]
+   },
+   "time": {
+      "from": "now-1h",
+      "to": "now"
+   },
+   "timezone": "browser",
+   "title": "Spring Petclinic / LGTM Correlation",
+   "uid": "spring-petclinic-correlation"
+}

@@ -11,7 +11,7 @@ Dieser Guide richtet sich an Customers, die unsere Observability-Lösung nutzen 
 ### 1.1 Was ihr von der Lösung erwarten könnt
 - Zentrales Observability-Frontend in Grafana.
 - Metriken in Mimir.
-- Traces in Tempo, Logs in Loki (geplant).
+- Traces in Tempo, Logs in Loki.
 - Einfache Promotability via Kargo-Stages (dev -> int -> prod).
 - Optionales Auto-Instrumentieren über den OpenTelemetry Operator.
 
@@ -156,6 +156,21 @@ Dashboards werden über JSON-Dateien im Verzeichnis `apps/grafana/prod/files/` g
 1. **GrafanaFolder**: Für jedes Verzeichnis wird eine CR erzeugt.
 2. **ConfigMap**: JSON-Inhalte werden in ConfigMaps ausgelagert, um CR-Limits zu umgehen.
 3. **GrafanaDashboard**: Referenziert die ConfigMap und den Ordner.
+
+### 4.2 LGTM Datenkorrelation
+
+Metriken (Mimir), Logs (Loki) und Traces (Tempo) sind in Grafana signalübergreifend verlinkt:
+
+| Richtung | Mechanismus | Konfiguration |
+| :--- | :--- | :--- |
+| Mimir → Tempo | Exemplars (`trace_id`) | `apps/grafana/base/values.yaml` → `exemplarTraceIdDestinations` |
+| Tempo → Loki | `tracesToLogsV2` + `trace_id` | Tempo-Datasource → `filterByTraceID: true` |
+| Loki → Tempo | `derivedFields` auf Logzeilen | Loki-Datasource → Regex `trace_id`/`traceID` |
+| Tempo → Mimir | Span metrics / Service graph | Tempo Metrics Generator → Mimir remote write |
+
+**Beispiel-App:** Spring Petclinic (`namespace: spring-petclinic`) mit OTel Java Auto-Instrumentation. Dashboard in Grafana: *Spring Petclinic / LGTM Correlation* (Ordner `Spring-Petclinic`).
+
+Ausführliche Erklärung: [ObservabilitySolutions/General/LGTM-Korrelation.md](ObservabilitySolutions/General/LGTM-Korrelation.md).
 
 ---
 
