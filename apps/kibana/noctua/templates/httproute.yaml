@@ -15,5 +15,5 @@ spec:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: elk-kibana
+        - name: kibana-kibana
           port: 5601
