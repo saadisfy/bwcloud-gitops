@@ -14,11 +14,8 @@ elasticsearch:
       requests:
         storage: 2Gi
 
-  # OIDC realm: Argo CD Dex (GitHub SSO) — Client-Secret via keystore secret
-  # `kibana-oidc-credentials` (0day-deployment-manifests/grafana-secrets.yaml).
-  keystore:
-    - secretName: kibana-oidc-credentials
-
+  # OIDC realm: Argo CD Dex (GitHub SSO). Client-Secret wird per post-install Hook
+  # in den Keystore geschrieben (Helm-keystore subPath crasht den ES-Entrypoint).
   esConfig:
     elasticsearch.yml: |
       xpack.security.authc.token.enabled: true
