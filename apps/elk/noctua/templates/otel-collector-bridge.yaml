@@ -23,6 +23,9 @@ spec:
         mapping:
           mode: "ecs"
     service:
+      telemetry:
+        metrics:
+          address: ""
       pipelines:
         logs:
           receivers: [otlp]
