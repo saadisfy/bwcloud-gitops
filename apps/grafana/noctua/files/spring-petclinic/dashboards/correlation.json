@@ -342,7 +342,7 @@
                "showLineNumbers": false,
                "showMiniMap": false
             },
-            "content": "OTel-Metriken (RED/JVM) sind service-weit aggregiert (`job=~\"spring-petclinic.*\"`). Pod-Filter gilt nur für Kubernetes-Panels (CPU). Logs: `{service_name=\"spring-petclinic\"}` in Loki.",
+            "content": "**Logs:** OTLP aktiv → Loki `{service_name=\"spring-petclinic\"}`. **RED:** service-weit (`job=~\"spring-petclinic.*\"`). **Exemplars:** brauchen `OTEL_METRICS_EXEMPLAR_FILTER` am Java-Agent (noch nicht gesetzt) — bis dahin Korrelation über Tempo Explore / Log-`trace_id`. Pod-Filter nur für CPU-Panel.",
             "mode": "markdown"
          },
          "title": "Log pipeline status",
