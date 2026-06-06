@@ -2,11 +2,6 @@ elasticsearch:
   replicas: 1
   minimumMasterNodes: 1
   antiAffinity: "soft"
-  esConfig:
-    elasticsearch.yml: |
-      xpack.security.enabled: false
-      xpack.security.transport.ssl.enabled: false
-      xpack.security.http.ssl.enabled: false
   resources:
     requests:
       cpu: "100m"
@@ -20,9 +15,6 @@ elasticsearch:
         storage: 2Gi
 
 kibana:
-  elasticsearchHosts: "http://elasticsearch-master:9200"
-  elasticsearchCertificateSecret: ""
-  elasticsearchCredentialSecret: ""
   resources:
     requests:
       cpu: "100m"
