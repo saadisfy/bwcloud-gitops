@@ -1,38 +1,11 @@
 kibana:
-  elasticsearchHosts: "https://elasticsearch-master.elk.svc:9200"
+  # Point to the official ES master service
+  elasticsearchHosts: "https://elasticsearch-master:9200"
 
-  # Use credentials from the elasticsearch-master-credentials secret
-  extraEnvs:
-    - name: ELASTICSEARCH_USERNAME
-      valueFrom:
-        secretKeyRef:
-          name: elasticsearch-master-credentials
-          key: username
-    - name: ELASTICSEARCH_PASSWORD
-      valueFrom:
-        secretKeyRef:
-          name: elasticsearch-master-credentials
-          key: password
-
-  # Mount the CA cert so Kibana can trust the self-signed ES TLS cert
-  extraVolumes:
-    - name: es-certs
-      secret:
-        secretName: elasticsearch-master-certs
-
-  extraVolumeMounts:
-    - name: es-certs
-      mountPath: /usr/share/kibana/config/certs
-      readOnly: true
-
-  kibanaConfig:
-    kibana.yml: |
-      server.host: "0.0.0.0"
-      elasticsearch.hosts: ["https://elasticsearch-master.elk.svc:9200"]
-      elasticsearch.username: "${ELASTICSEARCH_USERNAME}"
-      elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
-      elasticsearch.ssl.certificateAuthorities: ["/usr/share/kibana/config/certs/ca.crt"]
-      monitoring.ui.container.elasticsearch.enabled: true
+  # Use the cert and credentials secrets created by the elasticsearch chart
+  elasticsearchCertificateSecret: elasticsearch-master-certs
+  elasticsearchCertificateAuthoritiesFile: ca.crt
+  elasticsearchCredentialSecret: elasticsearch-master-credentials
 
   resources:
     requests:
