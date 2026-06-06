@@ -14,10 +14,25 @@ elasticsearch:
       requests:
         storage: 2Gi
 
-  # OIDC realm is applied by post-install hook after the client secret is in the keystore.
+  # OIDC client secret for Dex (GitHub SSO) — injected via Helm keystore init container.
+  keystore:
+    - secretName: kibana-oidc-credentials
+
   esConfig:
     elasticsearch.yml: |
       xpack.security.authc.token.enabled: true
+      xpack.security.authc.realms.oidc.oidc1:
+        order: 2
+        rp.client_id: kibana
+        rp.response_type: code
+        rp.redirect_uri: https://kibana.saadisfy.me/api/security/oidc/callback
+        rp.post_logout_redirect_uri: https://kibana.saadisfy.me/security/logged_out
+        op.issuer: https://argocd.saadisfy.me/api/dex
+        op.authorization_endpoint: https://argocd.saadisfy.me/api/dex/auth
+        op.token_endpoint: https://argocd.saadisfy.me/api/dex/token
+        op.jwkset_path: https://argocd.saadisfy.me/api/dex/keys
+        op.userinfo_endpoint: https://argocd.saadisfy.me/api/dex/userinfo
+        claims.principal: preferred_username
     role_mapping.yml: |
       oidc_admin:
         enabled: true
