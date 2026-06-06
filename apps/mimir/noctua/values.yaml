@@ -14,13 +14,7 @@ mimir-distributed:
         rule_path: /data/ruler-rules
         # Send alerts to Mimir's local Alertmanager
         alertmanager_url: "http://mimir-alertmanager.mimir.svc.cluster.local:8080/alertmanager"
-      # filesystem backend: uses the ruler PersistentVolume at /rules-storage.
-      # Unlike 'local', filesystem enables the Ruler HTTP API (SetRuleGroup).
-      # Crossplane pushes rules via API — no ConfigMap mount needed.
-      ruler_storage:
-        backend: filesystem
-        filesystem:
-          dir: /rules-storage
+
 
   ingester:
     replicas: 1

@@ -13,9 +13,13 @@ tempo:
     # Filesystem-based storage (Loki logic)
     storage:
       trace:
-        backend: local
-        local:
-          path: /var/tempo/traces
+        backend: s3
+        s3:
+          bucket: tempo
+          endpoint: minio.minio.svc.cluster.local:9000
+          access_key: minioadmin
+          secret_key: minioadminpassword
+          insecure: true
         wal:
           path: /var/tempo/wal
     

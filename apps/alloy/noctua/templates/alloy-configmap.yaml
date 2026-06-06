@@ -39,6 +39,16 @@ data:
       }
     }
 
+    otelcol.exporter.otlp "elasticsearch_bridge" {
+      client {
+        endpoint = "otel-elk-bridge-collector.elk.svc.cluster.local:4317"
+        tls {
+          insecure = true
+        }
+      }
+    }
+
+
     // ===============================================================
     // PHASE 2: PROCESS (Central Enrichment & Label Mapping)
     // ===============================================================
@@ -379,6 +389,22 @@ data:
     kubeproxy_scrape.scrape "default" {
       forward_to = otelcol_pipeline_meta_level.meta_level.input
     }
+
+    otelcol.processor.batch "logs" {
+      output {
+        logs = [otelcol.exporter.otlp.elasticsearch_bridge.input]
+      }
+      send_batch_size = 1000
+      timeout = "1s"
+    }
+
+    otelcol.receiver.filelog "pod_logs" {
+      include = ["/var/log/pods/*/*/*.log"]
+      output {
+        logs = [otelcol.processor.batch.logs.input]
+      }
+    }
+
 
   alloy_scrape.alloy: |-
     declare "scrape" {

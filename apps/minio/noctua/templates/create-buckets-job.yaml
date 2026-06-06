@@ -1,0 +1,34 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-make-buckets
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  template:
+    metadata:
+      labels:
+        app: minio-make-buckets
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: "{{ .Values.mc.image }}:{{ .Values.mc.tag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for MinIO server to be ready..."
+              until /usr/bin/mc alias set myminio http://minio:9000 "{{ .Values.minio.rootUser }}" "{{ .Values.minio.rootPassword }}"; do
+                echo "MinIO not ready yet, retrying in 2 seconds..."
+                sleep 2
+              done
+              echo "MinIO is ready! Creating buckets..."
+              /usr/bin/mc mb --ignore-existing myminio/mimir-blocks
+              /usr/bin/mc mb --ignore-existing myminio/mimir-alertmanager
+              /usr/bin/mc mb --ignore-existing myminio/mimir-ruler
+              /usr/bin/mc mb --ignore-existing myminio/loki
+              /usr/bin/mc mb --ignore-existing myminio/tempo
+              echo "All buckets created successfully!"

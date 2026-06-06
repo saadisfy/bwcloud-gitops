@@ -1,0 +1,18 @@
+minio:
+  image: "quay.io/minio/minio"
+  tag: "RELEASE.2024-05-10T01-39-19Z"
+  rootUser: "minioadmin"
+  rootPassword: "REPLACE_ROOT_PASSWORD"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      memory: "512Mi"
+  persistence:
+    size: "10Gi"
+    storageClass: "local-path"
+
+mc:
+  image: "quay.io/minio/mc"
+  tag: "RELEASE.2024-05-09T17-04-24Z"
