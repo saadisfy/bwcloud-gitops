@@ -2,6 +2,10 @@
 
 Dieses Dokument listet alle Panels der Grafana-Dashboards für **Grafana Alloy**, **Kubernetes**, **Grafana Mimir** und **Grafana Tempo** auf, die im Standardbetrieb keine Daten anzeigen (`No Data`), und klassifiziert, ob dies korrekt (**OK**) oder ein Fehler (**ERROR**) ist.
 
+> [!NOTE]
+> **Update vom 06. Juni 2026:**
+> Alle zuvor als **ERROR** markierten fehlenden Panels (z. B. CPU-Nutzung in Kubernetes-Dashboards und API-Server-Verfügbarkeit) wurden durch die Bereitstellung von benutzerdefinierten Aggregationsregeln (Recording Rules) in [recording-rules.yaml](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/apps/mimir/noctua/files/kubernetes/custom/recording-rules.yaml) erfolgreich behoben. Alle Dashboards wurden in die jeweiligen `accepted/`-Ordner verschoben.
+
 ---
 
 # Teil 1: Grafana Alloy Dashboards
@@ -111,28 +115,23 @@ In unserem **OTLP-first** Observability-Stack ist dieses Verhalten für fast all
 
 # Teil 2: Kubernetes Dashboards
 
-Bei den Kubernetes-Dashboards gibt es drei primäre Ursachen für fehlende Daten:
-1. **Fehlende Recording Rules** (Aggregationsregeln, die in Mimir berechnet werden müssten, aber nicht installiert sind).
-2. **Kubelet-Metriken-Whitelisting** (Alloy filtert zur Reduzierung der Kardinalität standardmäßig detaillierte Kubelet-Metriken heraus).
-3. **Nicht-gescrapte Control-Plane-Komponenten** (In K3s/managed K8s sind Scheduler, Controller-Manager und Proxy oft nicht direkt zugänglich oder nicht für Scraping konfiguriert).
-
 ## 1. Kubernetes / API server (`k8s-system-api-server.json`)
 
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
-| **Availability / SLI / ErrorBudget** (alle API-SLI Panels) | **ERROR** | Diese Panels nutzen pre-aggregierte Recording Rules wie `apiserver_request:availability30d`. Da die entsprechenden Kubernetes-SLI-Recording-Rules in Mimir nicht definiert sind, bleiben die Panels leer. |
+| **Availability / SLI / ErrorBudget** | **OK (RESOLVED)** | Die benötigte Aggregationsmetrik `apiserver_request:availability30d` wurde als benutzerdefinierte Recording Rule per Mimir-Ruler bereitgestellt. Die Panels erhalten nun Daten. |
 
 ## 2. Kubernetes / Compute Resources / Cluster (`k8s-resources-cluster.json`)
 
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
-| **CPU Usage** | **ERROR** | Das Panel fragt die Recording Rule `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m` ab. Da diese Aggregationsregel in Mimir nicht definiert ist, gibt es keine Daten, obwohl die Rohmetrik (`container_cpu_usage_seconds_total`) vorhanden ist. |
+| **CPU Usage** | **OK (RESOLVED)** | Die Recording Rule `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m` wurde per Mimir-Ruler definiert. CPU-Daten werden nun visualisiert. |
 
 ## 3. Kubernetes / Compute Resources / Namespace (Pods) (`k8s-resources-namespace.json`)
 
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
-| **CPU Utilisation (limits & requests)** | **ERROR** | Gleiche Ursache wie oben: Nutzt die nicht-existierende Recording Rule `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m`. |
+| **CPU Utilisation (limits & requests)** | **OK (RESOLVED)** | Die Recording Rule `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m` wurde bereitgestellt. |
 
 ## 4. Kubernetes / Compute Resources / Node & Pod
 
@@ -142,7 +141,7 @@ Bei den Kubernetes-Dashboards gibt es drei primäre Ursachen für fehlende Daten
 
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
-| **CPU Usage** | **ERROR** | Nutzt die fehlenden Recording Rules `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m` und `namespace_workload_pod:kube_pod_owner:relabel`. |
+| **CPU Usage** | **OK (RESOLVED)** | Die benötigten Recording Rules (`node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m` und `namespace_workload_pod:kube_pod_owner:relabel`) wurden deployed. |
 
 ## 6. Kubernetes / Controller Manager (`k8s-system-controller-manager.json`)
 
@@ -155,16 +154,16 @@ Bei den Kubernetes-Dashboards gibt es drei primäre Ursachen für fehlende Daten
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
 | **Operation Duration 99th quantile** | **OK** | Nutzt `kubelet_runtime_operations_duration_seconds_bucket`. Diese detaillierte Metrik wird durch die Whitelist-Relabeling-Regeln in Alloy (`apps/alloy/noctua-kai/render.yaml`) verworfen, um Mimir-Speicherplatz zu sparen. |
-| **Config Error Count** | **OK** | Nutzt `kubelet_node_config_error`. Bleibt leer, da bisher 0 Konfigurationsfehler auftraten (erwartet und gesund). |
+| **Config Error Count** | **OK** | Nutzt `kubelet_node_config_error`. Bleibt leer, da bisher 0 Konfigurationsfehler auftraten. |
 | **Storage Operation Duration 99th quantile** | **OK** | Die Metrik `storage_operation_duration_seconds_bucket` ist nicht im Metriken-Whitelist von Alloy enthalten und wird verworfen. |
 | **Storage Operation Error Rate** | **OK** | Zähler für Speicherfehler steht bei 0, daher keine Daten. |
-| **Request duration 99th quantile** | **OK** | HTTP-Dauer-Metriken der Kubelet-API sind nicht whitelisted und werden gefiltert. |
+| **Request duration 99th quantile** | **OK** | HTTP-Dauer-Metriken der Kubelet-API sind nicht whitelisted. |
 
 ## 8. Kubernetes / Proxy (`k8s-system-proxy.json`)
 
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
-| **Alle Panels** | **OK** | Die Metrik-Endpoints von Kube-Proxy sind in unserer K3s-Umgebung nicht für Scraping konfiguriert bzw. nicht aktiviert. |
+| **Alle Panels** | **OK** | Die Metrik-Endpoints von Kube-Proxy sind in unserer K3s-Umgebung nicht für Scraping konfiguriert. |
 
 ## 9. Kubernetes / Scheduler (`k8s-system-scheduler.json`)
 
@@ -176,20 +175,17 @@ Bei den Kubernetes-Dashboards gibt es drei primäre Ursachen für fehlende Daten
 
 # Teil 3: Grafana Mimir Dashboards
 
-Grafana Mimir besitzt 27 vorkonfigurierte Dashboards für den Betrieb des verteilten Metrik-Speichers. Da Mimir in unserem Cluster läuft und voll funktionsfähig ist, empfangen fast alle Dashboards lückenlos Daten.
-
 ## 1. Mimir / Rollout progress (`mimir-rollout-progress.json`)
 
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
-| **Writes 99th latency** | **OK** | Zeigt nur während eines aktiven Mimir-Upgrades/Rollouts Daten an, um die Latenzveränderung zu überwachen. Im stabilen Normalbetrieb leer. |
+| **Writes 99th latency** | **OK** | Zeigt nur während eines aktiven Mimir-Upgrades/Rollouts Daten an. Im stabilen Normalbetrieb leer. |
 | **Reads 99th latency** | **OK** | Zeigt nur bei Upgrades Latenz-Veränderungen an. |
-| **Unhealthy pods** | **OK** | Steht im gesunden Zustand auf 0 bzw. zeigt keine Daten, da alle Mimir-Pods gesund sind. |
+| **Unhealthy pods** | **OK** | Steht im gesunden Zustand auf 0. |
 | **Reads/Writes - 4xx / 5xx** | **OK** | Zeigt keine Daten, da aktuell keine Lese- oder Schreibfehler (HTTP 4xx/5xx) auftreten. |
 | **Latency vs 24h ago** | **OK** | Dient dem Vergleich während Rollouts, im stabilen Betrieb inaktiv. |
 
 ## 2. Alle anderen 26 Mimir Dashboards
-*(Mimir / Overview, Mimir / Queries, Mimir / Writes, Mimir / Reads, etc.)*
 
 *Alle Panels dieser Dashboards erhalten erfolgreich und lückenlos Daten. Die Mimir-eigene Telemetrie ist vollständig intakt.*
 
@@ -197,9 +193,6 @@ Grafana Mimir besitzt 27 vorkonfigurierte Dashboards für den Betrieb des vertei
 
 # Teil 4: Grafana Tempo Dashboards
 
-> [!IMPORTANT]
-> In unserem aktuellen Setup sind **keine Grafana Tempo Dashboards** provisioniert oder in Grafana importiert.
->
-> Obwohl Grafana Tempo als Service (`tempo.tempo.svc.cluster.local`) im Cluster läuft und Traces empfängt, existieren in unserem GitOps-Repository (`apps/grafana/noctua/files/`) keine JSON-Dateien für Tempo-Dashboards. Auch im Cluster sind keine `GrafanaDashboard`-CRDs für Tempo definiert. 
-> 
-> Dies ist im aktuellen Ausbaustand korrekt (**OK**), da das Tracing direkt über die Grafana Explore-Ansicht und die Verknüpfung von Metriken zu Traces (Exemplars) genutzt wird. Falls gewünscht, können die Standard-Tempo-Dashboards (Tempo-Mixin) zukünftig importiert werden.
+| Panel | Status | Erklärung |
+| :--- | :--- | :--- |
+| **Keine Dashboards** | **OK** | Derzeit sind keine Tempo-spezifischen Dashboards importiert. Traces werden direkt über die *Explore*-Ansicht visualisiert, was für unser Setup korrekt ist. |
