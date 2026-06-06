@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: elk
+  name: kibana
   namespace: argocd
 spec:
   generators:
@@ -11,13 +11,13 @@ spec:
             namespace: elk
   template:
     metadata:
-      name: elk
+      name: kibana
     spec:
       project: default
       source:
         repoURL: https://github.com/saadisfy/bwcloud-gitops.git
         targetRevision: main
-        path: 'apps/elk/{{stage}}'
+        path: 'apps/kibana/{{stage}}'
         helm:
           valueFiles:
             - values.yaml
