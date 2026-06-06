@@ -17,8 +17,11 @@ spec:
       value: "otlp"
     - name: OTEL_INSTRUMENTATION_RUNTIME_METRICS_ENABLED
       value: "true"
+    # Attach trace_id to histogram metrics → Mimir exemplars → Grafana → Tempo
+    - name: OTEL_METRICS_EXEMPLAR_FILTER
+      value: "trace_based"
   exporter:
-    endpoint: http://otel-collector-collector.otel-operator.svc.cluster.local:4318
+    endpoint: {{ .Values.otlpGateway.endpoint | quote }}
   resource:
     resourceAttributes:
       deployment.environment.name: noctua

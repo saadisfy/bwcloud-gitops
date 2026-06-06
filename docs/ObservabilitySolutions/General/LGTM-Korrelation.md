@@ -103,25 +103,28 @@ flowchart TB
   end
 
   subgraph OTelOp["Namespace otel-operator"]
-    Coll["otel-collector"]
+    Coll["otel-collector (optional/Labor)"]
   end
 
-  subgraph Alloy["Alloy noctua-kai DaemonSet"]
+  subgraph Alloy["Namespace alloy — alloy-node DaemonSet"]
     OTLP["OTLP Receiver<br/>applicationObservability"]
     FileLog["Pod Log Reader<br/>filtert otel_injected"]
   end
 
-  PC -->|"OTLP traces + metrics + logs"| Coll
-  Coll --> Mimir["Mimir"]
-  Coll --> Tempo["Tempo"]
-  Coll --> Loki["Loki OTLP"]
+  PC -->|"OTLP traces + metrics + logs"| OTLP
+  OTLP --> Mimir["Mimir"]
+  OTLP --> Tempo["Tempo"]
+  OTLP --> Loki["Loki"]
 
-  Alloy --> Mimir
-  Alloy --> Loki
-  Alloy --> Tempo
+  FileLog --> Loki
+  Coll -.->|"optional"| Mimir
 ```
 
-**Wichtig für Logs:** Pods mit OTel-Injection senden Logs **nur per OTLP** (stdout wird von Alloy bewusst ausgefiltert, um Duplikate zu vermeiden). Daher muss `OTEL_LOGS_EXPORTER=otlp` gesetzt sein und der Collector Logs nach Loki weiterleiten.
+**Wichtig für Logs:** Pods mit OTel-Injection senden Logs **nur per OTLP** (stdout wird von Alloy bewusst ausgefiltert, um Duplikate zu vermeiden). Endpoint: `http://alloy-kai-alloy-node.alloy.svc.cluster.local:4318`.
+
+**Exemplars:** Der Java-Agent setzt `OTEL_METRICS_EXEMPLAR_FILTER=trace_based`. Alloy leitet Exemplars in OTLP-Metriken unverändert an Mimir weiter; Grafana verlinkt sie über `exemplarTraceIdDestinations` zu Tempo.
+
+*(Der separate `otel-collector` im Namespace `otel-operator` ist optional/Labor — Spring Petclinic nutzt Alloy.)*
 
 ---
 

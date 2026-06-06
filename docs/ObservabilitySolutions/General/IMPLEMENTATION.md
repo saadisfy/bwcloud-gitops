@@ -29,7 +29,43 @@ spec:
 
 ---
 
-## 2. OTel Collector: Logs-Pipeline → Loki
+## 1b. OTLP via Alloy + Exemplars (Produktiv-Pfad)
+
+**Ziel:** Spring Petclinic (und andere OTel-injizierte Apps) senden OTLP an **Grafana Alloy** (`applicationObservability` auf `alloy-node`), nicht an den separaten `otel-collector`.
+
+**Datei:** [`apps/otel-operator/noctua/values.yaml`](../../../apps/otel-operator/noctua/values.yaml)
+
+```yaml
+otlpGateway:
+  endpoint: http://alloy-kai-alloy-node.alloy.svc.cluster.local:4318
+```
+
+**Datei:** [`apps/otel-operator/noctua/templates/instrumentation-java.yaml`](../../../apps/otel-operator/noctua/templates/instrumentation-java.yaml)
+
+```yaml
+    - name: OTEL_METRICS_EXEMPLAR_FILTER
+      value: "trace_based"
+  exporter:
+    endpoint: {{ .Values.otlpGateway.endpoint | quote }}
+```
+
+**Alloy (bereits aktiv):** `apps/alloy/noctua-kai/values.yaml` → `applicationObservability.enabled: true` — OTLP `:4317`/`:4318` auf `alloy-node`, Weiterleitung Metrics→Mimir, Logs→Loki, Traces→Tempo. Exemplars werden im OTLP-Metrics-Pfad durchgereicht; **kein** extra Alloy-Block nötig.
+
+**Nach Deploy:** `kubectl rollout restart deployment/spring-petclinic -n spring-petclinic`
+
+**Exemplar-Check:**
+
+```bash
+curl -sG -H "X-Scope-OrgID: 1" \
+  "http://mimir-gateway.mimir.svc.cluster.local/prometheus/api/v1/query_exemplars" \
+  --data-urlencode 'query=http_server_request_duration_bucket{job=~"spring-petclinic.*"}' \
+  --data-urlencode "start=$(($(date +%s)-900))" \
+  --data-urlencode "end=$(date +%s)"
+```
+
+---
+
+## 2. OTel Collector: Logs-Pipeline → Loki (optional/Labor)
 
 **Datei:** [`apps/otel-operator/noctua/templates/open-telemetry-collector.yaml`](../../../apps/otel-operator/noctua/templates/open-telemetry-collector.yaml)
 
@@ -186,11 +222,11 @@ Unter „Observability Stack“ kurzer Absatz:
 
 | Schritt | Erwartung |
 | :--- | :--- |
-| `kubectl logs -n otel-operator deploy/otel-collector-collector` | Keine Export-Fehler für Loki |
+| `kubectl get instrumentation java-instrumentation -n otel-operator -o yaml` | `exporter.endpoint` → Alloy; `OTEL_METRICS_EXEMPLAR_FILTER=trace_based` |
 | Grafana → Mimir | `http_server_request_duration_*{job=~"spring-petclinic.*"}` liefert Daten |
-| Grafana → Loki | `{service_name="spring-petclinic"}` zeigt Logs mit `trace_id` |
-| Grafana → Tempo | Trace → Logs-Tab zeigt Loki-Einträge |
-| Grafana → Tempo Service Map | `spring-petclinic` sichtbar (nach Metrics Generator) |
+| Mimir exemplars API | Einträge mit `trace_id` nach Traffic |
+| Grafana → Loki | `{service_name="spring-petclinic"}` zeigt Logs |
+| Grafana Latency-Panel | Exemplar-Marker (Diamant) → Klick öffnet Tempo |
 
 ---
 

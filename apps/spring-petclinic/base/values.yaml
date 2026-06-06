@@ -20,7 +20,7 @@ ingress:
   host: spring-petclinic.saadisfy.me
   tls: false
 
-# OTel: Collector + Instrumentation im otel-operator Namespace (Endpoint HTTP :4318 in java-instrumentation CR).
+# OTel: Instrumentation CR in otel-operator; OTLP → Alloy alloy-node (:4318), nicht otel-collector.
 otelInstrumentation:
   enabled: true
 otelCollector:

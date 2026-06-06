@@ -1,6 +1,10 @@
 # OpenTelemetry Operator prod overrides
 opentelemetry-operator: {}
 
+# OTLP gateway for auto-instrumented apps (Alloy applicationObservability on alloy-node).
+otlpGateway:
+  endpoint: http://alloy-kai-alloy-node.alloy.svc.cluster.local:4318
+
 obi:
   enabled: false
   image:

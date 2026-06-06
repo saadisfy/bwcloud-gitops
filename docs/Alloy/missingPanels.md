@@ -54,7 +54,7 @@ In unserem **OTLP-first** Observability-Stack ist dieses Verhalten für fast all
 
 | Panel | Status | Erklärung |
 | :--- | :--- | :--- |
-| **Accepted metric points** | **OK** | Die Alloy-interne OTel-Engine nimmt keine Anwendungsmetriken per OTLP entgegen. Anwendungsmetriken gehen direkt an den separaten OTel-Operator-Collector (`otel-collector-collector` im Namespace `otel-operator`). |
+| **Accepted metric points** | **OK** | Interne Alloy-Engine-Metriken. **Anwendungs-OTLP** geht an `alloy-kai-alloy-node` (`applicationObservability`, Ports 4317/4318) → Mimir/Loki/Tempo. |
 | **Refused metric points** | **OK** | Da keine Metriken über die OTel-Engine von Alloy empfangen werden, werden auch keine abgewiesen. |
 | **Accepted spans** | **OK** | Derzeit werden keine Anwendungs-Traces (Spans) über Alloy geleitet (Tempo-Integration läuft direkt oder über den OTel-Operator). |
 | **Refused spans** | **OK** | Da keine Traces verarbeitet werden, gibt es keine verweigerten Spans. |

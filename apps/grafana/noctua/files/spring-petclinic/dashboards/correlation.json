@@ -342,7 +342,7 @@
                "showLineNumbers": false,
                "showMiniMap": false
             },
-            "content": "**Logs:** OTLP aktiv → Loki `{service_name=\"spring-petclinic\"}`. **RED:** service-weit (`job=~\"spring-petclinic.*\"`). **Exemplars:** brauchen `OTEL_METRICS_EXEMPLAR_FILTER` am Java-Agent (noch nicht gesetzt) — bis dahin Korrelation über Tempo Explore / Log-`trace_id`. Pod-Filter nur für CPU-Panel.",
+            "content": "**Pipeline:** Java Agent → Alloy (`alloy-kai-alloy-node:4318`) → Mimir/Loki/Tempo. **Logs:** `{service_name=\"spring-petclinic\"}`. **RED:** `job=~\"spring-petclinic.*\"`. **Exemplars:** `OTEL_METRICS_EXEMPLAR_FILTER=trace_based` — Latency-Punkte mit Diamant → Tempo. Pod-Filter nur CPU-Panel.",
             "mode": "markdown"
          },
          "title": "Log pipeline status",
