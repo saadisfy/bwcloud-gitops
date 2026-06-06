@@ -129,7 +129,7 @@ Tempo-Block ergänzen:
 
 ## 6. Spring-Petclinic Korrelations-Dashboard
 
-**Neue Datei:** `apps/grafana/noctua/files/spring-petclinic/accepted/correlation.json`
+**Neue Datei:** `apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json`
 
 **Ordner:** wird automatisch als GrafanaFolder `Spring-Petclinic` provisioniert (Operator-Template).
 

@@ -168,7 +168,7 @@ Metriken (Mimir), Logs (Loki) und Traces (Tempo) sind in Grafana signalübergrei
 | Loki → Tempo | `derivedFields` auf Logzeilen | Loki-Datasource → Regex `trace_id`/`traceID` |
 | Tempo → Mimir | Span metrics / Service graph | Tempo Metrics Generator → Mimir remote write |
 
-**Beispiel-App:** Spring Petclinic (`namespace: spring-petclinic`) mit OTel Java Auto-Instrumentation. Dashboard in Grafana: *Spring Petclinic / LGTM Correlation* (Ordner `Spring-Petclinic`).
+**Beispiel-App:** Spring Petclinic (`namespace: spring-petclinic`) mit OTel Java Auto-Instrumentation. Dashboard in Grafana: *Spring Petclinic / LGTM Correlation* (Ordner `Spring-Petclinic - Dashboards`, provisioniert via `apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json`).
 
 Ausführliche Erklärung: [ObservabilitySolutions/General/LGTM-Korrelation.md](ObservabilitySolutions/General/LGTM-Korrelation.md).
 
