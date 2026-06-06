@@ -92,6 +92,14 @@ argo-cd:
               # Die RBAC-Regel `g, saadisfy, role:admin` matched dann direkt auf
               # den GitHub-Username.
               useLoginAsID: true
+        # Kibana nutzt Dex als OIDC-Provider (gleicher GitHub-Connector wie oben).
+        # Client-Secret aus Secret `kibana-oidc` (0day-deployment-manifests/grafana-secrets.yaml).
+        staticClients:
+          - id: kibana
+            name: Kibana
+            redirectURIs:
+              - https://kibana.saadisfy.me/api/security/oidc/callback
+            secret: $kibana-oidc:clientSecret
       # UI-/CLI-Session-Lebensdauer: 30 Tage, damit ein Pod-Roll (Self-Sync von
       # Argo CD) oder das Default-24h-TTL einen nicht ständig ausloggt.
       users.session.duration: 720h

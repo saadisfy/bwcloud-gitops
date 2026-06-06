@@ -25,9 +25,11 @@ kubectl apply -f 0day-deployment-manifests/root-application.yaml
 ```
 
 ## 4. GitHub SSO & SMTP
-If you want to enable GitHub SSO for Grafana and Argo CD, as well as SMTP for Grafana notifications:
+If you want to enable GitHub SSO for Grafana, Argo CD, and Kibana, as well as SMTP for Grafana notifications:
 ```bash
 cp 0day-deployment-manifests/grafana-secrets.yaml.example 0day-deployment-manifests/grafana-secrets.yaml
-# Fill in your OAuth Client IDs, Secrets, and SMTP credentials
+# Fill in OAuth Client IDs/Secrets (Grafana + Argo CD), Kibana OIDC client secret, and SMTP credentials.
+# Kibana reuses Argo CD Dex + the same GitHub OAuth app; generate one random value for
+# REPLACE_KIBANA_OIDC_CLIENT_SECRET and use it in both kibana-oidc secrets in the file.
 kubectl apply -f 0day-deployment-manifests/grafana-secrets.yaml
 ```

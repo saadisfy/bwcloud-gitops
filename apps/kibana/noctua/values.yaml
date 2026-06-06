@@ -14,3 +14,17 @@ kibana:
     limits:
       cpu: "500m"
       memory: "1Gi"
+
+  # GitHub SSO via Argo CD Dex (OIDC). Basic-Login bleibt als Fallback (elastic-User).
+  kibanaConfig:
+    kibana.yml: |
+      server.publicBaseUrl: "https://kibana.saadisfy.me"
+      xpack.security.authc.providers:
+        oidc.oidc1:
+          order: 0
+          realm: oidc1
+          description: "Log in with GitHub"
+          icon: logoGithub
+        basic.basic1:
+          order: 1
+          description: "Log in with Elasticsearch"

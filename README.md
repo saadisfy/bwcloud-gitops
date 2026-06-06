@@ -39,7 +39,7 @@ This repository is designed to be **public**. We use two mechanisms to keep it s
 -   **Storage**: **Grafana Mimir** (Distributed) stores metrics with high efficiency.
 -   **Dashboarding**: **Grafana Operator** manages dashboards and alerts as code via Custom Resources (CRs).
 -   **Auto-Reload**: **Stakater Reloader** monitors Secrets and ConfigMaps to trigger zero-downtime rolling restarts on changes.
--   **ELK (Elasticsearch + Kibana)**: Official Elastic Helm charts (8.5.1) in namespace `elk`. Elasticsearch deploys first (Argo CD sync-wave 1); a post-install hook bootstraps the native security realm (`.security-7`) before Kibana (sync-wave 2) creates its service-account token. Login: `elastic` + password from secret `elasticsearch-master-credentials`.
+-   **ELK (Elasticsearch + Kibana)**: Official Elastic Helm charts (8.5.1) in namespace `elk`. Elasticsearch deploys first (Argo CD sync-wave 1); a post-install hook bootstraps the native security realm (`.security-7`) before Kibana (sync-wave 2) creates its service-account token. **SSO**: GitHub via Argo CD Dex (OIDC) — gleiches Muster wie Argo CD; `saadisfy` → superuser, alle anderen → viewer. Fallback-Login: `elastic` + Passwort aus `elasticsearch-master-credentials`. OIDC-Secrets: `0day-deployment-manifests/grafana-secrets.yaml` (`kibana-oidc`, `kibana-oidc-credentials`).
 
 ## 🔄 Promotion Workflow (Kargo)
 
