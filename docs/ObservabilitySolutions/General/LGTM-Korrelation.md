@@ -129,14 +129,14 @@ flowchart TB
 
 ### Szenario A: Hohe Fehlerrate entdecken
 
-1. **Mimir:** Panel „HTTP 5xx Rate“ für `job="spring-petclinic"`.
+1. **Mimir:** Panel „HTTP 5xx Rate“ für `job=~"spring-petclinic.*"`.
 2. **Exemplar** auf dem Spike klicken → **Tempo** Trace mit Fehler-Span.
 3. In Tempo **Logs**-Tab → **Loki** Logzeile mit Stacktrace.
 4. Parallel **Kubernetes / Pod** Dashboard mit `namespace=spring-petclinic`, `pod=<pod aus Trace>` → CPU/Memory/OOM?
 
 ### Szenario B: Langsame Anfrage
 
-1. **Mimir:** p95/p99 Latenz (`http_server_duration_milliseconds` o. ä.).
+1. **Mimir:** p95/p99 Latenz (`http_server_request_duration_bucket`, Einheit Sekunden).
 2. Exemplar oder **Tempo Explore** mit `{ resource.service.name = "spring-petclinic" && duration > 1s }`.
 3. Span-Breakdown zeigt DB-Call vs. HTTP-Handler.
 4. Logs mit gleicher `trace_id` zeigen SQL/Parameter oder Business-Kontext.
@@ -161,13 +161,13 @@ Nach Java Auto-Instrumentation und OTLP-Export erwarten wir u. a.:
 
 | Metrik (Beispielname) | Nutzen |
 | :--- | :--- |
-| `http_server_duration_milliseconds_*` | Latenz RED |
+| `http_server_request_duration_*` | Latenz RED (Sekunden) |
 | `http_server_active_requests` | Last |
-| `jvm_memory_used_bytes` | Heap-Druck |
+| `jvm_memory_used` | Heap-Druck |
 | `jvm_gc_duration_seconds_*` | GC-Probleme |
 | `process_runtime_jvm_*` | JVM-Runtime |
 
-Labels für Filter: `job="spring-petclinic"`, `namespace="spring-petclinic"`, `pod=~"spring-petclinic.*"`.
+Labels für Filter: `job=~"spring-petclinic.*"` (Wert z. B. `spring-petclinic/spring-petclinic`). Pod-Variablen aus `kube_pod_info`; OTel-Metriken per `instance=~".*<pod>.*"` filtern. Kubernetes-Panels nutzen `cluster`, `namespace`, `pod` wie gewohnt.
 
 ---
 

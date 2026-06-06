@@ -139,18 +139,18 @@ Tempo-Block ergänzen:
 | :--- | :--- |
 | `datasource` | Prometheus/Mimir datasource |
 | `loki_datasource` | Loki datasource |
-| `cluster` | `label_values({job="spring-petclinic"}, cluster)` |
-| `namespace` | `label_values({job="spring-petclinic", cluster=~"$cluster"}, namespace)` |
-| `pod` | `label_values({job="spring-petclinic", namespace=~"$namespace"}, pod)` |
+| `cluster` | `label_values(kube_pod_info{namespace="petclinic"}, cluster)` |
+| `namespace` | `label_values(kube_pod_info{cluster=~"$cluster", namespace="petclinic"}, namespace)` |
+| `pod` | `label_values(kube_pod_info{cluster=~"$cluster", namespace=~"$namespace", pod=~"spring-petclinic.*"}, pod)` |
 
 ### Panels
 
 | Panel | Typ | Query / Inhalt |
 | :--- | :--- | :--- |
-| Request Rate | timeseries | `sum(rate(http_server_duration_milliseconds_count{job="spring-petclinic", namespace=~"$namespace", pod=~"$pod"}[$__rate_interval]))` |
-| Error Rate | timeseries | `sum(rate(http_server_duration_milliseconds_count{..., http_response_status_code=~"5.."}[$__rate_interval]))` |
-| Latency p95 | timeseries | `histogram_quantile(0.95, sum by (le) (rate(http_server_duration_milliseconds_bucket{...}[$__rate_interval])))` |
-| JVM Heap | timeseries | `jvm_memory_used_bytes{job="spring-petclinic", ...}` |
+| Request Rate | timeseries | `sum(rate(http_server_request_duration_count{job=~"spring-petclinic.*", instance=~".*$pod.*"}[$__rate_interval]))` |
+| Error Rate | timeseries | `sum(rate(http_server_request_duration_count{job=~"spring-petclinic.*", instance=~".*$pod.*", http_response_status_code=~"5.."}[$__rate_interval]))` |
+| Latency p95 | timeseries | `histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_bucket{job=~"spring-petclinic.*", instance=~".*$pod.*"}[$__rate_interval])))` (Einheit **s**) |
+| JVM Heap | timeseries | `sum by (jvm_memory_type, jvm_memory_pool_name) (jvm_memory_used{job=~"spring-petclinic.*", instance=~".*$pod.*"})` |
 | Pod CPU | timeseries | `node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m{namespace=~"$namespace", pod=~"$pod"}` |
 | Error Logs | logs | `{service_name="spring-petclinic"} \|= "ERROR"` oder `{job="spring-petclinic"} \|= "ERROR"` |
 | Trace Search | text/link | Link zu Explore Tempo: `{ resource.service.name = "spring-petclinic" }` |
@@ -187,7 +187,7 @@ Unter „Observability Stack“ kurzer Absatz:
 | Schritt | Erwartung |
 | :--- | :--- |
 | `kubectl logs -n otel-operator deploy/otel-collector-collector` | Keine Export-Fehler für Loki |
-| Grafana → Mimir | `http_server_duration_milliseconds_*{job="spring-petclinic"}` liefert Daten |
+| Grafana → Mimir | `http_server_request_duration_*{job=~"spring-petclinic.*"}` liefert Daten |
 | Grafana → Loki | `{service_name="spring-petclinic"}` zeigt Logs mit `trace_id` |
 | Grafana → Tempo | Trace → Logs-Tab zeigt Loki-Einträge |
 | Grafana → Tempo Service Map | `spring-petclinic` sichtbar (nach Metrics Generator) |
@@ -196,11 +196,12 @@ Unter „Observability Stack“ kurzer Absatz:
 
 ## 9. Metriken-Inventar (Referenz)
 
-Typische OTel-Java-Metriken in Mimir (Namen können leicht variieren):
+Typische OTel-Java-Metriken in Mimir (Noctua-Cluster, Semantic Conventions):
 
-- `http_server_duration_milliseconds_bucket/count/sum`
+- `http_server_request_duration_bucket/count/sum` (Histogram in **Sekunden**, Label `http_response_status_code`)
 - `http_server_active_requests`
-- `jvm_memory_used_bytes`, `jvm_memory_limit_bytes`
+- `jvm_memory_used` (Labels `jvm_memory_type`, `jvm_memory_pool_name`)
+- `job="spring-petclinic/spring-petclinic"` — kein `namespace`/`pod` auf App-Metriken; Pod-Filter über `instance=~".*<pod>.*"`
 - `jvm_gc_duration_seconds_*`
 - `process_runtime_jvm_*`
 
