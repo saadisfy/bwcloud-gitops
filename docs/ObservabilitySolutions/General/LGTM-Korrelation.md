@@ -458,7 +458,45 @@ Labels für Filter: `job=~"spring-petclinic.*"` (Wert z. B. `spring-petclinic/
 
 ---
 
-## 10. Weiterführende Docs in diesem Repo
+## 10. Das erweiterte Korrelations-Dashboard (Noctua Edition)
+
+Um den praktischen Nutzen bei der Fehlersuche drastisch zu steigern, wurde das Dashboard [`spring-petclinic-correlation`](../../../apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json) um tiefere Analyse-Ebenen erweitert. Dadurch entfällt das manuelle Wechseln in generische Infrastruktur-Dashboards.
+
+### 10.1 Neue Analyse-Panels
+
+1. **Top Slowest Endpoints (Table):**
+   - **Query:** `histogram_quantile(0.95, sum by (le, http_route, http_request_method) (rate(http_server_request_duration_seconds_bucket{job=~"spring-petclinic.*", pod=~"$pod"}[$__rate_interval])))`
+   - **Nutzen:** Zeigt sofort im Tabellen-Layout die langsamsten HTTP-Routen (p95) an. Bei Latenzproblemen sieht man auf einen Blick, welche Route (z. B. `/owners/list` vs. `/vets`) betroffen ist.
+2. **HTTP Response Codes (Stacked Area):**
+   - **Query:** `sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{job=~"spring-petclinic.*", pod=~"$pod"}[$__rate_interval]))`
+   - **Nutzen:** Zeigt das Verhältnis von erfolgreichen (2xx) zu fehlerhaften (5xx) oder nicht gefundenen (404) Requests im Zeitverlauf.
+3. **JVM CPU Utilization (Percent):**
+   - **Query:** `sum by (pod) (jvm_cpu_recent_utilization_ratio{job=~"spring-petclinic.*", pod=~"$pod"})`
+   - **Nutzen:** Visualisiert die tatsächliche CPU-Auslastung innerhalb der JVM, unabhängig von den Host-Limits.
+4. **JVM GC Pause Duration (Seconds):**
+   - **Query:** `sum by (jvm_gc_name, jvm_gc_action) (rate(jvm_gc_duration_seconds_sum{job=~"spring-petclinic.*", pod=~"$pod"}[$__rate_interval]))`
+   - **Nutzen:** Zeigt Garbage Collection Stopps (z. B. `PS MarkSweep` / `PS Scavenge`). Extrem wichtig, da GC-Spikes direkte Auslöser für Latenzausreißer (p99) sind.
+5. **JVM Thread States (Stacked Area):**
+   - **Query:** `sum by (jvm_thread_state) (jvm_thread_count{job=~"spring-petclinic.*", pod=~"$pod"})`
+   - **Nutzen:** Zeigt die Anzahl der Threads im Zustand `runnable`, `timed_waiting`, `blocked` etc. Hilft bei Thread-Pool-Engpässen oder Deadlocks.
+
+### 10.2 Typisches Troubleshooting-Szenario: Latenz-Peak
+
+Mit diesem Dashboard läuft die Analyse komplett korreliert ab:
+1. ** RED Metrics:** Im *Latency* Panel sieht man einen Ausreißer im p99-Histogramm.
+2. ** JVM GC Pauses:** Parallel im *JVM GC Pause Duration* Panel prüfen, ob zeitgleich eine GC stattgefunden hat.
+3. ** Top Slowest Endpoints:** In der Tabelle prüfen, welche Route die Latenz getrieben hat.
+4. ** Logs / Traces:** Auf den Exemplar-Marker (Diamant) im Latency-Panel klicken, um in **Tempo** den langsamen Span zu analysieren, und von dort direkt in den **Loki**-Logzeilen die DB-Abfragezeit ablesen.
+
+### 10.3 Wichtiger Hinweis zum Load Generator (Kubernetes Service Collision)
+
+Bei der Entwicklung des Dashboards wurde ein schwerer Kubernetes-Konfigurationsfehler behoben:
+- **Problem:** Der Load Generator (`spring-petclinic-load`) lief unter dem Label `app: spring-petclinic`. Da der Kubernetes Service `spring-petclinic` ebenfalls auf `app: spring-petclinic` filterte, leitete Kubernetes die Client-Anfragen fälschlicherweise round-robin an die Load-Generator-Pods weiter, was zu ständigen `Connection Refused` Fehlern in den Metriken führte.
+- **Lösung:** Das Label des Load Generators wurde im GitOps-Repository auf `app: spring-petclinic-load` geändert. **Niemals** wieder das App-Service-Selector-Label für Hilfs- oder Test-Workloads verwenden.
+
+---
+
+## 11. Weiterführende Docs in diesem Repo
 
 - [Observability Guide](../../OBSERVABILITY.md) – Alloy-Pipeline, Label-Strategie
 - [Alloy noctua-kai README](../../../apps/alloy/noctua-kai/README.md) – Dual Semantics, Log-Deduplication
