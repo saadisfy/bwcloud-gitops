@@ -74,10 +74,32 @@ grafana:
               tags:
                 - { key: 'service.name', value: 'service' }
                 - { key: 'service.name', value: 'service_name' }
+                - { key: 'k8s.pod.name', value: 'pod' }
+                - { key: 'k8s.namespace.name', value: 'namespace' }
               filterByTraceID: true
               filterBySpanID: false
             tracesToMetrics:
               datasourceUid: mimir
+              spanStartTimeShift: '1h'
+              spanEndTimeShift: '1h'
+              tags:
+                - { key: 'k8s.pod.name', value: 'pod' }
+                - { key: 'k8s.namespace.name', value: 'namespace' }
+              queries:
+                - name: 'Request rate (this pod)'
+                  query: 'sum(rate(http_server_request_duration_count{job=~"spring-petclinic.*", $$__tags}[$__rate_interval]))'
+                - name: 'JVM memory (this pod)'
+                  query: 'sum by (jvm_memory_type, jvm_memory_pool_name) (jvm_memory_used{job=~"spring-petclinic.*", $$__tags})'
+                - name: 'Pod CPU vs limit'
+                  query: 'sum by (pod) (max by (cluster, namespace, pod, container) (node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m{cluster="prod-bwcloud", $$__tags})) / sum by (pod) (max by (cluster, namespace, pod, container) (cluster:namespace:pod_cpu:active:kube_pod_container_resource_limits{cluster="prod-bwcloud", $$__tags}))'
+            correlations:
+              - label: 'Spring Petclinic / LGTM Dashboard'
+                description: 'RED, JVM, Pod CPU, Logs — pod from this trace pre-selected'
+                type: external
+                config:
+                  field: traceId
+                  target:
+                    url: '/d/spring-petclinic-correlation?var-pod=$${__span.tags["k8s.pod.name"]}&var-namespace=$${__span.tags["k8s.namespace.name"]}&var-cluster=prod-bwcloud&from=$${__from}&to=$${__to}'
             serviceMap:
               datasourceUid: mimir
             nodeGraph:

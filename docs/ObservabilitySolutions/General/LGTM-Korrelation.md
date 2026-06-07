@@ -90,7 +90,26 @@ Loki erkennt in Logzeilen Muster wie `trace_id=…`, `traceID=…` oder `traceId
 
 **Praxis:** Logzeile in Explore → auf **TraceID** klicken → derselbe Trace in Tempo.
 
-### 3.4 Tempo → Mimir (Service Map / Span Metrics)
+### 3.4 Tempo → Mimir (Trace to Metrics & Dashboard)
+
+Zwei **klickbare** Rückwege — konfiguriert in [`apps/grafana/base/values.yaml`](../../../apps/grafana/base/values.yaml) am Tempo-Datasource:
+
+| Rückweg | Wo klicken? | Was passiert |
+| :--- | :--- | :--- |
+| **Trace → Metrics** | Im Trace: Tab **Metrics** (Related metrics) | Mimir-Queries für Request Rate, JVM, Pod CPU — gefiltert per `k8s.pod.name` / `k8s.namespace.name` aus dem Span (`tracesToMetrics`) |
+| **Trace → Dashboard** | Im Trace: Link **Spring Petclinic / LGTM Dashboard** an der **Trace-ID** | Öffnet [`spring-petclinic-correlation`](../../../apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json) mit `var-pod`, `var-namespace`, Zeitraum aus dem Trace |
+
+**Voraussetzung:** Spans tragen OTel-Resource-Attribute `k8s.pod.name` und `k8s.namespace.name` (Java Auto-Instrumentation setzt diese). Das Dashboard filtert RED/JVM-Panels mit `pod=~"$pod"`.
+
+**Goldener Pfad (vollständig per Klick):**
+
+```text
+Latency-Diamant → Tempo → Tab Logs → Loki
+                      → Tab Metrics → JVM / CPU inline
+                      → Link an Trace-ID → LGTM-Dashboard (Pod gesetzt)
+```
+
+### 3.5 Tempo → Mimir (Service Map / Span Metrics)
 
 Tempo **Metrics Generator** schreibt abgeleitete Metriken (Service Graph, Span Metrics) nach Mimir. Grafana nutzt diese für **Service Map** und **Node Graph**.
 
@@ -372,10 +391,10 @@ Jedes Prometheus-Target im Latenz-Panel braucht `"exemplar": true`. Zusätzlich 
 
 ### Szenario B: Langsame Anfrage
 
-1. **Mimir:** p95/p99 Latenz (`http_server_request_duration_bucket`, Einheit Sekunden).
-2. Exemplar oder **Tempo Explore** mit `{ resource.service.name = "spring-petclinic" && duration > 1s }`.
-3. Span-Breakdown zeigt DB-Call vs. HTTP-Handler.
-4. Logs mit gleicher `trace_id` zeigen SQL/Parameter oder Business-Kontext.
+1. **Mimir:** p95/p99 Latenz — Diamant-Marker anklicken → **Tempo**.
+2. In Tempo: langsamen Span finden → Tab **Logs** → **Loki**.
+3. Tab **Metrics** → Request Rate / JVM / Pod CPU für **diesen Pod** (ohne manuelles Filtern).
+4. Oder: Link **Spring Petclinic / LGTM Dashboard** an der Trace-ID → Dashboard mit Pod-Variable gesetzt.
 
 ### Szenario C: Log-first (Fehler in Loki gesehen)
 
@@ -430,6 +449,8 @@ Labels für Filter: `job=~"spring-petclinic.*"` (Wert z. B. `spring-petclinic/
 | :--- | :--- | :--- |
 | Mimir `query_exemplars` | Einträge mit `trace_id` | [5.5](#55-schicht-3--mimir-speicher) |
 | Mimir-Exemplar → Tempo | Klick auf Diamant-Marker öffnet Trace | [5.6](#56-schicht-4--grafana-anzeige--klick) |
+| Tempo → Mimir (Metrics tab) | Related metrics zeigen JVM/CPU/Rate für Trace-Pod | [3.4](#34-tempo--mimir-trace-to-metrics--dashboard) |
+| Tempo → LGTM Dashboard | Link an Trace-ID öffnet Dashboard mit Pod | [3.4](#34-tempo--mimir-trace-to-metrics--dashboard) |
 | Tempo → Loki | Logs-Tab zeigt Zeilen mit gleicher `trace_id` | [3.2](#32-tempo--loki-tracestologsv2) |
 | Loki → Tempo | Derived-Field-Link **TraceID** sichtbar | [3.3](#33-loki--tempo-derivedfields) |
 | Service Map | Abhängigkeiten von `spring-petclinic` sichtbar (nach Metrics Generator) | [3.4](#34-tempo--mimir-service-map--span-metrics) |
