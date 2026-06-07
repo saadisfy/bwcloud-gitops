@@ -87,9 +87,9 @@ grafana:
                 - { key: 'k8s.namespace.name', value: 'namespace' }
               queries:
                 - name: 'Request rate (this pod)'
-                  query: 'sum(rate(http_server_request_duration_count{job=~"spring-petclinic.*", $$__tags}[$__rate_interval]))'
+                  query: 'sum(rate(http_server_request_duration_seconds_count{job=~"spring-petclinic.*", $$__tags}[$__rate_interval]))'
                 - name: 'JVM memory (this pod)'
-                  query: 'sum by (jvm_memory_type, jvm_memory_pool_name) (jvm_memory_used{job=~"spring-petclinic.*", $$__tags})'
+                  query: 'sum by (jvm_memory_type, jvm_memory_pool_name) (jvm_memory_used_bytes{job=~"spring-petclinic.*", $$__tags})'
                 - name: 'Pod CPU vs limit'
                   query: 'sum by (pod) (max by (cluster, namespace, pod, container) (node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m{cluster="prod-bwcloud", $$__tags})) / sum by (pod) (max by (cluster, namespace, pod, container) (cluster:namespace:pod_cpu:active:kube_pod_container_resource_limits{cluster="prod-bwcloud", $$__tags}))'
             correlations:
