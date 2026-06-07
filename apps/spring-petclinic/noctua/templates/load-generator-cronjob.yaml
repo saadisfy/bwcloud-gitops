@@ -4,7 +4,7 @@ kind: CronJob
 metadata:
   name: spring-petclinic-load
   labels:
-    app: spring-petclinic
+    app: spring-petclinic-load
 spec:
   schedule: "{{ .Values.loadGenerator.schedule }}"
   concurrencyPolicy: Forbid
@@ -16,7 +16,7 @@ spec:
       template:
         metadata:
           labels:
-            app: spring-petclinic
+            app: spring-petclinic-load
         spec:
           restartPolicy: OnFailure
           containers:
