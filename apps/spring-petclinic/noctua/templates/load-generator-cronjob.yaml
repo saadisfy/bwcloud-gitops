@@ -33,6 +33,14 @@ spec:
                 - -c
                 - |
                   for i in $(seq 1 "${REQUESTS}"); do
-                    curl -fsS --max-time 5 "${TARGET_URL}" >/dev/null || true
+                    case $((i % 6)) in
+                      0) curl -fsS --max-time 5 "${TARGET_URL}/" >/dev/null || true ;;
+                      1) curl -fsS --max-time 5 "${TARGET_URL}/vets" >/dev/null || true ;;
+                      2) curl -fsS --max-time 5 "${TARGET_URL}/owners/list" >/dev/null || true ;;
+                      3) curl -fsS --max-time 5 "${TARGET_URL}/owners/1" >/dev/null || true ;;
+                      4) curl -fsS --max-time 5 "${TARGET_URL}/manage/health" >/dev/null || true ;;
+                      5) curl -fsS --max-time 5 "${TARGET_URL}/non-existent-path-to-generate-404" >/dev/null || true ;;
+                    esac
+                    sleep 2
                   done
 {{- end }}

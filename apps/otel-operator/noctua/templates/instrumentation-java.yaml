@@ -20,7 +20,7 @@ spec:
     - name: OTEL_INSTRUMENTATION_LOGBACK_APPENDER_ENABLED
       value: "true"
     - name: OTEL_JAVAAGENT_DEBUG
-      value: "true"
+      value: "false"
     # Attach trace_id to histogram metrics → Mimir exemplars → Grafana → Tempo
     - name: OTEL_METRICS_EXEMPLAR_FILTER
       value: "always_on"

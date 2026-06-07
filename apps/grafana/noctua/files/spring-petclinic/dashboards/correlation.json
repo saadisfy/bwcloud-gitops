@@ -221,12 +221,111 @@
          "type": "timeseries"
       },
       {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "align": "auto",
+                  "displayMode": "auto"
+               },
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 16,
+            "x": 0,
+            "y": 9
+         },
+         "id": 9,
+         "options": {
+            "footer": {
+               "fields": "",
+               "reducer": [
+                  "sum"
+               ],
+               "show": false
+            },
+            "showHeader": true
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "histogram_quantile(0.95, sum by (le, http_route, http_request_method) (rate(http_server_request_duration_seconds_bucket{job=~\"spring-petclinic.*\", pod=~\"$pod\"}[$__rate_interval])))",
+               "legendFormat": "{{http_request_method}} {{http_route}}",
+               "refId": "A",
+               "instant": true
+            }
+         ],
+         "title": "Top Slowest Endpoints (p95)",
+         "type": "table"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 20,
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "normal"
+                  }
+               },
+               "unit": "reqps"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 9
+         },
+         "id": 10,
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum by (http_response_status_code) (rate(http_server_request_duration_seconds_count{job=~\"spring-petclinic.*\", pod=~\"$pod\"}[$__rate_interval]))",
+               "legendFormat": "HTTP {{http_response_status_code}}",
+               "refId": "A"
+            }
+         ],
+         "title": "HTTP Response Codes",
+         "type": "timeseries"
+      },
+      {
          "collapsed": false,
          "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 9
+            "y": 17
          },
          "id": 101,
          "title": "JVM & Pod Resources",
@@ -250,9 +349,9 @@
          },
          "gridPos": {
             "h": 8,
-            "w": 12,
+            "w": 8,
             "x": 0,
-            "y": 10
+            "y": 18
          },
          "id": 4,
          "options": {
@@ -298,9 +397,57 @@
          },
          "gridPos": {
             "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 10
+            "w": 8,
+            "x": 8,
+            "y": 18
+         },
+         "id": 11,
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum by (pod) (jvm_cpu_recent_utilization_ratio{job=~\"spring-petclinic.*\", pod=~\"$pod\"})",
+               "legendFormat": "{{pod}} JVM CPU",
+               "refId": "A"
+            }
+         ],
+         "title": "JVM CPU Utilization",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": true
+               },
+               "unit": "percentunit"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 18
          },
          "id": 5,
          "options": {
@@ -321,11 +468,111 @@
                   "uid": "${datasource}"
                },
                "expr": "sum by (pod) (max by (cluster, namespace, pod, container)(node_namespace_pod_container:container_cpu_usage_seconds_total:sum_rate5m{cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"})) / sum by (pod) (max by (cluster, namespace, pod, container)(cluster:namespace:pod_cpu:active:kube_pod_container_resource_limits{cluster=~\"$cluster\", namespace=~\"$namespace\", pod=~\"$pod\"}))",
-               "legendFormat": "{{pod}}",
+               "legendFormat": "{{pod}} Pod limit",
                "refId": "A"
             }
          ],
          "title": "Pod CPU vs Limit",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": true
+               },
+               "unit": "s"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 26
+         },
+         "id": 12,
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum by (jvm_gc_name, jvm_gc_action) (rate(jvm_gc_duration_seconds_sum{job=~\"spring-petclinic.*\", pod=~\"$pod\"}[$__rate_interval]))",
+               "legendFormat": "{{jvm_gc_name}} ({{jvm_gc_action}})",
+               "refId": "A"
+            }
+         ],
+         "title": "JVM GC Pause Duration",
+         "type": "timeseries"
+      },
+      {
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "drawStyle": "line",
+                  "fillOpacity": 15,
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "normal"
+                  }
+               },
+               "unit": "short"
+            }
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 26
+         },
+         "id": 13,
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "expr": "sum by (jvm_thread_state) (jvm_thread_count{job=~\"spring-petclinic.*\", pod=~\"$pod\"})",
+               "legendFormat": "{{jvm_thread_state}}",
+               "refId": "A"
+            }
+         ],
+         "title": "JVM Thread States",
          "type": "timeseries"
       },
       {
@@ -334,7 +581,7 @@
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 18
+            "y": 34
          },
          "id": 102,
          "title": "Logs (Loki → Tempo via trace_id)",
@@ -349,7 +596,7 @@
             "h": 3,
             "w": 24,
             "x": 0,
-            "y": 19
+            "y": 35
          },
          "id": 8,
          "options": {
@@ -373,7 +620,7 @@
             "h": 10,
             "w": 24,
             "x": 0,
-            "y": 22
+            "y": 38
          },
          "id": 6,
          "options": {
@@ -408,7 +655,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 32
+            "y": 48
          },
          "id": 7,
          "options": {

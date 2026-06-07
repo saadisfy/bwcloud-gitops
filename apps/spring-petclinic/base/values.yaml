@@ -31,6 +31,6 @@ mimirNamespace: mimir
 
 loadGenerator:
   enabled: true
-  schedule: "*/5 * * * *"
-  url: "http://spring-petclinic:8080/"
-  requests: 5
+  schedule: "* * * * *"
+  url: "http://spring-petclinic:8080"
+  requests: 20
