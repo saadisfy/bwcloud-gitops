@@ -312,7 +312,7 @@ mimir-distributed:
 ```bash
 curl -sG -H "X-Scope-OrgID: 1" \
   "http://mimir-query-frontend.mimir.svc.cluster.local:8080/prometheus/api/v1/query_exemplars" \
-  --data-urlencode 'query=http_server_request_duration_bucket{job=~"spring-petclinic.*"}' \
+  --data-urlencode 'query=http_server_request_duration_seconds_bucket{job=~"spring-petclinic.*"}' \
   --data-urlencode "start=$(($(date +%s)-900))" \
   --data-urlencode "end=$(date +%s)"
 ```
@@ -343,7 +343,7 @@ Jedes Prometheus-Target im Latenz-Panel braucht `"exemplar": true`. Zusätzlich 
 ```json
 {
   "exemplar": true,
-  "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_bucket{job=~\"spring-petclinic.*\"}[$__rate_interval])))",
+  "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{job=~\"spring-petclinic.*\"}[$__rate_interval])))",
   "refId": "A"
 }
 ```
@@ -352,7 +352,7 @@ Jedes Prometheus-Target im Latenz-Panel braucht `"exemplar": true`. Zusätzlich 
 | :--- | :--- |
 | `exemplarTraceIdDestinations` | Marker sichtbar, Klick tut nichts / falscher Datasource |
 | `"exemplar": true` im Panel | Keine Diamant-Marker trotz Daten in Mimir |
-| Korrekte Metrik `http_server_request_duration_bucket` | Panel leer (falscher Metrikname) |
+| Korrekte Metrik `http_server_request_duration_seconds_bucket` | Panel leer (falscher Metrikname) |
 
 **In der UI:** Dashboard hart neu laden (Strg+Shift+R), Zeitbereich z. B. „Last 15 minutes“, vorher Traffic erzeugen (`/vets`, `/owners/1`). Marker erscheinen **nur** an Punkten mit gesampeltem Trace — nicht auf jeder Linie.
 
@@ -416,9 +416,9 @@ Nach Java Auto-Instrumentation und OTLP-Export erwarten wir u. a.:
 
 | Metrik (Beispielname) | Nutzen |
 | :--- | :--- |
-| `http_server_request_duration_bucket` / `_count` / `_sum` | Latenz RED (Histogram; Einheit Sekunden) |
-| `http_server_active_requests` | Last |
-| `jvm_memory_used` | Heap-Druck |
+| `http_server_request_duration_seconds_bucket` / `_count` / `_sum` | Latenz RED (Histogram; Einheit Sekunden) |
+| `http_server_request_duration_seconds_count` | Last |
+| `jvm_memory_used_bytes` | Heap-Druck |
 | `jvm_gc_duration_seconds_*` | GC-Probleme |
 | `process_runtime_jvm_*` | JVM-Runtime |
 
