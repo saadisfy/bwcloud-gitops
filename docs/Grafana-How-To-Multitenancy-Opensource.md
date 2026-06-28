@@ -21,7 +21,7 @@ Dieses Dokument bietet einen allumfassenden und praxisnahen Leitfaden zur Umsetz
 
 ### 🔴 Ausgangslage (Single-Tenant Baseline)
 Zuvor war die gesamte Observability-Infrastruktur im **Single-Tenant-Modus** konfiguriert:
-* **Ingestion:** Alle Anwendungen, Kubernetes-Systemkomponenten (Kube-State-Metrics, Node-Exporter) und Log-Kollektoren sendeten ihre Daten an Mimir und Loki mit dem statischen Header `X-Scope-OrgID: "1"`.
+* **Ingestion:** Alle Anwendungen, Kubernetes-Systemkomponenten (Kube-State-Metrics, Node-Exporter) und Log-Kollektoren sendeten ihre Daten an Mimir und Loki mit dem statischen Header `X-Scope-OrgID: "anonymous"` (oder Tenant 1).
 * **Visualisierung:** Grafana lief in einer einzigen Standard-Organisation (`Main Org.`). Alle Benutzer wurden nach dem SSO-Login in diese Organisation geleitet.
 * **Das Problem:** Alle Entwickler und Kunden konnten sämtliche Metriken, Logs und Traces des gesamten Clusters einsehen. Es gab keine logische oder physische Trennung.
 
@@ -293,7 +293,7 @@ gcs-bucket-mimir-blocks/
 │   └── debug/
 ├── tenant-b/                ◄ Datenblöcke & Index von Mandant B
 │   └── 01J2KLMNO.../
-└── infrastructure/          ◄ Globale K8s/Argo-Metriken (Tenant 1)
+└── infrastructure/          ◄ Globale K8s/Argo-Metriken (Tenant anonymous (oder Tenant 1))
     └── 01J3PQRST.../
 ```
 * Dies ermöglicht das Festlegen von **IAM-Regeln auf Pfad-Ebene** (Service Account A darf nur auf `tenant-a/*` zugreifen) sowie mandantenspezifische Aufbewahrungsfristen (GCS Lifecycle Policies).
