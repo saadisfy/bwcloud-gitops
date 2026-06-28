@@ -51,6 +51,23 @@ grafana:
       api_url: https://api.github.com/user
       client_id: $__env{GF_AUTH_GITHUB_CLIENT_ID}
       client_secret: $__env{GF_AUTH_GITHUB_CLIENT_SECRET}
+    auth.generic_oauth:
+      enabled: true
+      name: Microsoft Entra ID
+      allow_sign_up: true
+      client_id: $__env{GF_AUTH_GENERIC_OAUTH_CLIENT_ID}
+      client_secret: $__env{GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}
+      scopes: openid email profile offline_access
+      auth_url: https://login.microsoftonline.com/$__env{GF_AUTH_GENERIC_OAUTH_TENANT_ID}/oauth2/v2.0/authorize
+      token_url: https://login.microsoftonline.com/$__env{GF_AUTH_GENERIC_OAUTH_TENANT_ID}/oauth2/v2.0/token
+      api_url: https://graph.microsoft.com/oidc/userinfo
+      role_attribute_path: "contains(roles, 'GrafanaAdmin') && 'Admin' || contains(roles, 'GrafanaEditor') && 'Editor' || 'Viewer'"
+      role_attribute_strict: true
+      # Dynamic Org mapping based on Entra ID roles/groups claim
+      org_attribute_path: roles || groups
+      # Format: ExternalValue:GrafanaOrgID:Role
+      # E.g. "Customer-A-Group:2:Viewer" (maps Entra ID group to Org 2 (Tenant-A))
+      org_mapping: "Customer-A-Group:2:Viewer, Customer-B-Group:3:Viewer, AdminGroup:1:Admin"
     # Enable reception of external alerts (from Mimir Ruler) into Grafana's internal Alertmanager
     alerting:
       receive_external_alerts: true
@@ -59,6 +76,158 @@ grafana:
       alertmanagers_choice: external
     smtp:
       enabled: false
+
+  datasources:
+    alertmanager.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Mimir Alertmanager
+          type: alertmanager
+          uid: mimir-am
+          orgId: 1
+          access: proxy
+          url: http://mimir-gateway.mimir.svc.cluster.local
+          jsonData:
+            handleGrafanaManagedAlerts: true
+            implementation: mimir
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "1"
+        - name: Mimir Alertmanager
+          type: alertmanager
+          uid: mimir-am-tenant-a
+          orgId: 2
+          access: proxy
+          url: http://mimir-gateway.mimir.svc.cluster.local
+          jsonData:
+            handleGrafanaManagedAlerts: true
+            implementation: mimir
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "tenant-a,infrastructure"
+        - name: Mimir Alertmanager
+          type: alertmanager
+          uid: mimir-am-tenant-b
+          orgId: 3
+          access: proxy
+          url: http://mimir-gateway.mimir.svc.cluster.local
+          jsonData:
+            handleGrafanaManagedAlerts: true
+            implementation: mimir
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "tenant-b,infrastructure"
+
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        # --- Org 1 (Admin/Infrastructure) ---
+        - name: Mimir
+          type: prometheus
+          access: proxy
+          uid: mimir
+          orgId: 1
+          url: http://mimir-gateway.mimir.svc.cluster.local/prometheus
+          isDefault: true
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+            manageAlerts: true
+            alertmanagerUid: mimir-am
+          secureJsonData:
+            httpHeaderValue1: "1"
+        - name: Loki
+          type: loki
+          access: proxy
+          uid: loki
+          orgId: 1
+          url: http://loki.loki.svc.cluster.local:3100
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "1"
+        - name: Tempo
+          type: tempo
+          access: proxy
+          uid: tempo
+          orgId: 1
+          url: http://tempo.tempo.svc.cluster.local:3100
+          jsonData:
+            httpMethod: POST
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "1"
+
+        # --- Org 2 (Tenant A) ---
+        - name: Mimir
+          type: prometheus
+          access: proxy
+          uid: mimir-tenant-a
+          orgId: 2
+          url: http://mimir-gateway.mimir.svc.cluster.local/prometheus
+          isDefault: true
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+            manageAlerts: true
+            alertmanagerUid: mimir-am-tenant-a
+          secureJsonData:
+            httpHeaderValue1: "tenant-a,infrastructure"
+        - name: Loki
+          type: loki
+          access: proxy
+          uid: loki-tenant-a
+          orgId: 2
+          url: http://loki.loki.svc.cluster.local:3100
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "tenant-a,infrastructure"
+        - name: Tempo
+          type: tempo
+          access: proxy
+          uid: tempo-tenant-a
+          orgId: 2
+          url: http://tempo.tempo.svc.cluster.local:3100
+          jsonData:
+            httpMethod: POST
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "tenant-a,infrastructure"
+
+        # --- Org 3 (Tenant B) ---
+        - name: Mimir
+          type: prometheus
+          access: proxy
+          uid: mimir-tenant-b
+          orgId: 3
+          url: http://mimir-gateway.mimir.svc.cluster.local/prometheus
+          isDefault: true
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+            manageAlerts: true
+            alertmanagerUid: mimir-am-tenant-b
+          secureJsonData:
+            httpHeaderValue1: "tenant-b,infrastructure"
+        - name: Loki
+          type: loki
+          access: proxy
+          uid: loki-tenant-b
+          orgId: 3
+          url: http://loki.loki.svc.cluster.local:3100
+          jsonData:
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "tenant-b,infrastructure"
+        - name: Tempo
+          type: tempo
+          access: proxy
+          uid: tempo-tenant-b
+          orgId: 3
+          url: http://tempo.tempo.svc.cluster.local:3100
+          jsonData:
+            httpMethod: POST
+            httpHeaderName1: X-Scope-OrgID
+          secureJsonData:
+            httpHeaderValue1: "tenant-b,infrastructure"
 
 # Operator CRs configuration
 grafana-operator:
