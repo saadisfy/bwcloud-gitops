@@ -200,3 +200,71 @@ Commite und pushe die Änderungen in deinen GitOps-Branch (`main`).
 Da Alerts in Grafana OSS strikt innerhalb des jeweiligen Organisations-Kontexts ausgeführt werden:
 * **Keine Leaks:** Alert-Regeln, Contact Points (z.B. Slack-Webhooks) und Notification Policies von Org 2 (`Tenant-A`) sind für Org 3 (`Tenant-B`) vollkommen unsichtbar.
 * **Sichere Auswertung:** Alerts, die in Org 2 definiert sind, werten die Datenquelle von Org 2 aus. Sie haben somit keinen Zugriff auf Daten anderer Kunden.
+
+---
+
+## 7. Prometheus Mimir Multi-Tenant-Architektur
+
+Prometheus Mimir ist von Grund auf als mandantenfähiges (multi-tenant) System konzipiert. In unserer `noctua`-Umgebung ist die Mandantenfähigkeit standardmäßig aktiviert (`multitenancy_enabled: true`). 
+
+Hier ist die genaue Funktionsweise der einzelnen Mimir-Komponenten bei der Verarbeitung von Telemetriedaten und Alerts:
+
+```
+                  ┌──────────────────────────────────────────────┐
+                  │   OpenTelemetry Auto-Instrumentation (App)   │
+                  └──────────────────────┬───────────────────────┘
+                                         │ OTLP mit Header:
+                                         │ "X-Scope-OrgID: tenant-a"
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │            Grafana Alloy Gateway             │
+                  └──────────────────────┬───────────────────────┘
+                                         │ OTLP / Remote Write
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │              Mimir Distributor               │
+                  └──────────────────────┬───────────────────────┘
+                                         │
+                   ┌─────────────────────┴─────────────────────┐
+                   ▼ (Write Path)                              ▼ (Read Path)
+      ┌─────────────────────────┐                 ┌─────────────────────────┐
+      │     Mimir Ingester      │                 │  Mimir Query-Frontend   │
+      └────────────┬────────────┘                 └────────────┬────────────┘
+                   │ Metriken getrennt                         │ Abfrage mit Header:
+                   │ nach Tenant-ID                            │ "tenant-a,infrastructure"
+                   ▼                                           ▼
+      ┌─────────────────────────┐                 ┌─────────────────────────┐
+      │   Object Storage (S3)   │◄────────────────┤      Mimir Querier      │
+      └─────────────────────────┘                 └─────────────────────────┘
+                   ▲
+                   │ (Liest Rules & Configs)
+                   │
+      ┌────────────┴────────────┐                 ┌────────────┴────────────┐
+      │       Mimir Ruler       ├────────────────►│    Mimir Alertmanager   │
+      └─────────────────────────┘  Sendet Alerts  └────────────┬────────────┘
+        Liest & evaluiert Rules    mit Header                  │ Routet Alerts an
+        für "tenant-a"             "X-Scope-OrgID: tenant-a"   │ customer contact points
+                                                               ▼
+                                                  ┌─────────────────────────┐
+                                                  │   Slack / Email / Web   │
+                                                  └─────────────────────────┘
+```
+
+### 1. Ingester & Querier (Write & Read Path)
+* **Ingestion (Write-Pfad):** 
+  Die Anwendung (mittels der Auto-Instrumentation) oder Grafana Alloy senden Metriken über den HTTP-Distributor an Mimir. Der Distributor validiert den HTTP-Header `X-Scope-OrgID` (z. B. `tenant-a`). Die Ingester speichern die Zeitreihen (Series) getrennt nach dieser ID ab und schreiben sie nachfolgend in den S3-Speicher (MinIO in `noctua`).
+* **Querying (Read-Pfad):** 
+  Wird in Grafana ein Dashboard aufgerufen, sendet Grafana einen API-Request an das Mimir-Query-Frontend mit dem konfigurierten Header (z. B. `X-Scope-OrgID: tenant-a,infrastructure`). Die Querier werten die PromQL-Abfrage parallel für die Series des Kunden (`tenant-a`) und die globalen Series (`infrastructure`, z. B. node-exporter, KSM) aus.
+
+### 2. Mimir Ruler (Alerting- & Recording-Rules)
+Der Mimir Ruler wertet Prometheus-Warnregeln (Alerts) aus. Der Ruler arbeitet ebenfalls vollständig mandantenfähig:
+* **Rule Storage:** Alerts werden im S3-Storage (MinIO Bucket `mimir-ruler`) getrennt nach Mandanten-Präfix (z. B. `/rules/tenant-a/...`) abgelegt.
+* **Provisionierung:** In unserem Setup provisioniert **Crossplane** (oder ein anderes Tooling) die Alarmregeln über die HTTP-API des Mimir Rulers unter Angabe des Headers `X-Scope-OrgID: tenant-a`. Die Regeln werden lokal auf dem Volume `/rules-storage` (EmptyDir in `noctua`) für die Evaluierung zwischengespeichert.
+* **Evaluierung:** Der Ruler liest die Regeln für Mandant `tenant-a` aus und führt die PromQL-Abfragen exklusiv im Kontext des Mandanten `tenant-a` aus.
+* **Alert-Dispatch:** Wenn eine Regel anschlägt, sendet der Ruler den feuernenden Alert an den Mimir Alertmanager. Dabei setzt er automatisch den Header `X-Scope-OrgID: tenant-a`, damit der Alertmanager weiß, zu welchem Mandanten der Alert gehört.
+
+### 3. Mimir Alertmanager (Alert-Routing & Notification)
+Der Alertmanager nimmt feuernende Alerts entgegen und leitet sie an Endpunkte wie Slack oder E-Mail weiter:
+* **Configuration Storage:** Jeder Mandant kann seine eigene Alertmanager-Konfiguration (Routen, Empfänger, Templates) definieren. Diese Konfigurationen werden im MinIO Bucket `mimir-alertmanager` gespeichert.
+* **Dynamic Configuration:** Das Einspielen einer Mandanten-Konfiguration erfolgt über die HTTP-API des Alertmanagers mit dem Header `X-Scope-OrgID: <tenant-id>`.
+* **Routing:** Trifft ein Alert mit `X-Scope-OrgID: tenant-a` ein, wertet der Alertmanager die für `tenant-a` hinterlegten Routing-Regeln aus und versendet die Benachrichtigung an die dedizierten Kanäle dieses Kunden. Gibt es keine mandantenspezifische Konfiguration, schlägt das Routing fehl (oder greift auf eine globale Konfiguration zurück, falls definiert).
