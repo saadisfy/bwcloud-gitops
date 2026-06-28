@@ -51,6 +51,9 @@ grafana:
       api_url: https://api.github.com/user
       client_id: $__env{GF_AUTH_GITHUB_CLIENT_ID}
       client_secret: $__env{GF_AUTH_GITHUB_CLIENT_SECRET}
+      # Map GitHub teams to Grafana Org IDs (Org 2 = Tenant-A, Org 3 = Tenant-B)
+      # Please replace 'saadisfy-org/team-a' with your actual GitHub org and team
+      org_mapping: "saadisfy-org/team-a:2:Viewer, saadisfy-org/team-b:3:Viewer"
     auth.generic_oauth:
       enabled: true
       name: Microsoft Entra ID
