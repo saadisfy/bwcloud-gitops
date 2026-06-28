@@ -27,6 +27,12 @@ spec:
     # Ensure HTTP spans are sampled so trace_based exemplars are emitted
     - name: OTEL_TRACES_SAMPLER
       value: "always_on"
+    - name: K8S_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: OTEL_EXPORTER_OTLP_HEADERS
+      value: "X-Scope-OrgID=$(K8S_NAMESPACE)"
   exporter:
     endpoint: {{ .Values.otlpGateway.endpoint | quote }}
   resource:
