@@ -1,6 +1,19 @@
 # 🚀 Grafana How-To: Multi-Tenancy & RBAC in Grafana Open Source (OSS)
 
-Dieses Dokument bietet einen allumfassenden und praxisnahen Leitfaden zur Umsetzung von **Multi-Tenancy** (Mandantenfähigkeit) und **RBAC** (rollenbasierter Zugriffskontrolle) unter Verwendung der Open-Source-Versionen von Grafana (OSS) und dem LGTM-Stack (Loki, Grafana, Tempo, Mimir) in Kombination mit Grafana Alloy und dem OpenTelemetry Operator.
+> [!IMPORTANT]
+> **Das Mandat / Die Problemstellung (Requirements & Constraints):**
+> 
+> * **Ausgangssituation:** Ein einziges Kubernetes-Cluster betreibt den Grafana-LGTM-Stack (Loki, Grafana, Tempo, Mimir) im Single-Tenant-Modus. Alle Telemetriedaten werden an den Tenant `anonymous` gesendet. Alle User loggen sich in dieselbe Standard-Grafana-Org ein und sehen sämtliche Daten (Sicherheitsrisiko).
+> * **Anforderung:** Datentrennung (Multi-Tenancy) und Rollenberechtigungen (RBAC) müssen für verschiedene Mandanten (z.B. `tenant-a`, `tenant-b`) so implementiert werden, dass jeder Kunde nur seine eigenen Anwendungsdaten sieht, aber auch globale Infrastrukturmetriken (wie Kube-State-Metrics oder Node-Exporter) einsehen kann.
+> * **Vorgegebene Constraints (Einschränkungen):**
+>   1. **Reine Open-Source-Mittel:** Keine Lizenzierung von Grafana Enterprise oder Wechsel zu Grafana Cloud.
+>   2. **Single-Grafana-Instanz:** Keine Multiplikation von Grafana-Instanzen pro Kunde (Ressourceneffizienz).
+>   3. **Automatisierung (GitOps):** Onboarding neuer Kunden darf keine manuellen Eingriffe erfordern, sondern muss rein deklarativ in GitOps erfolgen (Argo CD gesteuert).
+>   4. **Grafana OSS-Beschränkung:** Da Datei-basierte Provisionierung in Grafana OSS bei nicht-existenten Organisationen fehlschlägt, müssen Organisationen und Datenquellen dynamisch beim Start über die HTTP-API erstellt und zugewiesen werden.
+>   5. **Infrastruktur-Zusatz:** Die Auto-Instrumentation (OTel Operator) muss die Tenant-ID automatisch basierend auf dem Namespace des Pods an das Alloy-Gateway übertragen.
+>   6. **Storage & Ingestion:** Mimir und Loki müssen die Daten physisch trennen (Unterordner im S3/GCS-Bucket) und Ingester-Ressourcen isolieren (Shuffle Sharding) zur Absicherung gegen "Noisy Neighbors".
+> 
+> **Dieses Dokument beschreibt Schritt-für-Schritt die technische Lösung, die diese komplexen Anforderungen erfüllt.**
 
 ---
 
