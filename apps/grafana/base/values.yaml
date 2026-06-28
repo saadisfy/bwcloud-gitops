@@ -11,7 +11,7 @@ grafana:
         command:
           - /bin/sh
           - -c
-          - 'sleep 25; grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD" || true; curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "Content-Type: application/json" -X POST -d "{\"name\":\"Tenant-A\"}" http://localhost:3000/api/orgs || true; curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "Content-Type: application/json" -X POST -d "{\"name\":\"Tenant-B\"}" http://localhost:3000/api/orgs || true'
+          - '/bin/sh /opt/bootstrap/bootstrap.sh &'
   # Mimir als Prometheus-Datasource über lokales Netz (Service, kein Ingress)
   datasources:
     alertmanager.yaml:
@@ -152,22 +152,6 @@ grafana:
       providers:
         - name: 'default'
           orgId: 1
-          folder: ''
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /tmp/dashboards
-        - name: 'tenant-a'
-          orgId: 2
-          folder: ''
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /tmp/dashboards
-        - name: 'tenant-b'
-          orgId: 3
           folder: ''
           type: file
           disableDeletion: false

@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-bootstrap-script
+  namespace: {{ .Release.Namespace }}
+data:
+  bootstrap.sh: |
+    #!/bin/sh
+    # Wait for Grafana to start
+    echo "Waiting for Grafana to start..."
+    for i in $(seq 1 30); do
+      if curl -s http://localhost:3000/api/health > /dev/null; then
+        echo "Grafana is up!"
+        break
+      fi
+      sleep 2
+    done
+
+    # Reset admin password
+    echo "Resetting admin password..."
+    grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD" || true
+
+    # API url
+    URL="http://localhost:3000"
+
+    # Function to create an Organization
+    create_org() {
+      NAME=$1
+      ID=$2
+      echo "Creating Organization $NAME (ID $ID)..."
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "Content-Type: application/json" -X POST -d "{\"name\":\"$NAME\"}" $URL/api/orgs || true
+    }
+
+    create_org "Tenant-A" 2
+    create_org "Tenant-B" 3
+
+    # Function to provision datasources for an Org
+    provision_datasources() {
+      ORG_ID=$1
+      TENANT_NAME=$2
+      echo "Provisioning datasources for Org $ORG_ID ($TENANT_NAME)..."
+
+      MIMIR_PAYLOAD=$(cat <<EOF
+    {
+      "name": "Mimir",
+      "type": "prometheus",
+      "access": "proxy",
+      "url": "http://mimir-gateway.mimir.svc.cluster.local/prometheus",
+      "isDefault": true,
+      "jsonData": {
+        "httpHeaderName1": "X-Scope-OrgID",
+        "manageAlerts": true,
+        "alertmanagerUid": "mimir-am"
+      },
+      "secureJsonData": {
+        "httpHeaderValue1": "$TENANT_NAME,infrastructure"
+      }
+    }
+    EOF
+    )
+
+      LOKI_PAYLOAD=$(cat <<EOF
+    {
+      "name": "Loki",
+      "type": "loki",
+      "access": "proxy",
+      "url": "http://loki.loki.svc.cluster.local:3100",
+      "jsonData": {
+        "httpHeaderName1": "X-Scope-OrgID",
+        "derivedFields": [
+          {
+            "datasourceUid": "tempo",
+            "matcherRegex": "(?:traceID|trace_id|traceId)[:=]\\\\s*([a-fA-F0-9]+)",
+            "name": "TraceID",
+            "url": "\${__value.raw}"
+          }
+        ]
+      },
+      "secureJsonData": {
+        "httpHeaderValue1": "$TENANT_NAME,infrastructure"
+      }
+    }
+    EOF
+    )
+
+      TEMPO_PAYLOAD=$(cat <<EOF
+    {
+      "name": "Tempo",
+      "type": "tempo",
+      "access": "proxy",
+      "url": "http://tempo.tempo.svc.cluster.local:3100",
+      "jsonData": {
+        "httpMethod": "POST",
+        "httpHeaderName1": "X-Scope-OrgID"
+      },
+      "secureJsonData": {
+        "httpHeaderValue1": "$TENANT_NAME,infrastructure"
+      }
+    }
+    EOF
+    )
+
+      MIMIR_AM_PAYLOAD=$(cat <<EOF
+    {
+      "name": "Mimir Alertmanager",
+      "type": "alertmanager",
+      "uid": "mimir-am",
+      "access": "proxy",
+      "url": "http://mimir-gateway.mimir.svc.cluster.local",
+      "jsonData": {
+        "handleGrafanaManagedAlerts": true,
+        "implementation": "mimir",
+        "httpHeaderName1": "X-Scope-OrgID"
+      },
+      "secureJsonData": {
+        "httpHeaderValue1": "$TENANT_NAME,infrastructure"
+      }
+    }
+    EOF
+    )
+
+      # Delete old datasources (to ensure updates are applied)
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -X DELETE $URL/api/datasources/name/Mimir >/dev/null || true
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -X DELETE $URL/api/datasources/name/Loki >/dev/null || true
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -X DELETE $URL/api/datasources/name/Tempo >/dev/null || true
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -X DELETE $URL/api/datasources/name/"Mimir Alertmanager" >/dev/null || true
+
+      # Create datasources
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -H "Content-Type: application/json" -X POST -d "$MIMIR_AM_PAYLOAD" $URL/api/datasources >/dev/null
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -H "Content-Type: application/json" -X POST -d "$MIMIR_PAYLOAD" $URL/api/datasources >/dev/null
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -H "Content-Type: application/json" -X POST -d "$LOKI_PAYLOAD" $URL/api/datasources >/dev/null
+      curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -H "Content-Type: application/json" -X POST -d "$TEMPO_PAYLOAD" $URL/api/datasources >/dev/null
+    }
+
+    provision_datasources 2 "tenant-a"
+    provision_datasources 3 "tenant-b"
+
+    # Function to upload default dashboards to all customer Orgs
+    upload_dashboards() {
+      ORG_ID=$1
+      echo "Uploading default dashboards to Org $ORG_ID..."
+      if [ -d "/tmp/dashboards" ]; then
+        for f in /tmp/dashboards/*.json; do
+          if [ -f "$f" ]; then
+            echo "Uploading dashboard $(basename $f) to Org $ORG_ID..."
+            echo '{"dashboard":' > /tmp/payload.json
+            cat "$f" >> /tmp/payload.json
+            echo ',"overwrite":true}' >> /tmp/payload.json
+            curl -s -u admin:"$GF_SECURITY_ADMIN_PASSWORD" -H "X-Grafana-Org-Id: $ORG_ID" -H "Content-Type: application/json" -X POST --data-binary @/tmp/payload.json $URL/api/dashboards/db >/dev/null || true
+            rm -f /tmp/payload.json
+          fi
+        done
+      else
+        echo "No dashboards folder found at /tmp/dashboards."
+      fi
+    }
+
+    # Wait a moment for sidecar to sync dashboards into /tmp/dashboards
+    sleep 15
+    upload_dashboards 2
+    upload_dashboards 3
+
+    echo "Bootstrap complete!"
