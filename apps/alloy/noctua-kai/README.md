@@ -16,6 +16,9 @@ Verantwortlich für alle Metriken, die Alloy **aktiv über ServiceMonitors abruf
 [ otelcol.receiver.prometheus "mimir" ] (Abgefangen via replaceComponent)
        │
        ▼
+[ memory_limiter "scrape_guard" ] (früher OOM-Schutz)
+       │
+       ▼
 [ groupbyattrs "group" ] (Gruppiert nach Pod/Namespace für Batch-Verarbeitung)
        │
        ▼
@@ -41,6 +44,9 @@ Verantwortlich für Metriken, die von **instrumentierten Anwendungen direkt via 
 [ otelcol.receiver.otlp "receiver" ] (Wird von applicationObservability bereitgestellt)
        │
        ▼
+[ memory_limiter "default" ] (Schützt den Ingest-Pfad)
+       │
+       ▼
 [ resourcedetection "default" ] (Erkennt Host-/Umgebungsinformationen)
        │
        ▼
@@ -55,6 +61,10 @@ Verantwortlich für Metriken, die von **instrumentierten Anwendungen direkt via 
        ▼
 [ otelcol.exporter.otlphttp "mimir" ] ──► [ Mimir ]
 ```
+
+Die Backend-Exports nutzen persistente OTLP-Exporter-Queues mit `otelcol.storage.file` auf `/var/lib/alloy`, damit ausstehende Payloads Container-Neustarts überstehen. Die chart-internen Batch-Prozessoren bleiben aktiv, weil `k8s-monitoring` 4.1.3 bei deaktiviertem Destination-Batch invalides River rendert.
+
+Application Observability nutzt `resourcedetection.override=false` und priorisiert bei `k8sattributes` die Pod-UID vor Pod-IP und Connection-Fallback. Dadurch überschreibt Alloy bereits gesetzte App-/SDK-Resource-Attribute nicht unnötig und ordnet Telemetrie stabiler Pods zu.
 
 ### 🤝 Label-Harmonisierung (Dual Semantics)
 Damit beide Wege dieselben Queries in Grafana unterstützen, mappen wir die Labels in beiden Pipelines identisch:
@@ -76,3 +86,5 @@ Unsere Konfiguration erkennt **automatisch**, ob eine Anwendung vom OpenTelemetr
 - Der nachgelagerte Filter (`otelcol.processor.filter "pod_logs"`) prüft auf das Vorhandensein dieses Attributs (`otel_injected != nil`).
 - Ist das Attribut vorhanden, verwirft der Log-Reader die Logdatei dieses Pods auf dem Node. Die Logs werden stattdessen ausschließlich über die OTLP-Verbindung der Anwendung empfangen.
 - **Ergebnis:** Keine doppelten Logs in Loki, vollautomatisches und zukunftssicheres Handling (unabhängig von der Programmiersprache) ohne manuellen Pflegeaufwand.
+
+Zusätzlich entfernen die Log- und Trace-Pfade bekannte sensible Attribute wie Authorization-/Cookie-Header, Passwörter, Tokens, API-Keys und Secrets vor dem Export. Datensätze mit explizitem `private_key`-Attribut werden vor den Backends gefiltert.

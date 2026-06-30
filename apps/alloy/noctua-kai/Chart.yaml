@@ -1,6 +1,6 @@
 apiVersion: v2
 name: alloy-two-tier
-description: Two-tier observability pipeline using k8s-monitoring and an Alloy gateway
+description: Gateway-less observability pipeline using k8s-monitoring and direct OTLP backends
 version: 0.1.0
 dependencies:
   - name: k8s-monitoring

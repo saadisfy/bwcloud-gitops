@@ -26,7 +26,7 @@ k8s-monitoring:
       name: mimir
       content: |
         output {
-          metrics = [otelcol.processor.groupbyattrs.group.input]
+          metrics = [otelcol.processor.memory_limiter.scrape_guard.input]
         }
     - type: otelcol.processor.k8sattributes
       name: pod_logs
@@ -102,6 +102,63 @@ k8s-monitoring:
         output {
           logs = [otelcol.processor.transform.pod_logs.input]
         }
+    - type: otelcol.processor.transform
+      name: pod_logs
+      module: pod_logs_via_opentelemetry
+      content: |
+        error_mode = "ignore"
+        log_statements {
+          context = "resource"
+          statements = [
+            `delete_key(attributes, "k8s.container.restart_count")`,
+            `delete_key(attributes, "logs.grafana.com/pods.enabled")`,
+            `delete_key(attributes, "http.request.header.authorization")`,
+            `delete_key(attributes, "http.request.header.cookie")`,
+            `delete_key(attributes, "http.request.header.set_cookie")`,
+            `delete_key(attributes, "authorization")`,
+            `delete_key(attributes, "cookie")`,
+            `delete_key(attributes, "password")`,
+            `delete_key(attributes, "token")`,
+            `delete_key(attributes, "api_key")`,
+            `delete_key(attributes, "apikey")`,
+            `delete_key(attributes, "secret")`,
+
+            `set(attributes["service.name"], attributes["app.kubernetes.io/name"]) where attributes["service.name"] == nil and attributes["app.kubernetes.io/name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.deployment.name"]) where attributes["service.name"] == nil and attributes["k8s.deployment.name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.replicaset.name"]) where attributes["service.name"] == nil and attributes["k8s.replicaset.name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.statefulset.name"]) where attributes["service.name"] == nil and attributes["k8s.statefulset.name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.daemonset.name"]) where attributes["service.name"] == nil and attributes["k8s.daemonset.name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.cronjob.name"]) where attributes["service.name"] == nil and attributes["k8s.cronjob.name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.job.name"]) where attributes["service.name"] == nil and attributes["k8s.job.name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.pod.name"]) where attributes["service.name"] == nil and attributes["k8s.pod.name"] != nil`,
+            `set(attributes["service.name"], attributes["k8s.container.name"]) where attributes["service.name"] == nil and attributes["k8s.container.name"] != nil`,
+
+            `set(attributes["service.namespace"], attributes["k8s.namespace.name"]) where attributes["service.namespace"] == nil and attributes["k8s.namespace.name"] != nil`,
+            `set(attributes["service.version"], attributes["app.kubernetes.io/version"]) where attributes["service.version"] == nil and attributes["app.kubernetes.io/version"] != nil`,
+            `set(attributes["service.instance.id"], Concat([attributes["k8s.namespace.name"], attributes["k8s.pod.name"], attributes["k8s.container.name"]], ".")) where attributes["service.instance.id"] == nil and attributes["k8s.namespace.name"] != nil and attributes["k8s.pod.name"] != nil and attributes["k8s.container.name"] != nil`,
+          ]
+        }
+
+        log_statements {
+          context = "log"
+          statements = [
+            `delete_key(attributes, "log.file.path")`,
+            `delete_key(attributes, "http.request.header.authorization")`,
+            `delete_key(attributes, "http.request.header.cookie")`,
+            `delete_key(attributes, "http.request.header.set_cookie")`,
+            `delete_key(attributes, "authorization")`,
+            `delete_key(attributes, "cookie")`,
+            `delete_key(attributes, "password")`,
+            `delete_key(attributes, "token")`,
+            `delete_key(attributes, "api_key")`,
+            `delete_key(attributes, "apikey")`,
+            `delete_key(attributes, "secret")`,
+          ]
+        }
+
+        output {
+          logs = argument.logs_destinations.value
+        }
 
 
   # Destinations: direkt zu den Backends, kein Gateway-Hop
@@ -119,10 +176,56 @@ k8s-monitoring:
         enabled: false  # override: loki ist logs-only
       traces:
         enabled: false  # override: loki ist logs-only
+      sendingQueue:
+        blockOnOverflow: true
+        numConsumers: 10
+        queueSize: 5000
+        storage: otelcol.storage.file.queue.handler
+        batch:
+          enabled: true
+          sizer: items
+          flushTimeout: 2s
+          minSize: 8192
+          maxSize: 16384
       processors:
+        memoryLimiter:
+          enabled: true
+          checkInterval: 1s
+          limit: 1536MiB
+        resourceAttributes:
+          removeList:
+            - http.request.body
+            - http.response.body
+            - db.statement
+        filters:
+          enabled: true
+          logs:
+            logRecord:
+              - "attributes[\"private_key\"] != nil"
         transform:
           logs:
+            resource:
+              - "delete_key(attributes, \"http.request.header.authorization\")"
+              - "delete_key(attributes, \"http.request.header.cookie\")"
+              - "delete_key(attributes, \"http.request.header.set_cookie\")"
+              - "delete_key(attributes, \"authorization\")"
+              - "delete_key(attributes, \"cookie\")"
+              - "delete_key(attributes, \"password\")"
+              - "delete_key(attributes, \"token\")"
+              - "delete_key(attributes, \"api_key\")"
+              - "delete_key(attributes, \"apikey\")"
+              - "delete_key(attributes, \"secret\")"
             log:
+              - "delete_key(attributes, \"http.request.header.authorization\")"
+              - "delete_key(attributes, \"http.request.header.cookie\")"
+              - "delete_key(attributes, \"http.request.header.set_cookie\")"
+              - "delete_key(attributes, \"authorization\")"
+              - "delete_key(attributes, \"cookie\")"
+              - "delete_key(attributes, \"password\")"
+              - "delete_key(attributes, \"token\")"
+              - "delete_key(attributes, \"api_key\")"
+              - "delete_key(attributes, \"apikey\")"
+              - "delete_key(attributes, \"secret\")"
               - "set(attributes[\"namespace\"], resource.attributes[\"k8s.namespace.name\"]) where resource.attributes[\"k8s.namespace.name\"] != nil"
               - "set(attributes[\"pod\"],       resource.attributes[\"k8s.pod.name\"])       where resource.attributes[\"k8s.pod.name\"] != nil"
               - "set(attributes[\"container\"], resource.attributes[\"k8s.container.name\"]) where resource.attributes[\"k8s.container.name\"] != nil"
@@ -143,6 +246,56 @@ k8s-monitoring:
         enabled: false
       traces:
         enabled: false
+      sendingQueue:
+        blockOnOverflow: true
+        numConsumers: 10
+        queueSize: 5000
+        storage: otelcol.storage.file.queue.handler
+        batch:
+          enabled: true
+          sizer: items
+          flushTimeout: 2s
+          minSize: 8192
+          maxSize: 16384
+      processors:
+        memoryLimiter:
+          enabled: true
+          checkInterval: 1s
+          limit: 1536MiB
+        resourceAttributes:
+          removeList:
+            - http.request.body
+            - http.response.body
+            - db.statement
+        filters:
+          enabled: true
+          logs:
+            logRecord:
+              - "attributes[\"private_key\"] != nil"
+        transform:
+          logs:
+            resource:
+              - "delete_key(attributes, \"http.request.header.authorization\")"
+              - "delete_key(attributes, \"http.request.header.cookie\")"
+              - "delete_key(attributes, \"http.request.header.set_cookie\")"
+              - "delete_key(attributes, \"authorization\")"
+              - "delete_key(attributes, \"cookie\")"
+              - "delete_key(attributes, \"password\")"
+              - "delete_key(attributes, \"token\")"
+              - "delete_key(attributes, \"api_key\")"
+              - "delete_key(attributes, \"apikey\")"
+              - "delete_key(attributes, \"secret\")"
+            log:
+              - "delete_key(attributes, \"http.request.header.authorization\")"
+              - "delete_key(attributes, \"http.request.header.cookie\")"
+              - "delete_key(attributes, \"http.request.header.set_cookie\")"
+              - "delete_key(attributes, \"authorization\")"
+              - "delete_key(attributes, \"cookie\")"
+              - "delete_key(attributes, \"password\")"
+              - "delete_key(attributes, \"token\")"
+              - "delete_key(attributes, \"api_key\")"
+              - "delete_key(attributes, \"apikey\")"
+              - "delete_key(attributes, \"secret\")"
     mimir:
       type: otlp
       url: "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp"
@@ -155,7 +308,22 @@ k8s-monitoring:
         enabled: false
       traces:
         enabled: false
+      sendingQueue:
+        blockOnOverflow: true
+        numConsumers: 10
+        queueSize: 5000
+        storage: otelcol.storage.file.queue.handler
+        batch:
+          enabled: true
+          sizer: items
+          flushTimeout: 2s
+          minSize: 8192
+          maxSize: 16384
       processors:
+        memoryLimiter:
+          enabled: true
+          checkInterval: 1s
+          limit: 1536MiB
         transform:
           metrics:
             datapoint:
@@ -177,10 +345,45 @@ k8s-monitoring:
         enabled: false
       logs:
         enabled: false
+      sendingQueue:
+        blockOnOverflow: true
+        numConsumers: 10
+        queueSize: 5000
+        storage: otelcol.storage.file.queue.handler
+        batch:
+          enabled: true
+          sizer: items
+          flushTimeout: 2s
+          minSize: 8192
+          maxSize: 16384
       processors:
+        memoryLimiter:
+          enabled: true
+          checkInterval: 1s
+          limit: 1536MiB
+        resourceAttributes:
+          removeList:
+            - http.request.body
+            - http.response.body
+            - db.statement
+        filters:
+          enabled: true
+          traces:
+            span:
+              - "attributes[\"private_key\"] != nil"
         transform:
           traces:
             resource:
+              - "delete_key(attributes, \"http.request.header.authorization\")"
+              - "delete_key(attributes, \"http.request.header.cookie\")"
+              - "delete_key(attributes, \"http.request.header.set_cookie\")"
+              - "delete_key(attributes, \"authorization\")"
+              - "delete_key(attributes, \"cookie\")"
+              - "delete_key(attributes, \"password\")"
+              - "delete_key(attributes, \"token\")"
+              - "delete_key(attributes, \"api_key\")"
+              - "delete_key(attributes, \"apikey\")"
+              - "delete_key(attributes, \"secret\")"
               - "set(attributes[\"namespace\"], attributes[\"k8s.namespace.name\"]) where attributes[\"k8s.namespace.name\"] != nil"
               - "set(attributes[\"pod\"],       attributes[\"k8s.pod.name\"])       where attributes[\"k8s.pod.name\"] != nil"
               - "set(attributes[\"container\"], attributes[\"k8s.container.name\"]) where attributes[\"k8s.container.name\"] != nil"
@@ -189,6 +392,17 @@ k8s-monitoring:
               - "set(attributes[\"job\"],       attributes[\"service.name\"])       where attributes[\"service.name\"] != nil and attributes[\"job\"] == nil"
               - "set(attributes[\"instance\"],  attributes[\"service.instance.id\"]) where attributes[\"service.instance.id\"] != nil and attributes[\"instance\"] == nil"
               - "set(attributes[\"instance\"],  attributes[\"k8s.pod.name\"])       where attributes[\"k8s.pod.name\"] != nil and attributes[\"instance\"] == nil"
+            span:
+              - "delete_key(attributes, \"http.request.header.authorization\")"
+              - "delete_key(attributes, \"http.request.header.cookie\")"
+              - "delete_key(attributes, \"http.request.header.set_cookie\")"
+              - "delete_key(attributes, \"authorization\")"
+              - "delete_key(attributes, \"cookie\")"
+              - "delete_key(attributes, \"password\")"
+              - "delete_key(attributes, \"token\")"
+              - "delete_key(attributes, \"api_key\")"
+              - "delete_key(attributes, \"apikey\")"
+              - "delete_key(attributes, \"secret\")"
 
   # Feature Enablement
   clusterMetrics:
@@ -222,6 +436,78 @@ k8s-monitoring:
           enabled: true
         http:
           enabled: true
+    processors:
+      memoryLimiter:
+        enabled: true
+        checkInterval: 1s
+        limit: 1536MiB
+      resourceDetection:
+        override: false
+      k8sattributes:
+        podAssociation:
+          - from: resource_attribute
+            name: k8s.pod.uid
+          - from: resource_attribute
+            name: k8s.pod.ip
+          - from: connection
+      filter:
+        errorMode: ignore
+      transform:
+        errorMode: ignore
+    logs:
+      filters:
+        log_record:
+          - "attributes[\"private_key\"] != nil"
+      transforms:
+        resource:
+          - "delete_key(attributes, \"http.request.header.authorization\")"
+          - "delete_key(attributes, \"http.request.header.cookie\")"
+          - "delete_key(attributes, \"http.request.header.set_cookie\")"
+          - "delete_key(attributes, \"authorization\")"
+          - "delete_key(attributes, \"cookie\")"
+          - "delete_key(attributes, \"password\")"
+          - "delete_key(attributes, \"token\")"
+          - "delete_key(attributes, \"api_key\")"
+          - "delete_key(attributes, \"apikey\")"
+          - "delete_key(attributes, \"secret\")"
+        log:
+          - "delete_key(attributes, \"http.request.header.authorization\")"
+          - "delete_key(attributes, \"http.request.header.cookie\")"
+          - "delete_key(attributes, \"http.request.header.set_cookie\")"
+          - "delete_key(attributes, \"authorization\")"
+          - "delete_key(attributes, \"cookie\")"
+          - "delete_key(attributes, \"password\")"
+          - "delete_key(attributes, \"token\")"
+          - "delete_key(attributes, \"api_key\")"
+          - "delete_key(attributes, \"apikey\")"
+          - "delete_key(attributes, \"secret\")"
+    traces:
+      filters:
+        span:
+          - "attributes[\"private_key\"] != nil"
+      transforms:
+        resource:
+          - "delete_key(attributes, \"http.request.header.authorization\")"
+          - "delete_key(attributes, \"http.request.header.cookie\")"
+          - "delete_key(attributes, \"http.request.header.set_cookie\")"
+          - "delete_key(attributes, \"authorization\")"
+          - "delete_key(attributes, \"cookie\")"
+          - "delete_key(attributes, \"password\")"
+          - "delete_key(attributes, \"token\")"
+          - "delete_key(attributes, \"api_key\")"
+          - "delete_key(attributes, \"apikey\")"
+          - "delete_key(attributes, \"secret\")"
+        span:
+          - "delete_key(attributes, \"http.request.header.authorization\")"
+          - "delete_key(attributes, \"http.request.header.cookie\")"
+          - "delete_key(attributes, \"http.request.header.set_cookie\")"
+          - "delete_key(attributes, \"authorization\")"
+          - "delete_key(attributes, \"cookie\")"
+          - "delete_key(attributes, \"password\")"
+          - "delete_key(attributes, \"token\")"
+          - "delete_key(attributes, \"api_key\")"
+          - "delete_key(attributes, \"apikey\")"
+          - "delete_key(attributes, \"secret\")"
 
   # Discover ServiceMonitors, PodMonitors, etc.
   prometheusOperatorObjects:
@@ -258,18 +544,53 @@ k8s-monitoring:
       includeDestinations:
         - mimir
       alloy:
+        stabilityLevel: public-preview
+        storagePath: /var/lib/alloy/data
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
         mounts:
           extra:
             - name: alloy-modules
               mountPath: /etc/alloy/modules
               readOnly: true
+            - name: alloy-storage
+              mountPath: /var/lib/alloy
       controller:
         volumes:
           extra:
             - name: alloy-modules
               configMap:
                 name: alloy-modules
+            - name: alloy-storage
+              hostPath:
+                path: /var/lib/alloy/noctua-kai/metrics
+                type: DirectoryOrCreate
       extraConfig: &metricsPipeline |
+        // Persistent queue storage for OTLP exporter sending_queue blocks.
+        // The hostPath mount keeps queued payloads across Alloy container restarts.
+        otelcol.storage.file "queue" {
+          directory = "/var/lib/alloy/queue"
+          compaction {
+            on_start = true
+            on_rebound = true
+            directory = "/var/lib/alloy/queue-compaction"
+          }
+        }
+
+        otelcol.processor.memory_limiter "scrape_guard" {
+          check_interval = "1s"
+          limit = "1536MiB"
+          spike_limit = "384MiB"
+          output {
+            metrics = [otelcol.processor.groupbyattrs.group.input]
+          }
+        }
+
         // k8sattributes + dual_semantics kommen aus dem Modul (single source of truth).
         // Änderungen → templates/alloy-modules-configmap.yaml
         import.file "enrich" {
@@ -320,7 +641,7 @@ k8s-monitoring:
             context = "datapoint"
             statements = [
               "set(resource.attributes[\"service.name\"], attributes[\"job\"]) where resource.attributes[\"service.name\"] == nil and attributes[\"job\"] != nil",
-              "set(resource.attributes[\"service.instance.id\"], attributes[\"instance\"]) where resource.attributes[\"service.instance.id\"] == nil and attributes[\"instance\"] != nil",
+              "set(resource.attributes[\"service.instance.id\"], attributes[\"instance\"]) where resource.attributes[\"service.instance.id\"] == nil and attributes[\"instance\"] != nil and IsMatch(attributes[\"instance\"], \"^[^:]+:\\\\d+$\")",
             ]
           }
         }
@@ -332,15 +653,29 @@ k8s-monitoring:
       presets: [daemonset, clustered, filesystem-log-reader]
       alloy:
         stabilityLevel: public-preview
+        storagePath: /var/lib/alloy/data
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
         mounts:
           extra:
             - name: alloy-modules
               mountPath: /etc/alloy/modules
               readOnly: true
+            - name: alloy-storage
+              mountPath: /var/lib/alloy
       controller:
         volumes:
           extra:
             - name: alloy-modules
               configMap:
                 name: alloy-modules
+            - name: alloy-storage
+              hostPath:
+                path: /var/lib/alloy/noctua-kai/node
+                type: DirectoryOrCreate
       extraConfig: *metricsPipeline
