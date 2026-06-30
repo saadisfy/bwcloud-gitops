@@ -5,5 +5,18 @@
 alloy:
   controller:
     type: daemonset
+    volumes:
+      extra:
+        - name: alloy-storage
+          hostPath:
+            path: /var/lib/alloy/noctua
+            type: DirectoryOrCreate
+  alloy:
+    stabilityLevel: public-preview
+    storagePath: /var/lib/alloy/data
+    mounts:
+      extra:
+        - name: alloy-storage
+          mountPath: /var/lib/alloy
 
 enableMirroring: true
