@@ -515,6 +515,12 @@ k8s-monitoring:
     collector: alloy-metrics
     destinations:
       - mimir
+    podMonitors:
+      enabled: false
+    probes:
+      enabled: false
+    scrapeConfigs:
+      enabled: false
 
   # Discover Pods/Services via annotations
   annotationAutodiscovery:
