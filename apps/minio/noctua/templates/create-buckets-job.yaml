@@ -16,12 +16,23 @@ spec:
         - name: mc
           image: "{{ .Values.mc.image }}:{{ .Values.mc.tag }}"
           imagePullPolicy: IfNotPresent
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.minio.credentialsSecret.name | quote }}
+                  key: {{ .Values.minio.credentialsSecret.rootUserKey | quote }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.minio.credentialsSecret.name | quote }}
+                  key: {{ .Values.minio.credentialsSecret.rootPasswordKey | quote }}
           command:
             - /bin/sh
             - -c
             - |
               echo "Waiting for MinIO server to be ready..."
-              until /usr/bin/mc alias set myminio http://minio:9000 "{{ .Values.minio.rootUser }}" "{{ .Values.minio.rootPassword }}"; do
+              until /usr/bin/mc alias set myminio http://minio:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"; do
                 echo "MinIO not ready yet, retrying in 2 seconds..."
                 sleep 2
               done

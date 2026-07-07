@@ -38,6 +38,12 @@ spec:
           jqPathExpressions:
             - .webhooks[]?.clientConfig.caBundle
             - .webhooks[]?.failurePolicy
+        - group: ""
+          kind: Secret
+          name: kiali
+          namespace: istio-system
+          jqPathExpressions:
+            - .data.signing_key
       syncPolicy:
         automated:
           prune: true

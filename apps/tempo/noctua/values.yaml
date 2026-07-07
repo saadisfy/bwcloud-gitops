@@ -1,6 +1,11 @@
 # Tempo monolithic values for noctua stage (low resources)
 tempo:
   fullnameOverride: tempo
+  extraEnvFrom:
+    - secretRef:
+        name: minio-credentials
+  extraArgs:
+    config.expand-env: true
   
   persistence:
     enabled: true
@@ -35,8 +40,8 @@ tempo:
         s3:
           bucket: tempo
           endpoint: minio.minio.svc.cluster.local:9000
-          access_key: minioadmin
-          secret_key: minioadminpassword
+          access_key: ${MINIO_ROOT_USER}
+          secret_key: ${MINIO_ROOT_PASSWORD}
           insecure: true
         wal:
           path: /var/tempo/wal

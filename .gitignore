@@ -5,6 +5,7 @@
 0day-deployment-manifests/grafana-secrets.yaml
 
 *.lock
+render.yaml
 
 # Local MCP server dependencies
 tools/mcp-argocd-k8s/node_modules/

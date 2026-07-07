@@ -1,8 +1,10 @@
 minio:
   image: "minio/minio"
   tag: "latest"
-  rootUser: "minioadmin"
-  rootPassword: "REPLACE_ROOT_PASSWORD"
+  credentialsSecret:
+    name: minio-credentials
+    rootUserKey: MINIO_ROOT_USER
+    rootPasswordKey: MINIO_ROOT_PASSWORD
   resources:
     requests:
       cpu: "100m"
