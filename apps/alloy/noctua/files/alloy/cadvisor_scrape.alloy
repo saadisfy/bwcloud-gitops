@@ -1,0 +1,60 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "nodes" {
+		role = "node"
+	}
+
+	discovery.relabel "cadvisor" {
+		targets = discovery.kubernetes.nodes.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_name"]
+			regex         = sys.env("HOSTNAME")
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_name"]
+			target_label  = "node"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "cadvisor"
+		}
+
+		rule {
+			target_label = "__scheme__"
+			replacement  = "https"
+		}
+
+		rule {
+			target_label = "__metrics_path__"
+			replacement  = "/metrics/cadvisor"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+			target_label  = "__address__"
+			replacement   = "${1}:10250"
+		}
+	}
+
+	prometheus.scrape "cadvisor" {
+		targets           = discovery.relabel.cadvisor.output
+		forward_to        = [otelcol.receiver.prometheus.cadvisor.receiver]
+		bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+		tls_config {
+			insecure_skip_verify = true
+		}
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "cadvisor" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

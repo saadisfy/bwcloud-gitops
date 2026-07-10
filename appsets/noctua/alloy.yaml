@@ -8,11 +8,11 @@ spec:
   generators:
     - list:
         elements:
-          - stage: noctua-kai
+          - stage: noctua
             namespace: alloy
   template:
     metadata:
-      name: alloy-kai
+      name: alloy
     spec:
       project: default
       source:

@@ -1,0 +1,148 @@
+declare "exports" {
+	otelcol.storage.file "queue" {
+		directory = "/var/lib/alloy/queue"
+
+		compaction {
+			on_start   = true
+			on_rebound = true
+			directory  = "/var/lib/alloy/queue-compaction"
+		}
+	}
+
+	otelcol.exporter.otlphttp "mimir" {
+		client {
+			endpoint = {{ .Values.alloyPipeline.mimir.endpoint | default "http://mimir-distributor.mimir.svc.cluster.local:8080/otlp" | quote }}
+			timeout  = "10s"
+			headers  = {
+				"X-Scope-OrgID" = {{ .Values.alloyPipeline.mimir.tenantId | default "1" | quote }},
+			}
+		}
+
+		sending_queue {
+			enabled           = true
+			block_on_overflow = true
+			num_consumers     = 10
+			queue_size        = 5000
+			storage           = otelcol.storage.file.queue.handler
+
+			batch {
+				sizer         = "items"
+				flush_timeout = "2s"
+				min_size      = 8192
+				max_size      = 16384
+			}
+		}
+
+		retry_on_failure {
+			enabled          = true
+			max_elapsed_time = "5m"
+		}
+	}
+
+	otelcol.exporter.otlphttp "loki" {
+		client {
+			endpoint = {{ .Values.alloyPipeline.loki.endpoint | default "http://loki-gateway.loki.svc.cluster.local/otlp" | quote }}
+			timeout  = "10s"
+
+			tls {
+				insecure = true
+			}
+		}
+
+		sending_queue {
+			enabled           = true
+			block_on_overflow = true
+			num_consumers     = 10
+			queue_size        = 5000
+			storage           = otelcol.storage.file.queue.handler
+
+			batch {
+				sizer         = "items"
+				flush_timeout = "2s"
+				min_size      = 8192
+				max_size      = 16384
+			}
+		}
+
+		retry_on_failure {
+			enabled          = true
+			max_elapsed_time = "5m"
+		}
+	}
+
+	otelcol.exporter.otlp "elastic_logs" {
+		client {
+			endpoint = {{ .Values.alloyPipeline.elasticLogs.endpoint | default "http://otel-elk-bridge-collector.elk.svc.cluster.local:4317" | quote }}
+
+			tls {
+				insecure = true
+			}
+		}
+
+		sending_queue {
+			enabled           = true
+			block_on_overflow = true
+			num_consumers     = 10
+			queue_size        = 5000
+			storage           = otelcol.storage.file.queue.handler
+
+			batch {
+				sizer         = "items"
+				flush_timeout = "2s"
+				min_size      = 8192
+				max_size      = 16384
+			}
+		}
+
+		retry_on_failure {
+			enabled          = true
+			max_elapsed_time = "5m"
+		}
+	}
+
+	otelcol.exporter.otlp "tempo" {
+		client {
+			endpoint = {{ .Values.alloyPipeline.tempo.endpoint | default "http://tempo.tempo.svc.cluster.local:4317" | quote }}
+
+			tls {
+				insecure = true
+			}
+		}
+
+		sending_queue {
+			enabled           = true
+			block_on_overflow = true
+			num_consumers     = 10
+			queue_size        = 5000
+			storage           = otelcol.storage.file.queue.handler
+
+			batch {
+				sizer         = "items"
+				flush_timeout = "2s"
+				min_size      = 8192
+				max_size      = 16384
+			}
+		}
+
+		retry_on_failure {
+			enabled          = true
+			max_elapsed_time = "5m"
+		}
+	}
+
+	export "mimir" {
+		value = otelcol.exporter.otlphttp.mimir.input
+	}
+
+	export "loki" {
+		value = otelcol.exporter.otlphttp.loki.input
+	}
+
+	export "elastic_logs" {
+		value = otelcol.exporter.otlp.elastic_logs.input
+	}
+
+	export "tempo" {
+		value = otelcol.exporter.otlp.tempo.input
+	}
+}

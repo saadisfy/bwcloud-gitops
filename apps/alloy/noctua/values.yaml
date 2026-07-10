@@ -12,11 +12,52 @@ alloy:
             path: /var/lib/alloy/noctua
             type: DirectoryOrCreate
   alloy:
+    clustering:
+      enabled: true
     stabilityLevel: public-preview
     storagePath: /var/lib/alloy/data
+    extraPorts:
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+        protocol: TCP
+        appProtocol: grpc
+      - name: otlp-http
+        port: 4318
+        targetPort: 4318
+        protocol: TCP
+        appProtocol: http
     mounts:
+      varlog: true
+      dockercontainers: true
       extra:
         - name: alloy-storage
           mountPath: /var/lib/alloy
 
 enableMirroring: true
+
+alloyPipeline:
+  clusterName: prod-bwcloud
+  environmentName: noctua
+  mimir:
+    endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
+    tenantId: "1"
+  loki:
+    endpoint: http://loki-gateway.loki.svc.cluster.local/otlp
+  elasticLogs:
+    endpoint: http://otel-elk-bridge-collector.elk.svc.cluster.local:4317
+  tempo:
+    endpoint: http://tempo.tempo.svc.cluster.local:4317
+  metrics:
+    # Global metric-name policy. Use per-target relabel rules in files/alloy/*_scrape.alloy
+    # for source-specific noise, and these regexes for rules that apply to all metrics.
+    # globalDropRegex drops matching metric names. Empty means "drop nothing".
+    globalDropRegex: ""
+    # globalKeepRegex keeps only matching metric names. Empty means "keep everything".
+    globalKeepRegex: ""
+  memoryLimiter:
+    limit: 1536MiB
+    spikeLimit: 384MiB
+  scrapeMemoryLimiter:
+    limit: 3000MiB
+    spikeLimit: 500MiB

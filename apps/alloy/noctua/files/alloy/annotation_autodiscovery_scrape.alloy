@@ -1,0 +1,360 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "pods" {
+		role = "pod"
+	}
+
+	discovery.relabel "pods" {
+		targets = discovery.kubernetes.pods.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_scrape"]
+			regex         = "true"
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = [
+				"__meta_kubernetes_pod_phase",
+				"__meta_kubernetes_pod_ready",
+				"__meta_kubernetes_pod_container_init",
+			]
+			regex  = "Running;true;false"
+			action = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_name"]
+			target_label  = "pod"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_container_name"]
+			target_label  = "container"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_namespace"]
+			target_label  = "namespace"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_job"]
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["job", "__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+			regex         = ";(.+)"
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["job", "__meta_kubernetes_pod_label_app"]
+			regex         = ";(.+)"
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["job", "container"]
+			regex         = ";(.+)"
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_instance"]
+			target_label  = "instance"
+		}
+
+		rule {
+			source_labels = ["container"]
+			target_label  = "__tmp_container"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_container"]
+			regex         = "(.+)"
+			target_label  = "__tmp_container"
+		}
+
+		rule {
+			source_labels = ["container"]
+			action        = "keepequal"
+			target_label  = "__tmp_container"
+		}
+
+		rule {
+			action = "labeldrop"
+			regex  = "__tmp_container"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_path"]
+			regex         = "(.+)"
+			target_label  = "__metrics_path__"
+		}
+
+		rule {
+			action      = "labelmap"
+			regex       = "__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_param_(.+)"
+			replacement = "__param_$1"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_container_port_name"]
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_portName"]
+			regex         = "(.+)"
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_container_port_name"]
+			action        = "keepequal"
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			action = "labeldrop"
+			regex  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_portNumber", "__meta_kubernetes_pod_ip"]
+			regex         = "(\\d+);(([A-Fa-f0-9]{1,4}::?){1,7}[A-Fa-f0-9]{1,4})"
+			replacement   = "[$2]:$1"
+			target_label  = "__address__"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_portNumber", "__meta_kubernetes_pod_ip"]
+			regex         = "(\\d+);((([0-9]+?)(\\.|$)){4})"
+			replacement   = "$2:$1"
+			target_label  = "__address__"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_scheme"]
+			regex         = "(.+)"
+			target_label  = "__scheme__"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_scrapeInterval"]
+			regex         = "(.+)"
+			target_label  = "__scrape_interval__"
+		}
+
+		rule {
+			source_labels = ["__scrape_interval__"]
+			regex         = ""
+			replacement   = "60s"
+			target_label  = "__scrape_interval__"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_annotation_k8s_grafana_com_metrics_scrapeTimeout"]
+			regex         = "(.+)"
+			target_label  = "__scrape_timeout__"
+		}
+
+		rule {
+			source_labels = ["__scrape_timeout__"]
+			regex         = ""
+			replacement   = "10s"
+			target_label  = "__scrape_timeout__"
+		}
+	}
+
+	discovery.kubernetes "services" {
+		role = "service"
+	}
+
+	discovery.relabel "services" {
+		targets = discovery.kubernetes.services.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_scrape"]
+			regex         = "true"
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_name"]
+			target_label  = "service"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_namespace"]
+			target_label  = "namespace"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_job"]
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["job", "__meta_kubernetes_service_label_app_kubernetes_io_name"]
+			regex         = ";(.+)"
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["job", "__meta_kubernetes_service_label_app"]
+			regex         = ";(.+)"
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["job", "service"]
+			regex         = ";(.+)"
+			target_label  = "job"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_instance"]
+			target_label  = "instance"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_metrics_path"]
+			target_label  = "__metrics_path__"
+		}
+
+		rule {
+			action      = "labelmap"
+			regex       = "__meta_kubernetes_service_annotation_k8s_grafana_com_metrics_param_(.+)"
+			replacement = "__param_$1"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_port_name"]
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_metrics_portName"]
+			regex         = "(.+)"
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_port_name"]
+			action        = "keepequal"
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_port_number"]
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_metrics_portNumber"]
+			regex         = "(.+)"
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_port_number"]
+			action        = "keepequal"
+			target_label  = "__tmp_port"
+		}
+
+		rule {
+			action = "labeldrop"
+			regex  = "__tmp_port"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_metrics_scheme"]
+			regex         = "(.+)"
+			target_label  = "__scheme__"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_metrics_scrapeInterval"]
+			regex         = "(.+)"
+			target_label  = "__scrape_interval__"
+		}
+
+		rule {
+			source_labels = ["__scrape_interval__"]
+			regex         = ""
+			replacement   = "60s"
+			target_label  = "__scrape_interval__"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_annotation_k8s_grafana_com_metrics_scrapeTimeout"]
+			regex         = "(.+)"
+			target_label  = "__scrape_timeout__"
+		}
+
+		rule {
+			source_labels = ["__scrape_timeout__"]
+			regex         = ""
+			replacement   = "10s"
+			target_label  = "__scrape_timeout__"
+		}
+	}
+
+	discovery.relabel "http" {
+		targets = array.concat(discovery.relabel.pods.output, discovery.relabel.services.output)
+
+		rule {
+			source_labels = ["__scheme__"]
+			regex         = "https"
+			action        = "drop"
+		}
+	}
+
+	discovery.relabel "https" {
+		targets = array.concat(discovery.relabel.pods.output, discovery.relabel.services.output)
+
+		rule {
+			source_labels = ["__scheme__"]
+			regex         = "https"
+			action        = "keep"
+		}
+	}
+
+	prometheus.scrape "http" {
+		targets           = discovery.relabel.http.output
+		forward_to        = [otelcol.receiver.prometheus.annotation_autodiscovery.receiver]
+		honor_labels      = true
+		bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+		scrape_protocols  = ["OpenMetricsText1.0.0", "OpenMetricsText0.0.1", "PrometheusText0.0.4"]
+
+		clustering {
+			enabled = true
+		}
+	}
+
+	prometheus.scrape "https" {
+		targets           = discovery.relabel.https.output
+		forward_to        = [otelcol.receiver.prometheus.annotation_autodiscovery.receiver]
+		honor_labels      = true
+		bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+		scrape_protocols  = ["OpenMetricsText1.0.0", "OpenMetricsText0.0.1", "PrometheusText0.0.4"]
+
+		tls_config {
+			insecure_skip_verify = true
+		}
+
+		clustering {
+			enabled = true
+		}
+	}
+
+	otelcol.receiver.prometheus "annotation_autodiscovery" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

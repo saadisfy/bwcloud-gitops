@@ -1,0 +1,93 @@
+declare "preprocess" {
+	argument "metrics_destination" { }
+
+	argument "logs_destination" { }
+
+	argument "traces_destination" { }
+
+	otelcol.processor.k8sattributes "default" {
+		passthrough = false
+
+		extract {
+			metadata = [
+				"k8s.namespace.name",
+				"k8s.pod.name",
+				"k8s.pod.uid",
+				"k8s.node.name",
+				"k8s.container.name",
+				"k8s.deployment.name",
+				"k8s.statefulset.name",
+				"k8s.daemonset.name",
+				"k8s.cronjob.name",
+				"k8s.job.name",
+				"k8s.pod.start_time",
+			]
+			deployment_name_from_replicaset = true
+		}
+
+		pod_association {
+			source {
+				from = "resource_attribute"
+				name = "k8s.pod.uid"
+			}
+		}
+
+		pod_association {
+			source {
+				from = "resource_attribute"
+				name = "k8s.pod.ip"
+			}
+		}
+
+		pod_association {
+			source {
+				from = "connection"
+			}
+		}
+
+		output {
+			metrics = [argument.metrics_destination.value]
+			logs    = [argument.logs_destination.value]
+			traces  = [argument.traces_destination.value]
+		}
+	}
+
+	otelcol.processor.resourcedetection "default" {
+		detectors = ["env", "system"]
+		override  = false
+
+		system {
+			hostname_sources = ["os"]
+		}
+
+		output {
+			metrics = [otelcol.processor.k8sattributes.default.input]
+			logs    = [otelcol.processor.k8sattributes.default.input]
+			traces  = [otelcol.processor.k8sattributes.default.input]
+		}
+	}
+
+	otelcol.processor.memory_limiter "default" {
+		check_interval = "1s"
+		limit          = {{ .Values.alloyPipeline.memoryLimiter.limit | default "1536MiB" | quote }}
+		spike_limit    = {{ .Values.alloyPipeline.memoryLimiter.spikeLimit | default "384MiB" | quote }}
+
+		output {
+			metrics = [otelcol.processor.resourcedetection.default.input]
+			logs    = [otelcol.processor.resourcedetection.default.input]
+			traces  = [otelcol.processor.resourcedetection.default.input]
+		}
+	}
+
+	export "metrics_input" {
+		value = otelcol.processor.memory_limiter.default.input
+	}
+
+	export "logs_input" {
+		value = otelcol.processor.memory_limiter.default.input
+	}
+
+	export "traces_input" {
+		value = otelcol.processor.memory_limiter.default.input
+	}
+}

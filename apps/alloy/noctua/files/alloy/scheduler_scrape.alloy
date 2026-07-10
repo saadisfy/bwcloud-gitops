@@ -1,0 +1,49 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "nodes" {
+		role = "node"
+	}
+
+	discovery.relabel "scheduler" {
+		targets = discovery.kubernetes.nodes.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_name"]
+			regex         = sys.env("HOSTNAME")
+			action        = "keep"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "kube-scheduler"
+		}
+
+		rule {
+			target_label = "__scheme__"
+			replacement  = "https"
+		}
+
+		rule {
+			target_label = "__address__"
+			replacement  = "127.0.0.1:10259"
+		}
+	}
+
+	prometheus.scrape "scheduler" {
+		targets           = discovery.relabel.scheduler.output
+		forward_to        = [otelcol.receiver.prometheus.scheduler.receiver]
+		bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+		tls_config {
+			insecure_skip_verify = true
+		}
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "scheduler" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

@@ -1,0 +1,113 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "kube_dns" {
+		role = "endpointslice"
+
+		namespaces {
+			names = ["kube-system"]
+		}
+
+		selectors {
+			role  = "endpointslice"
+			label = "kubernetes.io/service-name=kube-dns"
+		}
+	}
+
+	discovery.relabel "kube_dns" {
+		targets = discovery.kubernetes.kube_dns.targets
+
+		rule {
+			source_labels = [
+				"__meta_kubernetes_pod_container_port_name",
+				"__meta_kubernetes_pod_phase",
+				"__meta_kubernetes_pod_ready",
+			]
+			separator = "@"
+			regex     = "metrics@Running@true"
+			action    = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_container_init"]
+			regex         = "true"
+			action        = "drop"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_namespace"]
+			target_label  = "namespace"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_name"]
+			target_label  = "pod"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_container_name"]
+			target_label  = "container"
+		}
+
+		rule {
+			source_labels = [
+				"__meta_kubernetes_pod_controller_kind",
+				"__meta_kubernetes_pod_controller_name",
+			]
+			separator    = "/"
+			target_label = "workload"
+		}
+
+		rule {
+			source_labels = ["workload"]
+			regex         = "(ReplicaSet/.+)-.+"
+			target_label  = "workload"
+		}
+
+		rule {
+			action = "replace"
+			source_labels = [
+				"__meta_kubernetes_pod_label_app_kubernetes_io_name",
+				"__meta_kubernetes_pod_label_k8s_app",
+				"__meta_kubernetes_pod_label_app",
+			]
+			separator    = ";"
+			regex        = "^(?:;*)?([^;]+).*$"
+			replacement  = "$1"
+			target_label = "app"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_name"]
+			target_label  = "service"
+		}
+
+		rule {
+			target_label = "source"
+			replacement  = "kubernetes"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "kube-dns"
+		}
+	}
+
+	prometheus.scrape "kube_dns" {
+		targets          = discovery.relabel.kube_dns.output
+		forward_to       = [otelcol.receiver.prometheus.kube_dns.receiver]
+		scrape_interval  = "60s"
+		scrape_timeout   = "10s"
+		scrape_protocols = ["OpenMetricsText1.0.0", "OpenMetricsText0.0.1", "PrometheusText0.0.4"]
+
+		clustering {
+			enabled = true
+		}
+	}
+
+	otelcol.receiver.prometheus "kube_dns" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

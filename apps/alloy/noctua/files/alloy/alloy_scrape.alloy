@@ -1,0 +1,59 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	argument "namespace" {
+		optional = true
+		default  = "alloy"
+	}
+
+	argument "service_name" {
+		optional = true
+		default  = "alloy"
+	}
+
+	discovery.kubernetes "endpoints" {
+		role = "endpoints"
+
+		namespaces {
+			names = [argument.namespace.value]
+		}
+	}
+
+	discovery.relabel "alloy" {
+		targets = discovery.kubernetes.endpoints.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_name"]
+			regex         = argument.service_name.value
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_endpoint_port_name"]
+			regex         = "http-metrics"
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_ip"]
+			target_label  = "k8s_pod_ip"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "alloy"
+		}
+	}
+
+	prometheus.scrape "alloy" {
+		targets         = discovery.relabel.alloy.output
+		forward_to      = [otelcol.receiver.prometheus.alloy.receiver]
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "alloy" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

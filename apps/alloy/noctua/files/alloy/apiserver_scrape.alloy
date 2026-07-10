@@ -1,0 +1,48 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "apiserver" {
+		role = "endpoints"
+	}
+
+	discovery.relabel "apiserver" {
+		targets = discovery.kubernetes.apiserver.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_name"]
+			regex         = "kubernetes"
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_namespace"]
+			regex         = "default"
+			action        = "keep"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "kube-apiserver"
+		}
+	}
+
+	prometheus.scrape "apiserver" {
+		targets           = discovery.relabel.apiserver.output
+		forward_to        = [otelcol.receiver.prometheus.apiserver.receiver]
+		scheme            = "https"
+		bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+		tls_config {
+			ca_file              = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+			server_name          = "kubernetes"
+			insecure_skip_verify = true
+		}
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "apiserver" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

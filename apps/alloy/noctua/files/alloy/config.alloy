@@ -1,0 +1,201 @@
+// Root wiring only. Component internals live in files/alloy/*.alloy.
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+// Shared modules
+import.file "destinations" {
+	filename = "/etc/alloy/destinations.alloy"
+}
+
+import.file "common_processing" {
+	filename = "/etc/alloy/common_processing.alloy"
+}
+
+import.file "application_pipeline" {
+	filename = "/etc/alloy/application_pipeline.alloy"
+}
+
+import.file "pod_logs_pipeline" {
+	filename = "/etc/alloy/pod_logs_pipeline.alloy"
+}
+
+import.file "metrics_pipeline" {
+	filename = "/etc/alloy/metrics_pipeline.alloy"
+}
+
+// Scrape target modules. Add a new scrape module here, then instantiate it below.
+import.file "alloy_scrape" {
+	filename = "/etc/alloy/alloy_scrape.alloy"
+}
+
+import.file "annotation_autodiscovery_scrape" {
+	filename = "/etc/alloy/annotation_autodiscovery_scrape.alloy"
+}
+
+import.file "kubelet_scrape" {
+	filename = "/etc/alloy/kubelet_scrape.alloy"
+}
+
+import.file "kubelet_resources_scrape" {
+	filename = "/etc/alloy/kubelet_resources_scrape.alloy"
+}
+
+import.file "cadvisor_scrape" {
+	filename = "/etc/alloy/cadvisor_scrape.alloy"
+}
+
+import.file "ksm_scrape" {
+	filename = "/etc/alloy/ksm_scrape.alloy"
+}
+
+import.file "node_exporter_scrape" {
+	filename = "/etc/alloy/node_exporter_scrape.alloy"
+}
+
+import.file "kube_dns_scrape" {
+	filename = "/etc/alloy/kube_dns_scrape.alloy"
+}
+
+import.file "apiserver_scrape" {
+	filename = "/etc/alloy/apiserver_scrape.alloy"
+}
+
+import.file "controllermanager_scrape" {
+	filename = "/etc/alloy/controllermanager_scrape.alloy"
+}
+
+import.file "scheduler_scrape" {
+	filename = "/etc/alloy/scheduler_scrape.alloy"
+}
+
+import.file "kubeproxy_scrape" {
+	filename = "/etc/alloy/kubeproxy_scrape.alloy"
+}
+
+destinations.exports "default" { }
+
+common_processing.process "default" {
+	metrics_destination      = destinations.exports.default.mimir
+	loki_logs_destination    = destinations.exports.default.loki
+	elastic_logs_destination = destinations.exports.default.elastic_logs
+	traces_destination       = destinations.exports.default.tempo
+}
+
+application_pipeline.preprocess "application" {
+	metrics_destination = common_processing.process.default.metrics_input
+	logs_destination    = common_processing.process.default.logs_input
+	traces_destination  = common_processing.process.default.traces_input
+}
+
+pod_logs_pipeline.preprocess "pod_logs" {
+	logs_destination = common_processing.process.default.logs_input
+}
+
+metrics_pipeline.otelcol_pipeline_pod_level "pod_level" {
+	forward_to = destinations.exports.default.mimir
+}
+
+metrics_pipeline.otelcol_pipeline_meta_level "meta_level" {
+	forward_to = destinations.exports.default.mimir
+}
+
+// Prometheus Operator objects keep pod-level enrichment because targets usually map to pods.
+prometheus.operator.servicemonitors "cluster" {
+	forward_to = [otelcol.receiver.prometheus.servicemonitors.receiver]
+}
+
+otelcol.receiver.prometheus "servicemonitors" {
+	output {
+		metrics = [metrics_pipeline.otelcol_pipeline_pod_level.pod_level.input]
+	}
+}
+
+otelcol.receiver.otlp "application" {
+	grpc {
+		endpoint = "0.0.0.0:4317"
+	}
+
+	http {
+		endpoint = "0.0.0.0:4318"
+	}
+
+	debug_metrics {
+		disable_high_cardinality_metrics = true
+	}
+
+	output {
+		metrics = [application_pipeline.preprocess.application.metrics_input]
+		logs    = [application_pipeline.preprocess.application.logs_input]
+		traces  = [application_pipeline.preprocess.application.traces_input]
+	}
+}
+
+otelcol.receiver.filelog "pod_logs" {
+	include           = ["/var/log/pods/*/*/*.log"]
+	start_at          = "end"
+	include_file_name = false
+	include_file_path = true
+
+	operators = [
+		{
+			type                       = "container",
+			add_metadata_from_filepath = true,
+		},
+	]
+
+	output {
+		logs = [pod_logs_pipeline.preprocess.pod_logs.input]
+	}
+}
+
+// Central scrape target list. Per-target drops/renames belong inside the scrape module.
+alloy_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_pod_level.pod_level.input
+}
+
+annotation_autodiscovery_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_pod_level.pod_level.input
+}
+
+kubelet_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+kubelet_resources_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+cadvisor_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+ksm_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+node_exporter_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+kube_dns_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+apiserver_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+controllermanager_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+scheduler_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}
+
+kubeproxy_scrape.scrape "default" {
+	forward_to = metrics_pipeline.otelcol_pipeline_meta_level.meta_level.input
+}

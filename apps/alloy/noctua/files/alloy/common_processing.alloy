@@ -1,0 +1,159 @@
+declare "process" {
+	argument "metrics_destination" { }
+
+	argument "loki_logs_destination" { }
+
+	argument "elastic_logs_destination" { }
+
+	argument "traces_destination" { }
+
+	otelcol.processor.transform "clean" {
+		error_mode = "ignore"
+
+		metric_statements {
+			context    = "resource"
+			statements = [
+{{ include "alloy.ottl.resource.identity" . | indent 5 }}
+{{ include "alloy.ottl.resource.metric_compat_labels" . | indent 5 }}
+{{ include "alloy.ottl.drop.query_payload" . | indent 5 }}
+{{ include "alloy.ottl.drop.sensitive_attributes" . | indent 5 }}
+			]
+		}
+
+		log_statements {
+			context    = "resource"
+			statements = [
+{{ include "alloy.ottl.resource.identity" . | indent 5 }}
+{{ include "alloy.ottl.resource.kubernetes_compat_labels" . | indent 5 }}
+{{ include "alloy.ottl.resource.service_from_kubernetes" . | indent 5 }}
+{{ include "alloy.ottl.drop.resource_host_container" . | indent 5 }}
+{{ include "alloy.ottl.drop.query_payload" . | indent 5 }}
+{{ include "alloy.ottl.drop.sensitive_attributes" . | indent 5 }}
+			]
+		}
+
+		log_statements {
+			context    = "log"
+			statements = [
+{{ include "alloy.ottl.drop.log_record_defaults" . | indent 5 }}
+				`limit(attributes, 128, ["service.name", "event.name", "log.iostream", "http.request.method", "http.route", "url.path", "k8s.pod.name", "k8s.container.name"])`,
+				"truncate_all(attributes, 2048)",
+				`replace_pattern(body, "(?i)(authorization|cookie|token|api[_-]?key|secret|password)=([^\\s&]+)", "[REDACTED_SECRET]") where body != nil`,
+				`replace_pattern(body, "(?i)-----BEGIN [A-Z ]*PRIVATE KEY-----.*-----END [A-Z ]*PRIVATE KEY-----", "[REDACTED_PRIVATE_KEY]") where body != nil`,
+			]
+		}
+
+		trace_statements {
+			context    = "resource"
+			statements = [
+{{ include "alloy.ottl.resource.identity" . | indent 5 }}
+{{ include "alloy.ottl.resource.service_from_kubernetes" . | indent 5 }}
+{{ include "alloy.ottl.drop.resource_host_container" . | indent 5 }}
+{{ include "alloy.ottl.drop.query_payload" . | indent 5 }}
+{{ include "alloy.ottl.drop.sensitive_attributes" . | indent 5 }}
+			]
+		}
+
+		trace_statements {
+			context    = "span"
+			statements = [
+{{ include "alloy.ottl.drop.span_defaults" . | indent 5 }}
+				"replace_pattern(attributes[\"url.path\"], \"/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\", \"/{uuid}\") where attributes[\"url.path\"] != nil",
+				"replace_pattern(attributes[\"url.path\"], \"/\\\\d+\", \"/{id}\") where attributes[\"url.path\"] != nil",
+				"replace_pattern(attributes[\"http.route\"], \"/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\", \"/{uuid}\") where attributes[\"http.route\"] != nil",
+				"replace_pattern(attributes[\"http.route\"], \"/\\\\d+\", \"/{id}\") where attributes[\"http.route\"] != nil",
+				"replace_pattern(attributes[\"client.address\"], \"(\\\\d{1,3}\\\\.\\\\d{1,3}\\\\.\\\\d{1,3})\\\\.\\\\d{1,3}\", \"$$1.0\") where attributes[\"client.address\"] != nil",
+				`limit(attributes, 96, ["service.name", "http.request.method", "http.route", "url.path", "server.address", "client.address", "rpc.system", "rpc.service", "messaging.system", "messaging.destination.name", "db.system.name", "db.namespace"])`,
+				"truncate_all(attributes, 1024)",
+			]
+		}
+
+		output {
+			metrics = [argument.metrics_destination.value]
+			logs    = [otelcol.processor.filter.logs_safety.input]
+			traces  = [otelcol.processor.filter.traces_safety.input]
+		}
+	}
+
+	otelcol.processor.filter "logs_safety" {
+		error_mode = "ignore"
+
+		logs {
+			log_record = [
+				"attributes[\"private_key\"] != nil",
+				`body != nil and IsMatch(body, "(?i)-----BEGIN [A-Z ]*PRIVATE KEY-----")`,
+			]
+		}
+
+		output {
+			logs = [
+				otelcol.processor.transform.loki_logs.input,
+				otelcol.processor.transform.elastic_logs.input,
+			]
+		}
+	}
+
+	otelcol.processor.transform "loki_logs" {
+		error_mode = "ignore"
+
+		log_statements {
+			context    = "resource"
+			statements = [
+				"set(attributes[\"loki.resource.labels\"], \"cluster, namespace, job, pod\")",
+			]
+		}
+
+		output {
+			logs = [argument.loki_logs_destination.value]
+		}
+	}
+
+	otelcol.processor.transform "elastic_logs" {
+		error_mode = "ignore"
+
+		log_statements {
+			context    = "resource"
+			statements = [
+				"delete_key(attributes, \"loki.resource.labels\")",
+			]
+		}
+
+		log_statements {
+			context    = "log"
+			statements = [
+				"delete_key(attributes, \"loki.attribute.labels\")",
+				"delete_key(attributes, \"loki.resource.labels\")",
+			]
+		}
+
+		output {
+			logs = [argument.elastic_logs_destination.value]
+		}
+	}
+
+	otelcol.processor.filter "traces_safety" {
+		error_mode = "ignore"
+
+		traces {
+			span = [
+				"attributes[\"private_key\"] != nil",
+			]
+		}
+
+		output {
+			traces = [argument.traces_destination.value]
+		}
+	}
+
+	export "metrics_input" {
+		value = otelcol.processor.transform.clean.input
+	}
+
+	export "logs_input" {
+		value = otelcol.processor.transform.clean.input
+	}
+
+	export "traces_input" {
+		value = otelcol.processor.transform.clean.input
+	}
+}

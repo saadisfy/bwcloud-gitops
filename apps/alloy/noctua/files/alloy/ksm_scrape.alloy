@@ -1,0 +1,54 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	argument "namespace" {
+		optional = true
+		default  = "alloy"
+	}
+
+	discovery.kubernetes "endpoints" {
+		role = "endpoints"
+
+		namespaces {
+			names = [argument.namespace.value]
+		}
+	}
+
+	discovery.relabel "ksm" {
+		targets = discovery.kubernetes.endpoints.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_service_name"]
+			regex         = "^(alloy-)?kube-state-metrics$"
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_endpoint_port_name"]
+			regex         = "http|http-metrics"
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_pod_ip"]
+			target_label  = "k8s_pod_ip"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "kube-state-metrics"
+		}
+	}
+
+	prometheus.scrape "ksm" {
+		targets         = discovery.relabel.ksm.output
+		forward_to      = [otelcol.receiver.prometheus.ksm.receiver]
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "ksm" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

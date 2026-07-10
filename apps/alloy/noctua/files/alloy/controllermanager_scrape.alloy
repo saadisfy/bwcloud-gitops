@@ -1,0 +1,49 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "nodes" {
+		role = "node"
+	}
+
+	discovery.relabel "controllermanager" {
+		targets = discovery.kubernetes.nodes.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_name"]
+			regex         = sys.env("HOSTNAME")
+			action        = "keep"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "kube-controller-manager"
+		}
+
+		rule {
+			target_label = "__scheme__"
+			replacement  = "https"
+		}
+
+		rule {
+			target_label = "__address__"
+			replacement  = "127.0.0.1:10257"
+		}
+	}
+
+	prometheus.scrape "controllermanager" {
+		targets           = discovery.relabel.controllermanager.output
+		forward_to        = [otelcol.receiver.prometheus.controllermanager.receiver]
+		bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+		tls_config {
+			insecure_skip_verify = true
+		}
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "controllermanager" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

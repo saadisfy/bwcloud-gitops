@@ -1,0 +1,39 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "nodes" {
+		role = "node"
+	}
+
+	discovery.relabel "kubeproxy" {
+		targets = discovery.kubernetes.nodes.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_name"]
+			regex         = sys.env("HOSTNAME")
+			action        = "keep"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "kube-proxy"
+		}
+
+		rule {
+			target_label = "__address__"
+			replacement  = "127.0.0.1:10249"
+		}
+	}
+
+	prometheus.scrape "kubeproxy" {
+		targets         = discovery.relabel.kubeproxy.output
+		forward_to      = [otelcol.receiver.prometheus.kubeproxy.receiver]
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "kubeproxy" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}

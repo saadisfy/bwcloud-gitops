@@ -1,0 +1,45 @@
+declare "scrape" {
+	argument "forward_to" { }
+
+	discovery.kubernetes "nodes" {
+		role = "node"
+	}
+
+	discovery.relabel "node_exporter" {
+		targets = discovery.kubernetes.nodes.targets
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_name"]
+			regex         = sys.env("HOSTNAME")
+			action        = "keep"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_name"]
+			target_label  = "node"
+		}
+
+		rule {
+			source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+			target_label  = "__address__"
+			replacement   = "${1}:9100"
+		}
+
+		rule {
+			target_label = "job"
+			replacement  = "node-exporter"
+		}
+	}
+
+	prometheus.scrape "node_exporter" {
+		targets         = discovery.relabel.node_exporter.output
+		forward_to      = [otelcol.receiver.prometheus.node_exporter.receiver]
+		scrape_interval = "15s"
+	}
+
+	otelcol.receiver.prometheus "node_exporter" {
+		output {
+			metrics = [argument.forward_to.value]
+		}
+	}
+}
