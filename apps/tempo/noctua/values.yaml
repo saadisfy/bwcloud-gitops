@@ -1,11 +1,6 @@
 # Tempo monolithic values for noctua stage (low resources)
 tempo:
   fullnameOverride: tempo
-  extraEnvFrom:
-    - secretRef:
-        name: minio-credentials
-  extraArgs:
-    config.expand-env: true
   
   persistence:
     enabled: true
@@ -13,7 +8,13 @@ tempo:
     storageClass: local-path
 
   tempo:
-    reporting_enabled: false
+    extraEnvFrom:
+      - secretRef:
+          name: minio-credentials
+    extraArgs:
+      config.expand-env: true
+
+    reportingEnabled: false
 
     # Span metrics + service graph for Grafana Service Map / tracesToMetrics
     metricsGenerator:
