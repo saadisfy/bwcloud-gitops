@@ -34,7 +34,7 @@ bwcloud-gitops/
 │   ├── opentelemetry-demo/  # base + prod (Wrapper für OpenTelemetry Demo)
 │   └── spring-petclinic/   # dev, int, prod (Custom-Chart + Templates)
 ├── appsets/                # ApplicationSets (werden von Root-Application gesynct)
-├── 0day-deployment-manifests/  # Root-Application, Repo-Secret (Beispiel)
+├── 0day-deployment-manifests/  # Root-Application, local secret templates
 ├── apps/kargo/             # Kargo Helm-Chart (prod)
 ├── apps/kargo-projects/    # Kargo-CRs pro App (Projects/Stages/Warehouse)
 ├── initial-plan.md         # Kurzreferenz Setup
@@ -98,7 +98,7 @@ Alle URLs unter **\*.saadisfy.me**. DNS für diese Hosts auf die Ingress-/Cluste
 - **Zentrale Konfiguration:** `apps/argocd/prod/values.yaml`
   - Ingress: argocd.saadisfy.me, TLS, cert-manager-Annotations
   - Helm-Repos: grafana, open-telemetry, argo (in `configs.repositories`)
-  - Git-Repo-Credentials **nicht** in Values; Secret separat: `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` (Datei in `.gitignore`, Token nicht committen)
+  - Git repository access **not** configured through Values. The public repository is read over HTTPS without credentials by default; private or write credentials must be created out-of-band and kept out of Git.
 
 **Argo CD nach Values-Änderung anwenden:**
 
@@ -112,11 +112,14 @@ helm upgrade argocd . -n argocd -f ../base/values.yaml -f values.yaml --wait
 
 ## Git-Repo-Zugriff (Argo CD)
 
-1. `cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml`
-2. In der Kopie: `password: DEIN_GITHUB_PAT` durch echten GitHub-PAT ersetzen (mit z. B. **Contents: Read and Write**).
-3. `kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml`
+The repository is public, so Argo CD can clone it over HTTPS without storing a GitHub token. Apply the repository Secret from the example as a credential-less repository definition:
 
-Danach kann Argo CD das Repo clonen und die Applications syncen.
+```bash
+cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
+kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
+```
+
+If the repository becomes private, create a narrowly scoped credential out-of-band and rotate it independently from Kargo write credentials.
 
 ---
 
@@ -158,8 +161,8 @@ Argo CD Applications für Kargo-Promotion: Annotation `kargo.akuity.io/authorize
 | Root-Application (synct appsets/) | `0day-deployment-manifests/root-application.yaml` |
 | ApplicationSets | `appsets/*.yaml` |
 | Kargo Warehouse/Stages | `apps/kargo-projects/**/*.yaml` |
-| Repo-Secret (Beispiel) | `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example` |
-| Repo-Secret (lokal, gitignored) | `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` |
+| Repo definition (example) | `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example` |
+| Repo definition (local, gitignored) | `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` |
 
 ---
 

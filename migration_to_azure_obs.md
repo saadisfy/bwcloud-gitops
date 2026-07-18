@@ -68,22 +68,19 @@ Basierend auf `appsets/*.yaml` (prod).
 
 ## 4) Argo CD -> GitHub Zugriff: Empfehlung und Umsetzung
 
-Das Repo enthält bereits PAT-basiertes Bootstrap (`0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example`). Für Azure-Migration solltest du entscheiden:
+The repository is public, so Argo CD can read it over HTTPS without storing a GitHub token. Keep the repo definition credential-less unless the repository becomes private.
 
-## Option A (schnell, kompatibel mit aktuellem Repo): Fine-grained PAT
-- Secret wie im Template anlegen (`repo-bwcloud-gitops`).
-- Scope minimal:
-  - Repository: `bwcloud-gitops`
-  - **Contents: Read** (für Argo CD)
-  - Falls Kargo in dasselbe Repo schreibt: zusätzlich separater Write-Token für Kargo verwenden.
+## Option A (current default): Public HTTPS read access
+- Apply `repo-bwcloud-gitops` without username/password fields.
+- No GitHub token is required for Argo CD read-only sync.
+- Keep Kargo write credentials separate if promotion workflows need to commit back to Git.
 
-## Option B (empfohlen langfristig): GitHub App
-- Besser rotierbar, feinere Rechte, kein User-PAT.
-- Rechte für Argo CD:
-  - Repository permissions: `Contents: Read`, `Metadata: Read`
-- Argo CD Repo-Secret mit GitHub-App-Feldern anlegen (statt username/password).
+## Option B (private repository): GitHub App or fine-grained credential
+- Prefer a GitHub App for better rotation and narrower permissions.
+- Minimum Argo CD permissions: repository metadata and contents read.
+- If a fine-grained PAT is used temporarily, scope it only to the required repository and rotate it independently from Kargo write credentials.
 
-> Empfehlung: **Argo CD Read-only** und **Kargo Write separat** (eigene Credentials), damit Deployment und Promotion sauber getrennt sind.
+> Recommendation: keep **Argo CD read-only** and **Kargo write credentials separate**, so deployment sync and promotion writeback remain clearly separated.
 
 ---
 
@@ -92,8 +89,9 @@ Das Repo enthält bereits PAT-basiertes Bootstrap (`0day-deployment-manifests/ar
 ## Reihenfolge (manuell)
 1. Kontext setzen: `kubectx obs`
 2. Argo CD initial installieren (Bootstrap außerhalb dieses Repos, falls noch nicht vorhanden).
-3. Argo CD Git-Repo Zugriff setzen:
-   - `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` (PAT) **oder** GitHub-App Secret.
+3. Set Argo CD Git repository access:
+   - `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` as a credential-less public HTTPS repo definition by default.
+   - Add a GitHub App or tightly scoped token only if the repository becomes private.
 4. Helm-Repo-Secrets setzen:
    - `0day-deployment-manifests/argocd-helm-repos.yaml`
 5. Manuelle App-Secrets setzen:
@@ -312,7 +310,7 @@ Hinweis: Viele AppSets haben **kein** `syncPolicy.automated`; initialer Sync mus
 ## 10) Konkrete manuelle Artefakte/Dateien (Checkliste)
 
 Aus diesem Repo:
-- `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` (lokal aus Example erzeugen, gitignored)
+- `0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml` (local from example, gitignored, credential-less by default)
 - `0day-deployment-manifests/argocd-helm-repos.yaml`
 - `0day-deployment-manifests/app-admin-secrets.yaml` (lokal aus Example)
 - `0day-deployment-manifests/grafana-secrets.yaml` (lokal aus Example)
@@ -322,14 +320,14 @@ Außerhalb dieses Repos (manuell auf AKS):
 - ingress-nginx Installation
 - cert-manager + `ClusterIssuer` `letsencrypt-prod`
 - DNS Umschaltung
-- ggf. GitHub App/PAT Erzeugung und Rotation
+- optional GitHub App or token creation/rotation if private access or Git writeback is required
 
 ---
 
 ## 11) Offene Entscheidungen vor Start
 
 1. **Mimir Historie mitnehmen oder neu starten?**  
-2. **Argo CD Repo Auth via PAT (kurzfristig) oder GitHub App (langfristig)?**  
+2. **Keep Argo CD credential-less for the public repo, or use GitHub App/token only if private access is needed?**  
 3. **Gleiche Domains sofort cutovern oder temporäre Azure-Subdomains für Parallelbetrieb?**  
 4. **Kargo direkt aktivieren oder erst nach stabiler Basis (empfohlen: später)?**
 

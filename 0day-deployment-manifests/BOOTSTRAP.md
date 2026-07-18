@@ -3,10 +3,11 @@
 Follow these steps to initialize the environment. **Secrets never enter the Git repository.**
 
 ## 1. Connect Argo CD to GitHub
-Argo CD needs access to this repository to manage applications.
+Argo CD needs access to this repository to manage applications. Because this repository is public, read-only Argo CD access can normally use HTTPS without credentials. Only add credentials if the repository becomes private or if a specific controller needs write access.
+
 ```bash
 cp 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml.example 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
-# Edit the file and replace DEIN_GITHUB_PAT with your Personal Access Token
+# Keep the default public HTTPS configuration, or add tightly scoped credentials out-of-band.
 kubectl apply -f 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml
 ```
 

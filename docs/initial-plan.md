@@ -8,7 +8,7 @@
 - **Charts:** In-Repo unter `apps/<app>/<stage>/` – **Chart.yaml und values.yaml direkt im Stage-Ordner** (kein chartstuff/).
 - **Namespaces:** Prod = `<app>`; Dev = `<app>-dev`, Int = `<app>-int`.
 - **ArgoCD Bootstrap:** **Manuell per `helm install`** (kein Autopilot).
-- **Git-Repo:** GitHub (saadisfy/bwcloud-gitops); ArgoCD braucht **GitHub PAT** für Repo-Zugriff und PR-Generator.
+- **Git-Repo:** GitHub (saadisfy/bwcloud-gitops); Argo CD reads the public repository over HTTPS without credentials, while writeback credentials for Kargo are managed separately and out-of-band.
 - **Container-Registry:** **ghcr.io** für Spring Petclinic (saadisfy).
 - **Kargo:** Promotion dev → int → prod.
 - **Keine globale base:** Nur `apps/<app>/base/values.yaml`.
@@ -45,7 +45,7 @@ bwcloud-gitops/
 ## Ablauf
 
 1. Struktur + ApplicationSets
-2. ArgoCD manuell installieren, GitHub-Token, Helm-Repos
+2. Argo CD manuell installieren, Repository-Zugriff und Helm-Repos konfigurieren
 3. ArgoCD self-managed Application
 4. Wrapper-Charts + Values pro App
 5. OTel Operator, Collector, Instrumentation
