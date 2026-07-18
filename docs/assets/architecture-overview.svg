@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="620" viewBox="0 0 1180 620" role="img" aria-labelledby="title desc">
+  <title id="title">bwcloud-gitops architecture overview</title>
+  <desc id="desc">GitOps-driven Kubernetes observability platform with Argo CD, Kargo, Crossplane, OpenTelemetry, Grafana Alloy, Mimir, Loki, Tempo, and Grafana.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .group { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+      .group-title { fill: #0f172a; font: 700 18px Arial, sans-serif; }
+      .box { fill: #ffffff; stroke: #64748b; stroke-width: 1.4; rx: 10; }
+      .box-main { fill: #fff7ed; stroke: #f97316; stroke-width: 2; rx: 10; }
+      .box-telemetry { fill: #ecfeff; stroke: #0891b2; stroke-width: 1.8; rx: 10; }
+      .box-store { fill: #f0fdf4; stroke: #16a34a; stroke-width: 1.8; rx: 10; }
+      .text { fill: #0f172a; font: 700 17px Arial, sans-serif; }
+      .subtext { fill: #475569; font: 13px Arial, sans-serif; }
+      .line { stroke: #334155; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+      .line-soft { stroke: #94a3b8; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1180" height="620"/>
+
+  <rect class="group" x="40" y="48" width="310" height="500" rx="16"/>
+  <text class="group-title" x="70" y="88">GitOps source of truth</text>
+
+  <rect class="group" x="435" y="48" width="310" height="500" rx="16"/>
+  <text class="group-title" x="465" y="88">Kubernetes platform</text>
+
+  <rect class="group" x="830" y="48" width="310" height="500" rx="16"/>
+  <text class="group-title" x="860" y="88">Observability plane</text>
+
+  <rect class="box-main" x="85" y="140" width="220" height="72"/>
+  <text class="text" x="195" y="169" text-anchor="middle">Git repository</text>
+  <text class="subtext" x="195" y="192" text-anchor="middle">apps, appsets, manifests</text>
+
+  <rect class="box" x="85" y="260" width="220" height="72"/>
+  <text class="text" x="195" y="289" text-anchor="middle">Kargo</text>
+  <text class="subtext" x="195" y="312" text-anchor="middle">stage promotion workflows</text>
+
+  <rect class="box" x="85" y="380" width="220" height="72"/>
+  <text class="text" x="195" y="409" text-anchor="middle">Crossplane</text>
+  <text class="subtext" x="195" y="432" text-anchor="middle">declarative cloud resources</text>
+
+  <rect class="box-main" x="480" y="140" width="220" height="72"/>
+  <text class="text" x="590" y="169" text-anchor="middle">Argo CD</text>
+  <text class="subtext" x="590" y="192" text-anchor="middle">ApplicationSets and sync</text>
+
+  <rect class="box" x="480" y="260" width="220" height="72"/>
+  <text class="text" x="590" y="289" text-anchor="middle">Kubernetes</text>
+  <text class="subtext" x="590" y="312" text-anchor="middle">platform services and workloads</text>
+
+  <rect class="box-telemetry" x="480" y="380" width="220" height="72"/>
+  <text class="text" x="590" y="409" text-anchor="middle">OpenTelemetry</text>
+  <text class="subtext" x="590" y="432" text-anchor="middle">auto-instrumentation</text>
+
+  <rect class="box-telemetry" x="875" y="110" width="220" height="72"/>
+  <text class="text" x="985" y="139" text-anchor="middle">Grafana Alloy</text>
+  <text class="subtext" x="985" y="162" text-anchor="middle">collection and enrichment</text>
+
+  <rect class="box-store" x="875" y="230" width="220" height="64"/>
+  <text class="text" x="985" y="257" text-anchor="middle">Mimir</text>
+  <text class="subtext" x="985" y="278" text-anchor="middle">metrics</text>
+
+  <rect class="box-store" x="875" y="322" width="220" height="64"/>
+  <text class="text" x="985" y="349" text-anchor="middle">Loki</text>
+  <text class="subtext" x="985" y="370" text-anchor="middle">logs</text>
+
+  <rect class="box-store" x="875" y="414" width="220" height="64"/>
+  <text class="text" x="985" y="441" text-anchor="middle">Tempo</text>
+  <text class="subtext" x="985" y="462" text-anchor="middle">traces</text>
+
+  <rect class="box-main" x="480" y="498" width="220" height="72"/>
+  <text class="text" x="590" y="527" text-anchor="middle">Grafana</text>
+  <text class="subtext" x="590" y="550" text-anchor="middle">dashboards and alerting</text>
+
+  <path class="line" d="M305 176 H470"/>
+  <path class="line-soft" d="M195 212 V250"/>
+  <path class="line-soft" d="M305 296 H470"/>
+  <path class="line-soft" d="M305 416 H470"/>
+  <path class="line" d="M590 212 V250"/>
+  <path class="line" d="M590 332 V370"/>
+  <path class="line" d="M700 416 C760 416 805 146 865 146"/>
+  <path class="line" d="M875 146 C805 146 760 296 710 296"/>
+  <path class="line" d="M985 182 V220"/>
+  <path class="line" d="M985 182 V312"/>
+  <path class="line" d="M985 182 V404"/>
+  <path class="line-soft" d="M875 262 C795 262 760 505 710 525"/>
+  <path class="line-soft" d="M875 354 C790 354 760 515 710 535"/>
+  <path class="line-soft" d="M875 446 C795 446 760 540 710 545"/>
+
+  <text class="subtext" x="395" y="165">reconcile</text>
+  <text class="subtext" x="350" y="285">promote releases</text>
+  <text class="subtext" x="342" y="405">provision resources</text>
+  <text class="subtext" x="735" y="125">telemetry</text>
+  <text class="subtext" x="750" y="525">query and correlate</text>
+</svg>
