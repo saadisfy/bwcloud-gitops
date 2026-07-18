@@ -1,25 +1,37 @@
 # Secret Rotation Notes
 
-This repository is public. Any credential that has ever been committed must be considered exposed and should be rotated outside Git.
+This repository is public. Any credential that was previously committed or stored in an exposed Kubernetes annotation should be treated as compromised and rotated outside Git.
 
 ## Current repository state
 
-`gitleaks dir . --redact=100` currently reports no leaks in the working tree.
+The repository and cluster metadata have been cleaned for portfolio use:
 
-Runtime secrets are expected to be created directly in the cluster with `kubectl`, not committed to this repository. See `0day-deployment-manifests/BOOTSTRAP.md`.
+- `gitleaks dir . --redact --no-banner --verbose` reports no leaks in the working tree.
+- A fresh GitHub mirror scan with `gitleaks detect` reports no leaks across the current remote history.
+- Kubernetes Secret annotations named `kubectl.kubernetes.io/last-applied-configuration` have been removed cluster-wide, because they can duplicate secret values.
+- Argo CD reads the public Git repository over HTTPS; no GitHub token is required for read-only sync.
 
-## Historical findings
+Runtime secrets are still expected to be created out-of-band with `kubectl` or a future sealed/external secret workflow. See `0day-deployment-manifests/BOOTSTRAP.md`.
 
-`gitleaks detect --redact=100` still reports historical findings in older commits. Because Git history is already public, cleaning the current tree is not enough for those values.
+## Rotation status
 
-Rotate at least:
+Completed:
 
-- Argo CD API/JWT tokens and any local MCP tokens.
-- Grafana API keys, OAuth client secrets, and SMTP credentials.
-- Kargo admin password hash and token signing key.
-- Kiali login-token signing key.
-- MinIO root credentials used by Loki, Mimir, Tempo, and MinIO.
-- Any GitHub PAT used for Argo CD repository access.
+- Public Git history and local working tree cleaned and rescanned.
+- Old GitHub PATs identified during the cleanup were revoked or replaced.
+- `argocd/repo-bwcloud-gitops` was updated with the new repository credential path.
+- Secret-bearing `last-applied` annotations were removed from Kubernetes Secrets.
+
+Still open by decision:
+
+- Rotate the Telegram bot token used by Grafana notifications.
+- Rotate the Kibana/OIDC client secret if Kibana SSO is still in active use.
+- Replace or delete `grafana/kargo-git-creds`; the previously stored GitHub-token-shaped value now returns `401`, but the Secret should still be cleaned up if the Grafana Kargo project is no longer used.
+
+Optional later hardening:
+
+- Rotate GitHub OAuth client secrets for `sso_argo` and `sso_grafana` even though they are no longer present in Git history.
+- Move runtime secrets to Sealed Secrets or External Secrets so bootstrap remains reproducible without committing raw credentials.
 
 ## MinIO/S3 credentials
 
@@ -39,7 +51,7 @@ for namespace in minio loki mimir tempo; do
 done
 ```
 
-After rotation, sync/restart MinIO, Loki, Mimir, and Tempo so they read the updated secret.
+After rotation, sync or restart MinIO, Loki, Mimir, and Tempo so they read the updated secret.
 
 ## Kiali signing key
 
