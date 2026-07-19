@@ -1,0 +1,14 @@
+# GitHub Linguist overrides
+# This is a GitOps/platform repository; generated reference HTML should not
+# dominate the repository language statistics.
+
+# Count Kubernetes/GitOps manifests in the language bar.
+*.yaml linguist-detectable=true
+*.yml linguist-detectable=true
+
+# Exclude generated or presentation-oriented HTML from language stats.
+.agents/** linguist-generated=true
+docs/Alloy/presentation.html linguist-documentation=true
+
+# Keep checked-in tool dependencies from skewing language stats.
+tools/**/node_modules/** linguist-vendored=true
