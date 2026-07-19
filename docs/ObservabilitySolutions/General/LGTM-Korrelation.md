@@ -498,7 +498,7 @@ Bei der Entwicklung des Dashboards wurde ein schwerer Kubernetes-Konfigurationsf
 
 ## 11. Weiterführende Docs in diesem Repo
 
-- [Observability Guide](../../OBSERVABILITY.md) – Alloy-Pipeline, Label-Strategie
+- [Observability Guide](../../observability/OBSERVABILITY.md) – Alloy-Pipeline, Label-Strategie
 - [Alloy noctua-kai README](../../../apps/alloy/noctua-kai/README.md) – Dual Semantics, Log-Deduplication
 - [Grafana Datasources](../../../apps/grafana/base/values.yaml) – Exemplars, derivedFields, tracesToLogs
 - [Design & Stack-Vergleich](../Design.md) – LGTM vs. ELK vs. Datadog

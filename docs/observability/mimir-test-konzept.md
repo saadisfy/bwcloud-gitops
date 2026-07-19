@@ -1037,8 +1037,8 @@ Die Plattform gilt als testseitig abnahmefähig, wenn folgende Kriterien erfüll
 
 | Artefakt | Speicherort | Status |
 |---|---|---|
-| Testkonzept | `docs/mimir-test-konzept.md` | ✅ vorhanden |
-| Ruler & Alerting Setup | `docs/mimir-ruler-alerting-setup.md` | ✅ vorhanden |
+| Testkonzept | `docs/observability/mimir-test-konzept.md` | ✅ vorhanden |
+| Ruler & Alerting Setup | `docs/alerting/mimir-ruler-alerting-setup.md` | ✅ vorhanden |
 | Pipeline-Health Alerts | `apps/mimir/prod/files/mimir/alerts-pipeline-health.yaml` | ⚠️ noch anlegen |
 | Scrape-Coverage Alerts | `apps/mimir/prod/files/mimir/alerts-scrape-coverage.yaml` | ⚠️ noch anlegen |
 | Ruler-Health Alerts | `apps/mimir/prod/files/mimir/alerts-ruler-health.yaml` | ⚠️ noch anlegen |

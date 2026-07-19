@@ -76,6 +76,6 @@ Die Testergebnisse des `@testframework` dienen als technischer Nachweis für den
 ---
  
 ## 6. Referenzen & Weiterführende Dokumente
-* **Operative Umsetzung:** [test-konzept-implementierung.md](./test-konzept-implementierung.md)
+* **Operative Umsetzung:** [TestImplementierung.md](./TestImplementierung.md)
 * **Testframework:** [README des @testframework](@testframework/README.md)
  

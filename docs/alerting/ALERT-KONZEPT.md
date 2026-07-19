@@ -775,9 +775,9 @@ Genau eine Notification-Plane für alle Alert-Typen.
 
 ## 8. Referenzen
 
-- `docs/alerting-plan.md` — Alert-Regelkatalog mit PromQL-Queries
-- `docs/OBSERVABILITY.md`
-- `docs/MIMIR.md`
+- `docs/alerting/alerting-plan.md` — Alert-Regelkatalog mit PromQL-Queries
+- `docs/observability/OBSERVABILITY.md`
+- `docs/observability/MIMIR.md`
 - `apps/grafana/noctua/values.yaml`
 - `apps/grafana/noctua/templates/`
 - `apps/crossplane/noctua/templates/mimir-alertmanager-config.yaml` — Test-Telegram-Receiver

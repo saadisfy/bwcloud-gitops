@@ -480,14 +480,13 @@ dependencies:
 
 Die technischen Implementierungs-Details für ArgoCD, Kargo und die Release Strategy sind in einer separaten Datei dokumentiert:
 
-➡️ **[ImplementationTODOs.md](./ImplementationTODOs.md)**
+➡️ **[Kargo and Argo CD integration](../platform/kargo-argocd-loesung_alternative.md)**
 
-Diese enthält:
-* ArgoCD ApplicationSet Konfiguration
+Diese enthält unter anderem:
+* Argo CD ApplicationSet Konfiguration
 * Kargo Stage Pipeline Setup
-* Semantic Versioning Implementation Details
-* Git Tagging Strategy und Automation
-* Helm Chart Versioning
+* GitOps promotion workflows
+* Helm chart versioning notes
 * Container Image Tagging
 * TTL Cleanup Mechanismus
 * Rollback Procedures

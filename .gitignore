@@ -16,3 +16,7 @@ untrack/
 # Local/customer-specific Codex skills - do not publish
 .agents/skills/dz-repo/
 
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
