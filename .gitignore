@@ -13,3 +13,6 @@ tools/mcp-argocd-k8s/node_modules/
 *.tgz
 
 untrack/
+# Local/customer-specific Codex skills - do not publish
+.agents/skills/dz-repo/
+
