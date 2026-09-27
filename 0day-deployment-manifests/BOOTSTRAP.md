@@ -19,22 +19,43 @@ cp 0day-deployment-manifests/app-admin-secrets.yaml.example 0day-deployment-mani
 kubectl apply -f 0day-deployment-manifests/app-admin-secrets.yaml
 ```
 
-## 3. Apply Root Application
-Create shared MinIO/S3 credentials before syncing MinIO, Loki, Mimir, or Tempo. The same Secret name is needed in each namespace because Kubernetes Secrets are namespace-scoped.
+## 3. Object storage for Mimir
+
+Loki and Tempo store on their own PVC and need nothing here. Mimir needs Azure
+Blob Storage: MinIO used to provide an in-cluster S3 endpoint for all three, but
+MinIO no longer publishes a publicly pullable container image, so it was removed.
+
+Create a storage account with the three containers, then put the credentials in
+the `mimir` namespace. The Mimir chart runs with `-config.expand-env=true`, so
+the values file resolves `${AZURE_STORAGE_ACCOUNT}` / `${AZURE_STORAGE_KEY}`
+from this Secret at startup.
 
 ```bash
-MINIO_ROOT_USER="REPLACE_WITH_ROTATED_USER"
-MINIO_ROOT_PASSWORD="$(openssl rand -base64 48)"
+RG="REPLACE_WITH_RESOURCE_GROUP"
+ACCOUNT="REPLACE_WITH_GLOBALLY_UNIQUE_NAME"   # 3-24 chars, lowercase letters and digits
 
-for namespace in minio loki mimir tempo; do
-  kubectl create namespace "${namespace}" --dry-run=client -o yaml | kubectl apply -f -
-  kubectl create secret generic minio-credentials \
-    -n "${namespace}" \
-    --from-literal=MINIO_ROOT_USER="${MINIO_ROOT_USER}" \
-    --from-literal=MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD}" \
-    --dry-run=client -o yaml | kubectl apply -f -
+az storage account create --name "${ACCOUNT}" --resource-group "${RG}" \
+  --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 \
+  --allow-blob-public-access false
+
+KEY="$(az storage account keys list --account-name "${ACCOUNT}" \
+  --resource-group "${RG}" --query '[0].value' -o tsv)"
+
+for container in mimir-blocks mimir-alertmanager mimir-ruler; do
+  az storage container create --name "${container}" \
+    --account-name "${ACCOUNT}" --account-key "${KEY}"
 done
+
+kubectl create namespace mimir --dry-run=client -o yaml | kubectl apply -f -
+kubectl create secret generic mimir-azure-storage \
+  -n mimir \
+  --from-literal=AZURE_STORAGE_ACCOUNT="${ACCOUNT}" \
+  --from-literal=AZURE_STORAGE_KEY="${KEY}" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
+
+Until this Secret exists, the `mimir` Application cannot become healthy and
+Alloy will keep retrying its metric pushes.
 
 If Kiali is enabled, rotate its login token signing key outside Git as well:
 

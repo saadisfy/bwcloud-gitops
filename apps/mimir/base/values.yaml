@@ -5,9 +5,12 @@
 mimir-distributed:
   fullnameOverride: mimir
   global:
+    # Azure Blob credentials. Created out of band, see
+    # 0day-deployment-manifests/BOOTSTRAP.md. The chart passes
+    # -config.expand-env=true, so ${...} below is resolved from these env vars.
     extraEnvFrom:
       - secretRef:
-          name: minio-credentials
+          name: mimir-azure-storage
     podAnnotations:
       reloader.stakater.com/auto: "true"
   metaMonitoring:
@@ -38,26 +41,22 @@ mimir-distributed:
       alertmanager:
         data_dir: /tmp/alertmanager-data
       blocks_storage:
-        backend: s3
-        s3:
-          endpoint: minio.minio.svc.cluster.local:9000
-          access_key_id: ${MINIO_ROOT_USER}
-          secret_access_key: ${MINIO_ROOT_PASSWORD}
-          insecure: true
-          bucket_name: mimir-blocks
+        backend: azure
+        azure:
+          account_name: ${AZURE_STORAGE_ACCOUNT}
+          account_key: ${AZURE_STORAGE_KEY}
+          container_name: mimir-blocks
       limits:
         compactor_blocks_retention_period: 24h
         max_global_series_per_user: 500000
         ruler_max_rules_per_rule_group: 100
         ruler_max_rule_groups_per_tenant: 100
       alertmanager_storage:
-        backend: s3
-        s3:
-          endpoint: minio.minio.svc.cluster.local:9000
-          access_key_id: ${MINIO_ROOT_USER}
-          secret_access_key: ${MINIO_ROOT_PASSWORD}
-          insecure: true
-          bucket_name: mimir-alertmanager
+        backend: azure
+        azure:
+          account_name: ${AZURE_STORAGE_ACCOUNT}
+          account_key: ${AZURE_STORAGE_KEY}
+          container_name: mimir-alertmanager
       compactor:
         data_dir: /data/compactor
       ingest_storage:
@@ -70,13 +69,11 @@ mimir-distributed:
       ruler:
         rule_path: /tmp/ruler-rules
       ruler_storage:
-        backend: s3
-        s3:
-          endpoint: minio.minio.svc.cluster.local:9000
-          access_key_id: ${MINIO_ROOT_USER}
-          secret_access_key: ${MINIO_ROOT_PASSWORD}
-          insecure: true
-          bucket_name: mimir-ruler
+        backend: azure
+        azure:
+          account_name: ${AZURE_STORAGE_ACCOUNT}
+          account_key: ${AZURE_STORAGE_KEY}
+          container_name: mimir-ruler
 
   alertmanager:
     replicas: 1
@@ -162,5 +159,8 @@ mimir-distributed:
   ruler:
     enabled: false
 
+  # The mimir-distributed chart bundles its own MinIO subchart. Keep it off:
+  # storage is Azure Blob (see structuredConfig above), and MinIO no longer
+  # publishes a publicly pullable image anyway.
   minio:
     enabled: false

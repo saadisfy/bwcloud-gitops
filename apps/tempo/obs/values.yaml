@@ -12,12 +12,6 @@ tempo:
     storageClassName: default
 
   tempo:
-    extraEnvFrom:
-      - secretRef:
-          name: minio-credentials
-    extraArgs:
-      config.expand-env: true
-
     reportingEnabled: false
 
     # Span metrics + service graph for Grafana Service Map / tracesToMetrics
@@ -38,16 +32,14 @@ tempo:
             - span-metrics
             - local-blocks
 
-    # Filesystem-based storage (Loki logic)
+    # Local filesystem storage on the Tempo PVC. The former S3 setup pointed at
+    # the in-cluster MinIO, which is gone (no publicly pullable image). This is
+    # also exactly what the running Tempo on this cluster already used.
     storage:
       trace:
-        backend: s3
-        s3:
-          bucket: tempo
-          endpoint: minio.minio.svc.cluster.local:9000
-          access_key: ${MINIO_ROOT_USER}
-          secret_key: ${MINIO_ROOT_PASSWORD}
-          insecure: true
+        backend: local
+        local:
+          path: /var/tempo/traces
         wal:
           path: /var/tempo/wal
     

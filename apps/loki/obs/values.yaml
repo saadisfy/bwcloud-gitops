@@ -1,20 +1,20 @@
 # Loki monolithic wrapper chart values for the obs cluster (PoC)
+#
+# Storage is the local filesystem on the SingleBinary PVC. The former S3 setup
+# pointed at the in-cluster MinIO, which is gone: MinIO no longer publishes a
+# publicly pullable container image, so the deployment could not start at all.
+# SingleBinary mode is designed for filesystem storage, so this is the native
+# configuration rather than a workaround.
 loki:
-  global:
-    extraEnvFrom:
-      - secretRef:
-          name: minio-credentials
   fullnameOverride: loki
   deploymentMode: SingleBinary
-  
+
   memberlist:
     service:
       publishNotReadyAddresses: true
-  
+
   singleBinary:
     replicas: 1
-    extraArgs:
-      - "-config.expand-env=true"
     persistence:
       enabled: true
       size: 5Gi
@@ -31,38 +31,27 @@ loki:
 
   loki:
     storage:
-      type: s3
-      bucketNames:
-        chunks: loki
-        ruler: loki
-        admin: loki
-      s3:
-        endpoint: minio.minio.svc.cluster.local:9000
-        accessKeyId: ${MINIO_ROOT_USER}
-        secretAccessKey: ${MINIO_ROOT_PASSWORD}
-        insecure: true
-        s3ForcePathStyle: true
+      type: filesystem
+    storage_config:
+      filesystem:
+        directory: /var/loki/chunks
 
     auth_enabled: false
     commonConfig:
       replication_factor: 1
-    
+      path_prefix: /var/loki
+
     rulerConfig:
       storage:
-        type: s3
-        s3:
-          bucketnames: loki
-          endpoint: minio.minio.svc.cluster.local:9000
-          access_key_id: ${MINIO_ROOT_USER}
-          secret_access_key: ${MINIO_ROOT_PASSWORD}
-          insecure: true
-          s3forcepathstyle: true
+        type: local
+        local:
+          directory: /var/loki/rules
 
     schemaConfig:
       configs:
         - from: "2024-01-01"
           store: tsdb
-          object_store: s3
+          object_store: filesystem
           schema: v13
           index:
             prefix: loki_index_
@@ -70,9 +59,9 @@ loki:
 
     limits_config:
       retention_period: 24h
-    
+
     compactor:
       retention_enabled: true
-      delete_request_store: s3
+      delete_request_store: filesystem
       retention_delete_delay: 2h
       retention_delete_worker_count: 15
