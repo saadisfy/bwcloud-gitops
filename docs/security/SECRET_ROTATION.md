@@ -33,25 +33,34 @@ Optional later hardening:
 - Rotate GitHub OAuth client secrets for `sso_argo` and `sso_grafana` even though they are no longer present in Git history.
 - Move runtime secrets to Sealed Secrets or External Secrets so bootstrap remains reproducible without committing raw credentials.
 
-## MinIO/S3 credentials
+## Mimir object storage credentials
 
-Create the same secret name in each namespace that needs S3 access:
+MinIO was removed (no publicly pullable image), and with it the shared
+`minio-credentials` secret. Loki and Tempo now store on their own PVC and hold
+no storage credentials at all. Only Mimir needs a rotation path.
+
+Rotate the Azure Storage account key and update the Secret:
 
 ```bash
-MINIO_ROOT_USER="REPLACE_WITH_ROTATED_USER"
-MINIO_ROOT_PASSWORD="$(openssl rand -base64 48)"
+RG="REPLACE_WITH_RESOURCE_GROUP"
+ACCOUNT="REPLACE_WITH_STORAGE_ACCOUNT"
 
-for namespace in minio loki mimir tempo; do
-  kubectl create namespace "${namespace}" --dry-run=client -o yaml | kubectl apply -f -
-  kubectl create secret generic minio-credentials \
-    -n "${namespace}" \
-    --from-literal=MINIO_ROOT_USER="${MINIO_ROOT_USER}" \
-    --from-literal=MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD}" \
-    --dry-run=client -o yaml | kubectl apply -f -
-done
+az storage account keys renew --account-name "${ACCOUNT}" \
+  --resource-group "${RG}" --key key1
+
+KEY="$(az storage account keys list --account-name "${ACCOUNT}" \
+  --resource-group "${RG}" --query '[0].value' -o tsv)"
+
+kubectl create secret generic mimir-azure-storage \
+  -n mimir \
+  --from-literal=AZURE_STORAGE_ACCOUNT="${ACCOUNT}" \
+  --from-literal=AZURE_STORAGE_KEY="${KEY}" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-After rotation, sync or restart MinIO, Loki, Mimir, and Tempo so they read the updated secret.
+Mimir pods carry the Reloader annotation, so they restart on their own once the
+Secret changes. Verify with `kubectl rollout status` on the Mimir StatefulSets
+if a component looks stuck.
 
 ## Kiali signing key
 

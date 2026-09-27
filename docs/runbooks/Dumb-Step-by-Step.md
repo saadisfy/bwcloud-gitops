@@ -8,7 +8,7 @@ Zusätzlich ist hier das technische Zielbild aus der `dev-observability`-Umgebun
 
 ## 📋 Ausgangslage
 * **Crossplane** ist bereits im Kubernetes-Cluster installiert.
-* **Mimir** ist installiert und speichert seine TSDB-Blöcke bereits erfolgreich in S3/MinIO.
+* **Mimir** speichert seine TSDB-Blöcke in Azure Blob Storage (vormals MinIO/S3, das entfernt wurde).
 * **Der Mimir Ruler** läuft aktuell mit dem Backend `local` und lädt seine Regeln über ein ConfigMap-Volume-Mount unter `/rules-storage`.
 * **Ziel:** Die Regeln sowie die Benachrichtigungskanäle (Alertmanager Config) sollen stattdessen über Crossplane provisioniert werden.
 
