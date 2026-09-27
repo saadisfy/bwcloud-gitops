@@ -1,6 +1,13 @@
 # Tempo monolithic values for the obs cluster (low resources)
 tempo:
   fullnameOverride: tempo
+
+  # The chart leaves the pod securityContext empty, so the PVC mounted at
+  # /var/tempo is owned by root and Tempo -- which runs non-root -- cannot
+  # create /var/tempo/traces. fsGroup makes the kubelet chown the volume to
+  # root:10001 with g+rwx and adds 10001 as a supplemental group.
+  securityContext:
+    fsGroup: 10001
   
   persistence:
     enabled: true
