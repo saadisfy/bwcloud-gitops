@@ -21,23 +21,24 @@ tempo:
   tempo:
     reportingEnabled: false
 
-    # Span metrics + service graph for Grafana Service Map / tracesToMetrics
+    # Span metrics + service graph for Grafana Service Map / tracesToMetrics.
+    #
+    # NOTE the schema: the MONOLITHIC tempo chart takes a single flat
+    # `remoteWriteUrl` string. The nested `storage.remote_write` list that the
+    # tempo-distributed chart uses is silently ignored here, which is why this
+    # generator was writing to the chart's default target
+    # (http://prometheus.monitoring:9090) instead of Mimir.
+    #
+    # Two things cannot be expressed through this chart's schema and are lost
+    # compared to the distributed setup:
+    #   - the X-Scope-OrgID header and send_exemplars on the remote write
+    #   - the `local-blocks` processor, which TraceQL metrics queries require
+    # The chart hardcodes the processor list to service-graphs + span-metrics
+    # whenever the generator is enabled. Restoring either means switching back
+    # to tempo-distributed or templating the config by hand.
     metricsGenerator:
       enabled: true
-      storage:
-        path: /var/tempo/generator/wal
-        remote_write:
-          - url: "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
-            headers:
-              X-Scope-OrgID: "1"
-            send_exemplars: true
-    overrides:
-      defaults:
-        metrics_generator:
-          processors:
-            - service-graphs
-            - span-metrics
-            - local-blocks
+      remoteWriteUrl: "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
 
     # Local filesystem storage on the Tempo PVC. The former S3 setup pointed at
     # the in-cluster MinIO, which is gone (no publicly pullable image). This is
