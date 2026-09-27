@@ -2,12 +2,27 @@
 base: {}
 istiod: {}
 
-# Kiali is disabled in apps/istio/base/values.yaml and enabled here, because it
-# needs cluster-specific backend endpoints.
+# Kiali: configuration is kept here but DISABLED pending a decision on the
+# session signing key.
+#
+# kiali-server 2.26 renders login_token.signing_key into the ConfigMap
+# `kiali` (config.yaml) and reads it from there -- NOT from the Secret
+# istio-system/kiali. Kiali refuses to start unless the key is exactly 16, 24
+# or 32 characters, so the "REPLACE_SIGNING_KEY" placeholder (19 chars) makes
+# the pod CrashLoopBackOff. The ignoreDifferences entry in appsets/obs/istio.yaml
+# targets the Secret's .data.signing_key and therefore has no effect on the
+# value Kiali actually uses.
+#
+# This never surfaced before because base sets enabled: false and the overlay
+# that enabled it was never synced on this cluster.
+#
+# Two ways forward, both needing a call:
+#   a) commit a valid 32-character key here -- it then lives in a PUBLIC repo,
+#      acceptable only while Kiali has no external exposure;
+#   b) switch auth.strategy to anonymous, dropping the need for a signing key,
+#      at the cost of Kiali having no login at all.
 kiali-server:
-  enabled: true
-  # Rotated manually. Do not store the real signing key in Git.
-  # The live value lives in the Secret istio-system/kiali.
+  enabled: false
   login_token:
     signing_key: "REPLACE_SIGNING_KEY"
   external_services:

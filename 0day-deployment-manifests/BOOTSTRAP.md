@@ -39,7 +39,9 @@ done
 If Kiali is enabled, rotate its login token signing key outside Git as well:
 
 ```bash
-KIALI_SIGNING_KEY="$(openssl rand -base64 48)"
+# Kiali accepts a signing key of exactly 16, 24 or 32 characters.
+# `openssl rand -base64 48` produces 64 characters and Kiali refuses to start with it.
+KIALI_SIGNING_KEY="$(openssl rand -hex 16)"   # 32 characters
 kubectl create secret generic kiali \
   -n istio-system \
   --from-literal=signing_key="${KIALI_SIGNING_KEY}" \
