@@ -168,7 +168,7 @@ Metriken (Mimir), Logs (Loki) und Traces (Tempo) sind in Grafana signalübergrei
 | Loki → Tempo | `derivedFields` auf Logzeilen | Loki-Datasource → Regex `trace_id`/`traceID` |
 | Tempo → Mimir | Tab **Metrics** (`tracesToMetrics`) + Dashboard-Link an Trace-ID | `apps/grafana/base/values.yaml` → Tempo `tracesToMetrics`, `correlations` |
 
-**Beispiel-App:** Spring Petclinic (`namespace: spring-petclinic`) mit OTel Java Auto-Instrumentation. OTLP-Endpoint: Alloy `alloy-kai-alloy-node.alloy:4318`. Exemplars: `OTEL_METRICS_EXEMPLAR_FILTER=always_on` in der Instrumentation-CR; Mimir braucht `max_global_exemplars_per_user > 0` (`apps/mimir/noctua/values.yaml`). Dashboard in Grafana: *Spring Petclinic / LGTM Correlation* (Ordner `Spring-Petclinic - Dashboards`, provisioniert via `apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json`).
+**Beispiel-App:** Spring Petclinic (`namespace: spring-petclinic`) mit OTel Java Auto-Instrumentation. OTLP-Endpoint: Alloy `alloy-kai-alloy-node.alloy:4318`. Exemplars: `OTEL_METRICS_EXEMPLAR_FILTER=always_on` in der Instrumentation-CR; Mimir braucht `max_global_exemplars_per_user > 0` (`apps/mimir/obs/values.yaml`). Dashboard in Grafana: *Spring Petclinic / LGTM Correlation* (Ordner `Spring-Petclinic - Dashboards`, provisioniert via `apps/grafana/obs/files/spring-petclinic/dashboards/correlation.json`).
 
 Ausführliche Erklärung: [ObservabilitySolutions/General/LGTM-Korrelation.md](../ObservabilitySolutions/General/LGTM-Korrelation.md).
 

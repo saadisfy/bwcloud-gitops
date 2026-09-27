@@ -5,7 +5,7 @@ Diese Doku beschreibt das bisherige `noctua-kai` Konzept auf Basis der Grafana `
 Der alte Ansatz liegt im Repo unter:
 
 ```text
-apps/alloy/noctua-kai/
+apps/alloy/experimental-kai/
 ```
 
 ## Grundidee
@@ -30,7 +30,7 @@ Das war der Grund, warum das Chart urspruenglich attraktiv war: viel Telemetry-F
 
 | Ebene | Beschreibung |
 | --- | --- |
-| Helm Values | `apps/alloy/noctua-kai/values.yaml` steuert die Chart. |
+| Helm Values | `apps/alloy/experimental-kai/values.yaml` steuert die Chart. |
 | `k8s-monitoring` Chart | Generiert Collector-, Feature- und Destination-Konfiguration. |
 | Alloy Operator | Erstellt/verwaltet Alloy CRs. |
 | Alloy CRs | `noctua-kai-alloy-node` und `noctua-kai-alloy-metrics`. |
@@ -168,7 +168,7 @@ Die neue Architektur uebernimmt das Telemetry-Set, aber nicht den Generator-Ansa
 
 | Altes Feature | Neuer Ort |
 | --- | --- |
-| Annotation Autodiscovery | `apps/alloy/noctua/files/alloy/annotation_autodiscovery_scrape.alloy` |
+| Annotation Autodiscovery | `apps/alloy/obs/files/alloy/annotation_autodiscovery_scrape.alloy` |
 | Kubelet `/metrics` | `kubelet_scrape.alloy` |
 | Kubelet `/metrics/resource` | `kubelet_resources_scrape.alloy` |
 | cAdvisor | `cadvisor_scrape.alloy` |

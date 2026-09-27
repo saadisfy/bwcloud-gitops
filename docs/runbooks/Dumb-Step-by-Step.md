@@ -107,7 +107,7 @@ Diese Punkte sind die eigentliche To-do-Liste für eine robuste Umsetzung:
 Weil Crossplane die Regeln über die HTTP-API in den Ruler schiebt, benötigt der Ruler Schreibrechte. Da der Container standardmäßig mit einem read-only Filesystem läuft, müssen wir ein beschriebenes Verzeichnis bereitstellen.
 
 ### 1.1 Mimir Values editieren
-Öffne die Datei `apps/mimir/noctua/values.yaml` (oder die entsprechende Datei für dein Environment `dev/values.yaml`) und passe den `ruler`-Bereich an:
+Öffne die Datei `apps/mimir/obs/values.yaml` (oder die entsprechende Datei für dein Environment `dev/values.yaml`) und passe den `ruler`-Bereich an:
 
 1. Ändere das `ruler_storage.backend` von `local` auf `filesystem`.
 2. Entferne den alten `persistentVolume`-Block unter `ruler` (dieser wird vom Upstream-Chart oft ignoriert) und erstelle stattdessen ein `emptyDir`-Volume via `extraVolumes` und `extraVolumeMounts`.
@@ -260,7 +260,7 @@ spec:
 
 ## 🛠️ Schritt 4: Rule-Dateien kopieren und Template erstellen
 
-Kopiere deine bestehenden Rule-Dateien aus deinem alten Mimir-Verzeichnis (z. B. `apps/mimir/noctua/files/...`) in das Verzeichnis `apps/alertprovider/files/...`.
+Kopiere deine bestehenden Rule-Dateien aus deinem alten Mimir-Verzeichnis (z. B. `apps/mimir/obs/files/...`) in das Verzeichnis `apps/alertprovider/files/...`.
 
 ### 4.1 Das Rule-Template schreiben
 Dieses Template generiert automatisch für jede YAML-Datei im `files/`-Ordner eine eigene Crossplane `Rules` Custom Resource. 
@@ -368,9 +368,9 @@ Bevor die Änderung gemerged wird, muss lokal geprüft werden, ob Helm wirklich 
 
 ```bash
 # Mimir-Konfiguration prüfen
-helm template apps/mimir/noctua \
+helm template apps/mimir/obs \
   -f apps/mimir/base/values.yaml \
-  -f apps/mimir/noctua/values.yaml \
+  -f apps/mimir/obs/values.yaml \
   | grep -nE "ruler_storage|rules-storage|alertmanager_url|backend: filesystem"
 
 # Alertprovider / Crossplane-Ressourcen prüfen

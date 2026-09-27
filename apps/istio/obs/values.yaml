@@ -1,0 +1,33 @@
+# Istio obs overrides
+base: {}
+istiod: {}
+
+# Kiali is disabled in apps/istio/base/values.yaml and enabled here, because it
+# needs cluster-specific backend endpoints.
+kiali-server:
+  enabled: true
+  # Rotated manually. Do not store the real signing key in Git.
+  # The live value lives in the Secret istio-system/kiali.
+  login_token:
+    signing_key: "REPLACE_SIGNING_KEY"
+  external_services:
+    prometheus:
+      enabled: true
+      # OTel demo Prometheus service running in this cluster.
+      url: "http://prometheus.opentelemetry-demo.svc.cluster.local:9090"
+    grafana:
+      enabled: true
+      # Kiali backend uses internal_url from inside the cluster.
+      internal_url: "http://grafana.grafana.svc.cluster.local"
+      # Browser links should use the external Grafana URL.
+      external_url: "https://grafana.saadisfy.me"
+    tracing:
+      enabled: true
+      provider: "tempo"
+      # Monolithic Tempo exposes its HTTP API on the `tempo` service, port 3100.
+      internal_url: "http://tempo.tempo.svc.cluster.local:3100"
+      use_grpc: false
+      # Links from Kiali should open in external Grafana Tempo UI.
+      external_url: "https://grafana.saadisfy.me"
+      tempo_config:
+        datasource_uid: "tempo"

@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: spring-petclinic
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - namespace: spring-petclinic
+  template:
+    metadata:
+      name: spring-petclinic
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/saadisfy/bwcloud-gitops.git
+        targetRevision: main
+        path: apps/spring-petclinic/obs
+        helm:
+          valueFiles:
+            - ../base/values.yaml
+            - values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true

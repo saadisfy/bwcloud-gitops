@@ -1,0 +1,48 @@
+# OpenTelemetry Demo obs overrides
+# The public ingress host (opentelemetry-demo.saadisfy.me) comes from
+# apps/opentelemetry-demo/base/values.yaml.
+
+mesh:
+  enabled: true
+  revision: default
+
+opentelemetry-demo:
+  default:
+    envOverrides:
+      # Forces a rollout so new pods get Istio sidecars after namespace mesh labeling.
+      - name: OTEL_DEMO_MESH
+        value: "enabled-with-istio"
+
+  # The demo's own collector is used as the trace pipeline into Tempo.
+  opentelemetry-collector:
+    enabled: true
+    mode: deployment
+    config:
+      exporters:
+        otlp/tempo:
+          # Monolithic Tempo: OTLP gRPC on the `tempo` service, port 4317.
+          endpoint: tempo.tempo.svc.cluster.local:4317
+          tls:
+            insecure: true
+      service:
+        pipelines:
+          traces:
+            exporters: [otlp/tempo, debug, spanmetrics]
+          logs:
+            exporters: [debug]
+
+  # Bundled backends are replaced by the platform's own LGTM stack.
+  jaeger:
+    enabled: false
+  opensearch:
+    enabled: false
+  grafana:
+    enabled: false
+
+  components:
+    kafka:
+      enabled: true
+    llm:
+      enabled: false
+    load-generator:
+      enabled: false

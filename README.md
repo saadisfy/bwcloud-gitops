@@ -20,10 +20,10 @@ This repository is a practical platform-engineering exercise in reducing operati
 
 ## 📂 Repository Structure
 
--   **`appsets/`**: Argo CD ApplicationSets (one per service). Managed by the Root App.
+-   **`appsets/obs/`**: Argo CD ApplicationSets (one per service). Managed by the Root App.
 -   **`apps/`**: Helm charts and stage-specific values.
-    -   `base/`: Common configuration shared across all environments.
-    -   `prod/`: Production overrides (primary focus).
+    -   `base/`: Common configuration shared by every app.
+    -   `obs/`: Cluster overrides for the `obs` AKS cluster (the only cluster).
 -   **`0day-deployment-manifests/`**: Templates for manual bootstrap (Secrets, Repo-Access). **See `BOOTSTRAP.md` inside this folder for setup instructions.**
 -   **`manifests/`**: Static Kubernetes manifests (e.g., Kargo Stages).
 
@@ -38,8 +38,6 @@ This repository is a practical platform-engineering exercise in reducing operati
 | **Alloy** | Telemetry Collection | (Internal Cluster DaemonSet) |
 | **Istio** | Service mesh control plane (no workloads meshed by default) | (Internal Cluster Control Plane) |
 | **Spring Petclinic** | Demo app (OTel auto-instrumentation, LGTM correlation example) | [spring-petclinic.saadisfy.me](https://spring-petclinic.saadisfy.me) |
-| **Kibana** | Log & search UI (Elasticsearch 8.5) | [kibana.saadisfy.me](https://kibana.saadisfy.me) |
-| **Elasticsearch** | Log/metric storage backend for Kibana | (Internal: `elasticsearch-master.elk`) |
 | **Cluster Priority** | PriorityClass objects for critical control-plane apps | (Internal Cluster Resources) |
 
 ## 🔐 Security & GitOps Decoupling
@@ -56,7 +54,6 @@ This repository is designed to be **public**. We use two mechanisms to keep it s
 -   **Dashboarding**: **Grafana Operator** manages dashboards and alerts as code via Custom Resources (CRs).
 -   **Correlation (LGTM):** Mimir exemplars → Tempo, Tempo → Loki (`trace_id`), Loki derived fields → Tempo. Demo app: Spring Petclinic. Dashboard: *Spring Petclinic / LGTM Correlation* in Grafana. Details: [General/LGTM-Correlation.md](docs/ObservabilitySolutions/General/LGTM-Korrelation.md).
 -   **Auto-Reload**: **Stakater Reloader** monitors Secrets and ConfigMaps to trigger zero-downtime rolling restarts on changes.
--   **ELK (Elasticsearch + Kibana)**: Official Elastic Helm charts (8.5.1) in namespace `elk`. Elasticsearch deploys first (Argo CD sync-wave 1); a post-install hook bootstraps the native security realm (`.security-7`) before Kibana (sync-wave 2) creates its service-account token. **SSO**: GitHub via Argo CD Dex (OIDC), reusing the same GitHub connector as Argo CD. `saadisfy` is mapped to superuser access, all other users to viewer access. Fallback login uses the `elastic` user and the password from `elasticsearch-master-credentials`. Secrets are referenced through `0day-deployment-manifests/grafana-secrets.yaml` (`kibana-oidc` for Dex, `kibana-oidc-credentials` for the Elasticsearch keystore).
 
 ## 🔄 Promotion Workflow (Kargo)
 

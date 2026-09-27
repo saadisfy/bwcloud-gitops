@@ -21,7 +21,7 @@ Im Ordner `tools/mcp-argocd-k8s`:
 
 ## Optionale Umgebungsvariablen
 
-- `KUBE_CONTEXT` (default: `noctua-k3s`)
+- `KUBE_CONTEXT` (default: `obs`)
 - `ARGOCD_SERVER` (z. B. `argocd.saadisfy.me`)
 - `ARGOCD_AUTH_TOKEN` (ArgoCD API Token)
 - `ARGOCD_GRPC_WEB` (`true`/`false`, default `true`)

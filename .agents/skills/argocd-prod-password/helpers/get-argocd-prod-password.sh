@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROD_CONTEXT="noctua-k3s"
+PROD_CONTEXT="obs"
 NAMESPACE="argocd"
 PRIMARY_SECRET="argocd-initial-admin-secret"
 PASSWORD_KEY="password"

@@ -1,0 +1,69 @@
+# Tempo monolithic values for the obs cluster (low resources)
+tempo:
+  fullnameOverride: tempo
+  
+  persistence:
+    enabled: true
+    size: 5Gi
+    # The monolithic tempo chart reads persistence.storageClassName -- a plain
+    # `storageClass` key here is silently ignored. It only ever appeared to work
+    # on the old k3s host because local-path was the default StorageClass there.
+    # AKS default StorageClass is "default" (disk.csi.azure.com).
+    storageClassName: default
+
+  tempo:
+    extraEnvFrom:
+      - secretRef:
+          name: minio-credentials
+    extraArgs:
+      config.expand-env: true
+
+    reportingEnabled: false
+
+    # Span metrics + service graph for Grafana Service Map / tracesToMetrics
+    metricsGenerator:
+      enabled: true
+      storage:
+        path: /var/tempo/generator/wal
+        remote_write:
+          - url: "http://mimir-distributor.mimir.svc.cluster.local:8080/api/v1/push"
+            headers:
+              X-Scope-OrgID: "1"
+            send_exemplars: true
+    overrides:
+      defaults:
+        metrics_generator:
+          processors:
+            - service-graphs
+            - span-metrics
+            - local-blocks
+
+    # Filesystem-based storage (Loki logic)
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: tempo
+          endpoint: minio.minio.svc.cluster.local:9000
+          access_key: ${MINIO_ROOT_USER}
+          secret_key: ${MINIO_ROOT_PASSWORD}
+          insecure: true
+        wal:
+          path: /var/tempo/wal
+    
+    # OTLP support is the baseline requirement
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+  # Minimal resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

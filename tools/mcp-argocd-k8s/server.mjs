@@ -6,7 +6,7 @@ import { z } from "zod";
 
 const execFileAsync = promisify(execFile);
 
-const DEFAULT_KUBE_CONTEXT = process.env.KUBE_CONTEXT || "noctua-k3s";
+const DEFAULT_KUBE_CONTEXT = process.env.KUBE_CONTEXT || "obs";
 const DEFAULT_TIMEOUT_MS = Number(process.env.MCP_COMMAND_TIMEOUT_MS || 20000);
 const ARGOCD_SERVER = process.env.ARGOCD_SERVER || "";
 const ARGOCD_AUTH_TOKEN = process.env.ARGOCD_AUTH_TOKEN || "";

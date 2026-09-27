@@ -82,7 +82,7 @@ set(attributes["job"], "kubelet")
 
 ## 5. Praxisbeispiele aus unserer Gateway-Pipeline
 
-Unsere Gateway-Konfiguration in [values.yaml](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/apps/alloy/noctua-kai/values.yaml) nutzt OTTL in zwei verschiedenen Phasen:
+Unsere Gateway-Konfiguration in [values.yaml](file:///Users/saad.masood/Documents/Git/bwcloud-gitops/apps/alloy/experimental-kai/values.yaml) nutzt OTTL in zwei verschiedenen Phasen:
 
 ### Phase 1: Metadaten-Promotion (`promote_meta`)
 Da der Scraper alle Metriken in einer einzigen OTel-Ressource bündelt, nutzen wir zuerst `groupbyattrs`, um die Metriken nach Ziel-Pods aufzuteilen. Danach läuft `promote_meta` im **Ressourcen-Kontext**, um die Pfade für die K8s-Anreicherung vorzubereiten:

@@ -11,7 +11,7 @@ It also contains the current implementation details for our cluster (`noctua`).
 
 ### Aktueller Stand
 
-- Istio wird als Wrapper-Chart aus `base` + `istiod` deployed (`apps/istio/noctua/Chart.yaml`).
+- Istio wird als Wrapper-Chart aus `base` + `istiod` deployed (`apps/istio/obs/Chart.yaml`).
 - **Ingress:** Der Cluster wurde von Nginx Ingress auf die moderne **Kubernetes Gateway API** mit Istio umgestellt.
 - **Gateway:** Ein zentrales `main-gateway` im Namespace `istio-system` verwaltet den eingehenden Traffic auf der öffentlichen IP `193.196.39.79`.
 - **TLS:** Ein Multi-Domain (SAN) Zertifikat (`main-gateway-tls`) sichert alle produktiven Hostnames ab.

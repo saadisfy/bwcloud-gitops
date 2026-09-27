@@ -61,7 +61,7 @@ So kann man von einem Trace zu Pod-Ressourcen (CPU, Memory, Restarts) in den Kub
 
 ### 2.4 Umgebung und Version
 
-- **`deployment.environment.name`**: z. B. `noctua` – trennt Stages in Queries.
+- **`deployment.environment.name`**: z. B. `obs` – trennt Stages in Queries.
 - **`service.version`**: Image-Tag – hilft bei Rollout-Vergleichen.
 
 ---
@@ -97,7 +97,7 @@ Zwei **klickbare** Rückwege — konfiguriert in [`apps/grafana/base/values.yaml
 | Rückweg | Wo klicken? | Was passiert |
 | :--- | :--- | :--- |
 | **Trace → Metrics** | Im Trace: Tab **Metrics** (Related metrics) | Mimir-Queries für Request Rate, JVM, Pod CPU — gefiltert per `k8s.pod.name` / `k8s.namespace.name` aus dem Span (`tracesToMetrics`) |
-| **Trace → Dashboard** | Im Trace: Link **Spring Petclinic / LGTM Dashboard** an der **Trace-ID** | Öffnet [`spring-petclinic-correlation`](../../../apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json) mit `var-pod`, `var-namespace`, Zeitraum aus dem Trace |
+| **Trace → Dashboard** | Im Trace: Link **Spring Petclinic / LGTM Dashboard** an der **Trace-ID** | Öffnet [`spring-petclinic-correlation`](../../../apps/grafana/obs/files/spring-petclinic/dashboards/correlation.json) mit `var-pod`, `var-namespace`, Zeitraum aus dem Trace |
 
 **Voraussetzung:** Spans tragen OTel-Resource-Attribute `k8s.pod.name` und `k8s.namespace.name` (Java Auto-Instrumentation setzt diese). Das Dashboard filtert RED/JVM-Panels mit `pod=~"$pod"`.
 
@@ -183,18 +183,18 @@ flowchart LR
 
 | Was setzen? | Wert (Noctua) | Komponente | GitOps-Datei |
 | :--- | :--- | :--- | :--- |
-| `OTEL_METRICS_EXEMPLAR_FILTER` | `always_on` | OTel Operator / Java Agent | [`apps/otel-operator/noctua/templates/instrumentation-java.yaml`](../../../apps/otel-operator/noctua/templates/instrumentation-java.yaml) |
+| `OTEL_METRICS_EXEMPLAR_FILTER` | `always_on` | OTel Operator / Java Agent | [`apps/otel-operator/obs/templates/instrumentation-java.yaml`](../../../apps/otel-operator/obs/templates/instrumentation-java.yaml) |
 | `OTEL_TRACES_SAMPLER` | `always_on` | OTel Operator / Java Agent | dieselbe Datei |
 | `OTEL_METRICS_EXPORTER` | `otlp` | OTel Operator / Java Agent | dieselbe Datei |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://alloy-kai-alloy-node.alloy.svc.cluster.local:4318` | OTel Operator / Java Agent | [`apps/otel-operator/noctua/values.yaml`](../../../apps/otel-operator/noctua/values.yaml) → `otlpGateway.endpoint` |
-| Metrics-Export-Pfad | `otelcol.exporter.prometheus` + `prometheus.remote_write` | Alloy | [`apps/alloy/noctua-kai/values.yaml`](../../../apps/alloy/noctua-kai/values.yaml) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://alloy-kai-alloy-node.alloy.svc.cluster.local:4318` | OTel Operator / Java Agent | [`apps/otel-operator/obs/values.yaml`](../../../apps/otel-operator/obs/values.yaml) → `otlpGateway.endpoint` |
+| Metrics-Export-Pfad | `otelcol.exporter.prometheus` + `prometheus.remote_write` | Alloy | [`apps/alloy/experimental-kai/values.yaml`](../../../apps/alloy/experimental-kai/values.yaml) |
 | `send_exemplars` | `true` | Alloy → Mimir | dieselbe Datei (`prometheus.remote_write "mimir"`) |
 | `X-Scope-OrgID` | `"1"` | Alloy → Mimir | dieselbe Datei (Remote-Write-Header) |
-| `max_global_exemplars_per_user` | `100000` | Mimir | [`apps/mimir/noctua/values.yaml`](../../../apps/mimir/noctua/values.yaml) |
+| `max_global_exemplars_per_user` | `100000` | Mimir | [`apps/mimir/obs/values.yaml`](../../../apps/mimir/obs/values.yaml) |
 | `ignore_ooo_exemplars` | `true` | Mimir | dieselbe Datei |
 | `out_of_order_time_window` | `5m` | Mimir | dieselbe Datei |
 | `exemplarTraceIdDestinations` | `trace_id` / `traceID` → Tempo | Grafana Datasource | [`apps/grafana/base/values.yaml`](../../../apps/grafana/base/values.yaml) |
-| `"exemplar": true` | pro Panel-Target | Grafana Dashboard | [`apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json`](../../../apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json) |
+| `"exemplar": true` | pro Panel-Target | Grafana Dashboard | [`apps/grafana/obs/files/spring-petclinic/dashboards/correlation.json`](../../../apps/grafana/obs/files/spring-petclinic/dashboards/correlation.json) |
 
 **Nach Änderungen an der Instrumentation-CR:** App-Pod neu starten (`kubectl rollout restart deployment/spring-petclinic -n spring-petclinic`), sonst läuft der alte Agent mit alten Env-Variablen weiter.
 
@@ -202,7 +202,7 @@ flowchart LR
 
 ### 5.3 Schicht 1 — Java Agent (Instrumentation CR)
 
-**Datei:** `apps/otel-operator/noctua/templates/instrumentation-java.yaml`
+**Datei:** `apps/otel-operator/obs/templates/instrumentation-java.yaml`
 
 Der Agent hängt bei Histogram-Metriken (z. B. HTTP-Latenz) optional eine **Trace-ID** als Exemplar an. Ohne diese Env-Variablen kommen **keine** Exemplars aus der App.
 
@@ -236,7 +236,7 @@ kubectl exec -n spring-petclinic deploy/spring-petclinic -- env | grep OTEL_METR
 
 ### 5.4 Schicht 2 — Alloy (Collector)
 
-**Datei:** `apps/alloy/noctua-kai/values.yaml`
+**Datei:** `apps/alloy/experimental-kai/values.yaml`
 
 Alloy empfängt OTLP von der App (`applicationObservability` auf `alloy-node`) und leitet Metriken an Mimir weiter. **Wichtig:** Der direkte OTLP-HTTP-Pfad nach Mimir (`/otlp`) ist für Exemplars **ungeeignet** — Mimir verwirft sie mit Grund `exemplar_labels_missing` (leere `{}`-Labels, keine `trace_id`).
 
@@ -278,7 +278,7 @@ prometheus.remote_write "mimir" {
 
 ### 5.5 Schicht 3 — Mimir (Speicher)
 
-**Datei:** `apps/mimir/noctua/values.yaml`
+**Datei:** `apps/mimir/obs/values.yaml`
 
 Mimir speichert Exemplars **standardmäßig nicht**. Der Default `max_global_exemplars_per_user: 0` bedeutet: **Speicher aus**. Dann sieht man in Metriken zwar `cortex_distributor_exemplars_in_total > 0`, aber `cortex_distributor_received_exemplars_total` bleibt **0** und Grafana zeigt keine Marker.
 
@@ -336,7 +336,7 @@ jsonData:
       name: trace_id      # Label-Name aus Mimir-Exemplars
 ```
 
-**Dashboard:** `apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json`
+**Dashboard:** `apps/grafana/obs/files/spring-petclinic/dashboards/correlation.json`
 
 Jedes Prometheus-Target im Latenz-Panel braucht `"exemplar": true`. Zusätzlich ein **verstecktes** Bucket-Query (`refId: C`), damit Grafana Exemplars für die Histogram-Serie laden kann:
 
@@ -363,9 +363,9 @@ Jedes Prometheus-Target im Latenz-Panel braucht `"exemplar": true`. Zusätzlich 
 | Symptom | Wahrscheinliche Ursache | Wo nachsehen |
 | :--- | :--- | :--- |
 | Keine Diamant-Marker in Grafana | Panel ohne `exemplar: true` oder Dashboard nicht synced | `correlation.json`, Argo CD App `grafana` |
-| Metriken OK, Traces OK, keine Marker | `max_global_exemplars_per_user: 0` (Default) | `apps/mimir/noctua/values.yaml` |
+| Metriken OK, Traces OK, keine Marker | `max_global_exemplars_per_user: 0` (Default) | `apps/mimir/obs/values.yaml` |
 | `exemplars_in > 0`, `received = 0` | Exemplar-Speicher aus **oder** leere Exemplar-Labels (OTLP-Pfad) | Mimir-Limits + Alloy Remote Write |
-| `exemplar_labels_missing` in Discards | Metriken via OTLP/HTTP nach Mimir statt Remote Write | `apps/alloy/noctua-kai/values.yaml` |
+| `exemplar_labels_missing` in Discards | Metriken via OTLP/HTTP nach Mimir statt Remote Write | `apps/alloy/experimental-kai/values.yaml` |
 | Pod hat `trace_based`, CR sagt `always_on` | Instrumentation geändert, Pod nicht neu gestartet | `kubectl rollout restart …` |
 | Marker da, Klick öffnet kein Tempo | `exemplarTraceIdDestinations` fehlt / falsches Label | `apps/grafana/base/values.yaml` |
 
@@ -460,7 +460,7 @@ Labels für Filter: `job=~"spring-petclinic.*"` (Wert z. B. `spring-petclinic/
 
 ## 10. Das erweiterte Korrelations-Dashboard (Noctua Edition)
 
-Um den praktischen Nutzen bei der Fehlersuche drastisch zu steigern, wurde das Dashboard [`spring-petclinic-correlation`](../../../apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json) um tiefere Analyse-Ebenen erweitert. Dadurch entfällt das manuelle Wechseln in generische Infrastruktur-Dashboards.
+Um den praktischen Nutzen bei der Fehlersuche drastisch zu steigern, wurde das Dashboard [`spring-petclinic-correlation`](../../../apps/grafana/obs/files/spring-petclinic/dashboards/correlation.json) um tiefere Analyse-Ebenen erweitert. Dadurch entfällt das manuelle Wechseln in generische Infrastruktur-Dashboards.
 
 ### 10.1 Neue Analyse-Panels
 
@@ -499,7 +499,7 @@ Bei der Entwicklung des Dashboards wurde ein schwerer Kubernetes-Konfigurationsf
 ## 11. Weiterführende Docs in diesem Repo
 
 - [Observability Guide](../../observability/OBSERVABILITY.md) – Alloy-Pipeline, Label-Strategie
-- [Alloy noctua-kai README](../../../apps/alloy/noctua-kai/README.md) – Dual Semantics, Log-Deduplication
+- [Alloy experimental-kai README](../../../apps/alloy/experimental-kai/README.md) – Dual Semantics, Log-Deduplication
 - [Grafana Datasources](../../../apps/grafana/base/values.yaml) – Exemplars, derivedFields, tracesToLogs
 - [Design & Stack-Vergleich](../Design.md) – LGTM vs. ELK vs. Datadog
 

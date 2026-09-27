@@ -1,0 +1,8 @@
+apiVersion: v2
+name: gateway-api-crds-obs
+description: Gateway API CRDs for the obs cluster
+version: 0.1.0
+dependencies:
+  - name: gateway-api-crds
+    version: 0.1.0
+    repository: "file://../base"

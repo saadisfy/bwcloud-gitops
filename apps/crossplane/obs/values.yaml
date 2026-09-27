@@ -1,0 +1,9 @@
+# Crossplane configuration for the obs cluster
+crossplane:
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi

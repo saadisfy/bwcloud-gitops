@@ -1,0 +1,138 @@
+# Argo CD prod – alle gewünschten Argo-CD-Konfigurationen (Repositories etc.)
+# Git-Repo mit Token: separat über 0day-deployment-manifests/argocd-repo-bwcloud-gitops.yaml anwenden (nicht hier, Token nicht ins Git).
+argo-cd:
+  global:
+    domain: argocd.saadisfy.me
+  
+  # Enable metrics and ServiceMonitors for all components
+  controller:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  dex:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  redis:
+    exporter:
+      enabled: true
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  repoServer:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  applicationSet:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  notifications:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+  # Der redis-secret-init Helm-Hook Job generiert beim Erst-Install den
+  # `argocd-redis` Secret. Bei jedem Self-Sync danach läuft er erneut als
+  # PreSync-Hook, hat `ttlSecondsAfterFinished: 60` und wird prompt vom
+  # Job-Controller gelöscht. Wenn der `application-controller` selbst während
+  # des Syncs neu rollt (was beim Self-Sync passiert), verpasst er das
+  # Completion-Event und hängt danach ewig auf
+  # "waiting for completion of hook batch/Job/argocd-redis-secret-init".
+  # Der Secret existiert seit Erst-Install (2026-01-30), muss also nie wieder
+  # regeneriert werden → Job komplett deaktivieren.
+  redisSecretInit:
+    enabled: false
+  server:
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      hosts:
+        - argocd.saadisfy.me
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+      tls:
+        - secretName: argocd-tls
+          hosts:
+            - argocd.saadisfy.me
+  configs:
+    cm:
+      # Dedizierter API-Account für MCP-Nutzung (kein UI-Login).
+      accounts.mcp: apiKey
+      accounts.mcp.enabled: "true"
+      # GitHub SSO via built-in Dex. Client ID/Secret werden aus dem
+      # Secret `argocd-github-oauth` (Namespace argocd, Label
+      # app.kubernetes.io/part-of=argocd) per `$<secret>:<key>` interpoliert.
+      # Secret stammt aus 0day-deployment-manifests/grafana-secrets.yaml (gitignored).
+      url: https://argocd.saadisfy.me
+      dex.config: |
+        connectors:
+          - type: github
+            id: github
+            name: GitHub
+            config:
+              clientID: $argocd-github-oauth:clientID
+              clientSecret: $argocd-github-oauth:clientSecret
+              # Kein orgs:-Filter -> jeder GitHub-User darf sich anmelden.
+              # Berechtigungen werden ausschließlich über RBAC unten gesteuert.
+              # GitHub-Login statt E-Mail als User-ID verwenden. Sonst schlägt
+              # der Login fehl, wenn der User keine verifizierte/öffentliche
+              # primäre E-Mail hat ("github: user has no verified, primary email").
+              # Die RBAC-Regel `g, saadisfy, role:admin` matched dann direkt auf
+              # den GitHub-Username.
+              useLoginAsID: true
+      # UI-/CLI-Session-Lebensdauer: 30 Tage, damit ein Pod-Roll (Self-Sync von
+      # Argo CD) oder das Default-24h-TTL einen nicht ständig ausloggt.
+      users.session.duration: 720h
+    params:
+      server.insecure: true
+    rbac:
+      # Default-Rolle für alle authentifizierten Nutzer (inkl. SSO):
+      # readonly = nur `get` auf alle Ressourcen, kein sync/refresh/override/etc.
+      policy.default: role:readonly
+      # Nur mein eigener GitHub-Login bekommt Admin. Alle anderen GitHub-User
+      # bleiben bei policy.default = role:readonly (absolutes Minimum).
+      # Die mcp-Rolle bleibt für den lokalen API-Account erhalten.
+      scopes: "[preferred_username, email, groups]"
+      policy.csv: |
+        p, role:mcp, applications, get, */*, allow
+        p, role:mcp, applications, sync, */*, allow
+        p, role:mcp, projects, get, *, allow
+        g, mcp, role:mcp
+        g, saadisfy, role:admin
+    secret:
+      # Argo CD main secret (argocd-secret).
+      # The admin password hash is managed outside of Git.
+      # ignoreDifferences in ApplicationSet prevents Argo CD from overwriting the manual password.
+      createSecret: true
+      argocdServerAdminPassword: "PLACEHOLDER_MANAGED_OUTSIDE_GIT"
+      argocdServerAdminPasswordMtime: "2026-04-18T21:30:00Z"
+    repositories:
+      # Public Helm-Repos für Wrapper-Chart-Dependencies
+      repo-grafana-helm:
+        type: helm
+        name: grafana
+        url: https://grafana.github.io/helm-charts
+      repo-open-telemetry-helm:
+        type: helm
+        name: open-telemetry
+        url: https://open-telemetry.github.io/opentelemetry-helm-charts
+      repo-argo-helm:
+        type: helm
+        name: argo
+        url: https://argoproj.github.io/argo-helm
+      repo-stakater-helm:
+        type: helm
+        name: stakater
+        url: https://stakater.github.io/stakater-charts

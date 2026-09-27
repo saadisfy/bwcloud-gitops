@@ -9,7 +9,7 @@ Konkrete GitOps-Änderungen für die offenen Punkte. Basiert auf Skills:
 
 **Problem:** Alloy filtert stdout-Logs für OTel-injizierte Pods (`otel_injected != nil`), aber `OTEL_LOGS_EXPORTER=none` → keine Logs in Loki.
 
-**Datei:** [`apps/otel-operator/noctua/templates/instrumentation-java.yaml`](../../../apps/otel-operator/noctua/templates/instrumentation-java.yaml)
+**Datei:** [`apps/otel-operator/obs/templates/instrumentation-java.yaml`](../../../apps/otel-operator/obs/templates/instrumentation-java.yaml)
 
 ```yaml
 spec:
@@ -24,7 +24,7 @@ spec:
       value: "true"
   resource:
     resourceAttributes:
-      deployment.environment.name: noctua
+      deployment.environment.name: obs
 ```
 
 ---
@@ -33,14 +33,14 @@ spec:
 
 **Ziel:** Spring Petclinic (und andere OTel-injizierte Apps) senden OTLP an **Grafana Alloy** (`applicationObservability` auf `alloy-node`), nicht an den separaten `otel-collector`.
 
-**Datei:** [`apps/otel-operator/noctua/values.yaml`](../../../apps/otel-operator/noctua/values.yaml)
+**Datei:** [`apps/otel-operator/obs/values.yaml`](../../../apps/otel-operator/obs/values.yaml)
 
 ```yaml
 otlpGateway:
   endpoint: http://alloy-kai-alloy-node.alloy.svc.cluster.local:4318
 ```
 
-**Datei:** [`apps/otel-operator/noctua/templates/instrumentation-java.yaml`](../../../apps/otel-operator/noctua/templates/instrumentation-java.yaml)
+**Datei:** [`apps/otel-operator/obs/templates/instrumentation-java.yaml`](../../../apps/otel-operator/obs/templates/instrumentation-java.yaml)
 
 ```yaml
     - name: OTEL_METRICS_EXEMPLAR_FILTER
@@ -49,7 +49,7 @@ otlpGateway:
     endpoint: {{ .Values.otlpGateway.endpoint | quote }}
 ```
 
-**Alloy (bereits aktiv):** `apps/alloy/noctua-kai/values.yaml` → `applicationObservability.enabled: true` — OTLP `:4317`/`:4318` auf `alloy-node`, Weiterleitung Metrics→Mimir, Logs→Loki, Traces→Tempo. Exemplars werden im OTLP-Metrics-Pfad durchgereicht; **kein** extra Alloy-Block nötig.
+**Alloy (bereits aktiv):** `apps/alloy/experimental-kai/values.yaml` → `applicationObservability.enabled: true` — OTLP `:4317`/`:4318` auf `alloy-node`, Weiterleitung Metrics→Mimir, Logs→Loki, Traces→Tempo. Exemplars werden im OTLP-Metrics-Pfad durchgereicht; **kein** extra Alloy-Block nötig.
 
 **Nach Deploy:** `kubectl rollout restart deployment/spring-petclinic -n spring-petclinic`
 
@@ -67,7 +67,7 @@ curl -sG -H "X-Scope-OrgID: 1" \
 
 ## 2. OTel Collector: Logs-Pipeline → Loki (optional/Labor)
 
-**Datei:** [`apps/otel-operator/noctua/templates/open-telemetry-collector.yaml`](../../../apps/otel-operator/noctua/templates/open-telemetry-collector.yaml)
+**Datei:** [`apps/otel-operator/obs/templates/open-telemetry-collector.yaml`](../../../apps/otel-operator/obs/templates/open-telemetry-collector.yaml)
 
 Exporter und Pipeline ergänzen:
 
@@ -106,7 +106,7 @@ OTLP-Logs enthalten `trace_id`/`span_id` nativ → Loki derivedFields + Tempo tr
 
 ## 3. Spring Petclinic: Resource-Attribute
 
-**Datei:** [`apps/spring-petclinic/noctua/templates/deployment.yaml`](../../../apps/spring-petclinic/noctua/templates/deployment.yaml)
+**Datei:** [`apps/spring-petclinic/obs/templates/deployment.yaml`](../../../apps/spring-petclinic/obs/templates/deployment.yaml)
 
 Pod-Template-Annotations ergänzen:
 
@@ -114,7 +114,7 @@ Pod-Template-Annotations ergänzen:
         resource.opentelemetry.io/service.name: "spring-petclinic"
         resource.opentelemetry.io/service.namespace: "spring-petclinic"
         resource.opentelemetry.io/service.version: "{{ .Values.image.tag }}"
-        resource.opentelemetry.io/deployment.environment.name: "noctua"
+        resource.opentelemetry.io/deployment.environment.name: "obs"
 ```
 
 Erwartete Mimir-Labels nach Alloy/Collector: `job=spring-petclinic`, `namespace=spring-petclinic`, `pod=…`, `cluster=prod-bwcloud`.
@@ -123,7 +123,7 @@ Erwartete Mimir-Labels nach Alloy/Collector: `job=spring-petclinic`, `namespace=
 
 ## 4. Tempo Metrics Generator → Mimir (Service Map)
 
-**Datei:** [`apps/tempo/noctua/values.yaml`](../../../apps/tempo/noctua/values.yaml)
+**Datei:** [`apps/tempo/obs/values.yaml`](../../../apps/tempo/obs/values.yaml)
 
 Unter `tempo:` (monolithischer Chart 1.10.1):
 
@@ -165,7 +165,7 @@ Tempo-Block ergänzen:
 
 ## 6. Spring-Petclinic Korrelations-Dashboard
 
-**Neue Datei:** `apps/grafana/noctua/files/spring-petclinic/dashboards/correlation.json`
+**Neue Datei:** `apps/grafana/obs/files/spring-petclinic/dashboards/correlation.json`
 
 **Ordner:** wird automatisch als GrafanaFolder `Spring-Petclinic` provisioniert (Operator-Template).
 

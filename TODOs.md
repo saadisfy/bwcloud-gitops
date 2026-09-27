@@ -31,8 +31,6 @@
      - `grafana/grafana-secrets`: Grafana GitHub SSO, SMTP, and Telegram
        notification settings.
      - `argocd/argocd-github-oauth`: Argo CD GitHub SSO settings.
-     - `argocd/kibana-oidc` and `elk/kibana-oidc-credentials`: Kibana OIDC
-       client secret if Kibana SSO remains enabled.
      - Kargo Git writeback credentials only if promotion workflows need to push
        commits back to Git.
    - Remove obsolete gitignored local secret manifests and `.example` templates

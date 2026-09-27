@@ -54,7 +54,7 @@ Wichtig: `k8s_cluster_name`, `service` und `namespace` sind auf den Time Series 
 
 ### Grafana Notification Policy
 
-In `apps/grafana/noctua/values.yaml` existiert aktuell nur ein technischer Platzhalter:
+In `apps/grafana/obs/values.yaml` existiert aktuell nur ein technischer Platzhalter:
 
 - ein Contact Point `default-contact-point` mit `dummy@example.com`
 - eine Root-Policy, die alles an `default-contact-point` routet
@@ -464,7 +464,7 @@ Empfehlung:
 
 ### Contact Points
 
-Wenn der Mimir Alertmanager als zentraler Notification-Plane genutzt wird, werden die produktiven Contact Points primär in der **Mimir Alertmanager Config** definiert. Die bestehenden `grafanaOperatorCRs.contactPoints[]` in `apps/grafana/noctua/values.yaml` bleiben nur relevant, wenn Grafanas interner Alertmanager weiterhin produktiv benachrichtigen soll.
+Wenn der Mimir Alertmanager als zentraler Notification-Plane genutzt wird, werden die produktiven Contact Points primär in der **Mimir Alertmanager Config** definiert. Die bestehenden `grafanaOperatorCRs.contactPoints[]` in `apps/grafana/obs/values.yaml` bleiben nur relevant, wenn Grafanas interner Alertmanager weiterhin produktiv benachrichtigen soll.
 
 Empfehlung:
 
@@ -794,7 +794,7 @@ Pfad:
 
 - Contact Points: `grafanaOperatorCRs.contactPoints[]`
 - Policy: `grafanaOperatorCRs.notificationPolicies[]`
-- Datei: `apps/grafana/noctua/values.yaml`
+- Datei: `apps/grafana/obs/values.yaml`
 
 Diese Konfiguration ist nur dann produktiv zuständig, wenn Grafana-managed Alerts nicht an Mimir Alertmanager weitergeleitet werden. Im bevorzugten Zielbild ist sie Fallback/No-op.
 
@@ -803,12 +803,12 @@ Diese Konfiguration ist nur dann produktiv zuständig, wenn Grafana-managed Aler
 Pfad:
 
 - zunächst: `mimir-distributed.alertmanager.fallbackConfig`
-- Datei: `apps/mimir/noctua/values.yaml`
+- Datei: `apps/mimir/obs/values.yaml`
 - Tenant: `1`
 
 Das ist im bevorzugten Zielbild zuständig für:
 
-- Alerts aus `apps/mimir/noctua/files/**/alerts*.yaml`
+- Alerts aus `apps/mimir/obs/files/**/alerts*.yaml`
 - Prometheus-kompatible Upstream-Regeln, die der Mimir Ruler evaluiert
 - Grafana-managed Alerts, die von Grafana an den Mimir Alertmanager weitergeleitet werden
 
@@ -828,12 +828,12 @@ Damit wird Drift zwischen Grafana- und Mimir-Routing vermieden.
 
 Die bevorzugte Umsetzung erfolgt nicht mehr gleichberechtigt zweigleisig, sondern mit Mimir Alertmanager als zentralem Runtime-Routing:
 
-1. `apps/grafana/noctua/values.yaml`
+1. `apps/grafana/obs/values.yaml`
    - Mimir Alertmanager Datasource `mimir-am` auf `handleGrafanaManagedAlerts: true` setzen
    - Grafana Alerting Settings so konfigurieren, dass `mimir-am` Grafana-managed Alerts empfängt
    - `grafanaOperatorCRs.contactPoints[]` und `grafanaOperatorCRs.notificationPolicies[]` nicht als produktive Haupt-Policy verwenden
 
-2. `apps/mimir/noctua/values.yaml`
+2. `apps/mimir/obs/values.yaml`
    - `mimir-distributed.alertmanager.fallbackConfig`
    - später optional ersetzt oder ergänzt durch einen dedizierten Tenant-`1`-Alertmanager-Config-Sync
    - hier liegen produktive Receiver, Customer-Routen, Team-Routen und Subscriptions

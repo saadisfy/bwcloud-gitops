@@ -129,7 +129,7 @@ graph TB
 - ServiceMonitor für `istiod` deployen (Port `15014`, Pfad `/metrics`).
 - Alloy `prometheusOperatorObjects` Feature ist bereits aktiv → der ServiceMonitor wird automatisch gescraped.
 
-**Dashboard:** Offizielle Istio Control-Plane-Dashboards von [istio.io/grafana](https://grafana.com/grafana/dashboards/?search=istio) herunterladen und unter `apps/grafana/noctua/files/istio/dashboards/` ablegen.
+**Dashboard:** Offizielle Istio Control-Plane-Dashboards von [istio.io/grafana](https://grafana.com/grafana/dashboards/?search=istio) herunterladen und unter `apps/grafana/obs/files/istio/dashboards/` ablegen.
 
 ---
 
@@ -162,7 +162,7 @@ graph TB
 - **Ambient Mesh ohne Waypoint:** In Namespaces ohne Waypoint Proxy liefert ztunnel nur L4-Metriken. OBI füllt die L7-Lücke.
 - **Non-Mesh-Workloads:** OBI instrumentiert auch Pods, die nicht im Mesh sind.
 
-**Umsetzung:** OBI DaemonSet Template existiert bereits (`apps/otel-operator/noctua/templates/obi-daemonset.yaml`). Aktivierung: `obi.enabled: true`. OTLP-Endpoint auf Alloy-Gateway umstellen (`http://alloy-gateway.alloy.svc.cluster.local:4318`).
+**Umsetzung:** OBI DaemonSet Template existiert bereits (`apps/otel-operator/obs/templates/obi-daemonset.yaml`). Aktivierung: `obi.enabled: true`. OTLP-Endpoint auf Alloy-Gateway umstellen (`http://alloy-gateway.alloy.svc.cluster.local:4318`).
 
 ---
 
@@ -479,7 +479,7 @@ count_over_time({namespace=~".+", container="istio-proxy"} |= "response_flags" |
 | **Traffic** | `IstioServiceTrafficDrop` | `sum(rate(istio_requests_total[5m])) by (destination_workload) < 0.1` (für kritische Services) |
 | **Saturation** | `EnvoyConnectionPoolExhausted` | `envoy_cluster_upstream_cx_active / envoy_cluster_upstream_cx_max > 0.9` |
 
-**Umsetzung:** Als Mimir Recording/Alert Rules unter `apps/mimir/noctua/files/istio/alerts.yaml` deployen.
+**Umsetzung:** Als Mimir Recording/Alert Rules unter `apps/mimir/obs/files/istio/alerts.yaml` deployen.
 
 ---
 

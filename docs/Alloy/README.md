@@ -2,17 +2,17 @@
 
 Diese Doku beschreibt das neue, modulare Alloy-Deployment fuer Noctua. Das Ziel ist Feature-Paritaet zum bisherigen `k8s-monitoring`-Ansatz, aber ohne eine schwer durchschaubare, chart-generierte 1200+-Zeilen-ConfigMap.
 
-Der neue Ansatz benutzt die `grafana/alloy` Helm Chart als Runtime, legt die River-Konfiguration aber selbst als kleine Module unter `apps/alloy/noctua/files/alloy/` ab. Die `k8s-monitoring` Chart bleibt als Referenz fuer "welche Telemetry-Quellen brauchen wir?", aber nicht mehr als Zielarchitektur fuer "wie pflegen wir die Konfiguration?".
+Der neue Ansatz benutzt die `grafana/alloy` Helm Chart als Runtime, legt die River-Konfiguration aber selbst als kleine Module unter `apps/alloy/obs/files/alloy/` ab. Die `k8s-monitoring` Chart bleibt als Referenz fuer "welche Telemetry-Quellen brauchen wir?", aber nicht mehr als Zielarchitektur fuer "wie pflegen wir die Konfiguration?".
 
 ## Kurzfassung
 
 | Frage | Antwort |
 | --- | --- |
 | Runtime | Grafana Alloy als DaemonSet |
-| Deployment-Pfad | `apps/alloy/noctua` |
-| Main-Wiring | `apps/alloy/noctua/files/alloy/config.alloy` |
-| Shared Processing | `apps/alloy/noctua/files/alloy/common_processing.alloy` und `apps/alloy/noctua/templates/_ottl.tpl` |
-| Backend-Endpoints | `apps/alloy/noctua/values.yaml` unter `alloyPipeline` |
+| Deployment-Pfad | `apps/alloy/obs` |
+| Main-Wiring | `apps/alloy/obs/files/alloy/config.alloy` |
+| Shared Processing | `apps/alloy/obs/files/alloy/common_processing.alloy` und `apps/alloy/obs/templates/_ottl.tpl` |
+| Backend-Endpoints | `apps/alloy/obs/values.yaml` unter `alloyPipeline` |
 | Metrics-Ziele | Mimir via OTLP/HTTP |
 | Logs-Ziele | Loki via OTLP/HTTP und Elastic Bridge via OTLP/gRPC |
 | Traces-Ziel | Tempo via OTLP/gRPC |
@@ -86,11 +86,11 @@ flowchart LR
 
 | Datei | Zweck |
 | --- | --- |
-| `apps/alloy/noctua/Chart.yaml` | Wrapper Chart fuer `grafana/alloy`, `kube-state-metrics` und `prometheus-node-exporter`. |
-| `apps/alloy/noctua/values.yaml` | Noctua-spezifische Runtime-, Endpoint-, Tenant-, Filter- und Limiter-Werte. |
+| `apps/alloy/obs/Chart.yaml` | Wrapper Chart fuer `grafana/alloy`, `kube-state-metrics` und `prometheus-node-exporter`. |
+| `apps/alloy/obs/values.yaml` | Noctua-spezifische Runtime-, Endpoint-, Tenant-, Filter- und Limiter-Werte. |
 | `apps/alloy/base/values.yaml` | Basiswerte fuer DaemonSet, RBAC, Ressourcen, stabile Namen und Subchart-Defaults. |
-| `apps/alloy/noctua/templates/alloy-configmap.yaml` | Rendert alle River-Module aus `files/alloy/*.alloy` in eine ConfigMap. |
-| `apps/alloy/noctua/templates/_ottl.tpl` | Helm-Helper fuer wiederverwendbare OTTL-Fragmente. |
+| `apps/alloy/obs/templates/alloy-configmap.yaml` | Rendert alle River-Module aus `files/alloy/*.alloy` in eine ConfigMap. |
+| `apps/alloy/obs/templates/_ottl.tpl` | Helm-Helper fuer wiederverwendbare OTTL-Fragmente. |
 
 ### River-Module
 
@@ -111,7 +111,7 @@ Die wichtigsten Noctua-spezifischen Schalter liegen unter `alloyPipeline`:
 ```yaml
 alloyPipeline:
   clusterName: prod-bwcloud
-  environmentName: noctua
+  environmentName: obs
   mimir:
     endpoint: http://mimir-distributor.mimir.svc.cluster.local:8080/otlp
     tenantId: "1"
@@ -290,7 +290,7 @@ Faustregel:
 
 ### 1. Neue Scrape-Targets
 
-1. Neue Datei `apps/alloy/noctua/files/alloy/<name>_scrape.alloy` anlegen.
+1. Neue Datei `apps/alloy/obs/files/alloy/<name>_scrape.alloy` anlegen.
 2. Darin `declare "scrape"` mit `argument "forward_to"` verwenden.
 3. Kubernetes Discovery und Relabeling im Modul kapseln.
 4. Optional lokale `prometheus.relabel`-Regeln fuer Drop/Keep/Rename einbauen.
@@ -352,10 +352,10 @@ Traces werden ueber OTLP angenommen und nach `tempo` exportiert. Query- und Body
 Lokaler Render:
 
 ```bash
-helm template alloy apps/alloy/noctua \
+helm template alloy apps/alloy/obs \
   -n alloy \
   -f apps/alloy/base/values.yaml \
-  -f apps/alloy/noctua/values.yaml \
+  -f apps/alloy/obs/values.yaml \
   > /tmp/alloy-noctua-render.yaml
 ```
 
@@ -377,9 +377,9 @@ alloy validate --stability.level=public-preview /tmp/alloy-noctua-validate/confi
 Helm und Kubernetes Shape:
 
 ```bash
-helm lint apps/alloy/noctua \
+helm lint apps/alloy/obs \
   -f apps/alloy/base/values.yaml \
-  -f apps/alloy/noctua/values.yaml
+  -f apps/alloy/obs/values.yaml
 
 kubeconform -summary -ignore-missing-schemas /tmp/alloy-noctua-render.yaml
 ```

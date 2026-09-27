@@ -521,18 +521,18 @@
     <section class="slide">
       <div class="kicker">Validierung</div>
       <h2>Nie nur YAML anschauen. Immer rendern und Alloy validieren.</h2>
-      <pre>helm template alloy apps/alloy/noctua \
+      <pre>helm template alloy apps/alloy/obs \
   -n alloy \
   -f apps/alloy/base/values.yaml \
-  -f apps/alloy/noctua/values.yaml \
+  -f apps/alloy/obs/values.yaml \
   > /tmp/alloy-noctua-render.yaml
 
 alloy validate --stability.level=public-preview \
   /tmp/alloy-noctua-validate/config.alloy
 
-helm lint apps/alloy/noctua \
+helm lint apps/alloy/obs \
   -f apps/alloy/base/values.yaml \
-  -f apps/alloy/noctua/values.yaml
+  -f apps/alloy/obs/values.yaml
 
 kubeconform -summary -ignore-missing-schemas \
   /tmp/alloy-noctua-render.yaml</pre>

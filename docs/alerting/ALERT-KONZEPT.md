@@ -314,7 +314,7 @@ Helm-Template rendert Prometheus-Regeldateien on-the-fly in `GrafanaAlertRuleGro
 Originaldateien bleiben im Prometheus-Format erhalten — portabel und als Referenz nutzbar.
 
 ```
-apps/grafana/noctua/
+apps/grafana/obs/
 ├── files/
 │   └── prometheus-rules/               # Prometheus-Format (Referenz, portabel)
 │       ├── kubernetes-alerts.yaml
@@ -344,7 +344,7 @@ grafana:
 ```text
 1. GrafanaAlertRuleGroup CR anlegen
    → manuell oder via Helm-Template aus Prometheus-Regeldatei
-   → Ablegen in apps/grafana/noctua/files/alert-rules/ oder als Template
+   → Ablegen in apps/grafana/obs/files/alert-rules/ oder als Template
 
 2. PR mit: Query, Labels, Annotations, Runbook-Kontext
 
@@ -417,7 +417,7 @@ Contact Points und Notification Policies werden ausschliesslich via Grafana Oper
 Manuelle UI-Änderungen werden von Argo CD überschrieben.
 
 ```text
-apps/grafana/noctua/templates/
+apps/grafana/obs/templates/
 ├── grafana-operator-contactpoints.yaml         # GrafanaContactPoint CRs
 └── grafana-operator-notification-policies.yaml # GrafanaNotificationPolicy CR
 ```
@@ -488,7 +488,7 @@ Grafana Operator (im Plattform-Cluster)
   → provisioniert in zentraler Grafana-Instanz
 
 Plattform-Repo
-  └── apps/grafana/noctua/templates/
+  └── apps/grafana/obs/templates/
       └── grafana-operator-notification-policies.yaml
           → Route für namespace=~"customer-a-.*" ergänzt
 ```
@@ -778,9 +778,9 @@ Genau eine Notification-Plane für alle Alert-Typen.
 - `docs/alerting/alerting-plan.md` — Alert-Regelkatalog mit PromQL-Queries
 - `docs/observability/OBSERVABILITY.md`
 - `docs/observability/MIMIR.md`
-- `apps/grafana/noctua/values.yaml`
-- `apps/grafana/noctua/templates/`
-- `apps/crossplane/noctua/templates/mimir-alertmanager-config.yaml` — Test-Telegram-Receiver
+- `apps/grafana/obs/values.yaml`
+- `apps/grafana/obs/templates/`
+- `apps/crossplane/obs/templates/mimir-alertmanager-config.yaml` — Test-Telegram-Receiver
 
 ---
 
@@ -872,7 +872,7 @@ Problem 3: Split-Dependencies
 | `apps/mimir/prod/files/**/alerts*.yaml` | Behalten — portable Prometheus-Referenz |
 | `apps/mimir/prod/templates/ruler-rules-configmap.yaml` | Obsolet |
 | `apps/mimir/prod/templates/ruler-rules-sync.yaml` | Obsolet |
-| `apps/crossplane/noctua/templates/mimir-alertmanager-config.yaml` | Aktiv (Test-Telegram-Receiver) |
+| `apps/crossplane/obs/templates/mimir-alertmanager-config.yaml` | Aktiv (Test-Telegram-Receiver) |
 | Mimir Ruler Deployment | Passiv — läuft, keine Regeln geladen |
 | Mimir Alertmanager | Passiv — minimale Fallback-Konfiguration |
 
@@ -894,14 +894,14 @@ Im Rahmen eines technischen PoC wurde die deklarative Bereitstellung von Alertin
 Die Provisionierung nutzt den Crossplane Mimir Provider (`rules.ruler.mimir.crossplane.io`) zur direkten Interaktion mit der Mimir Ruler HTTP API.
 
 ```text
-Argo CD (GitOps) -> Crossplane Rules CR (noctua namespace)
+Argo CD (GitOps) -> Crossplane Rules CR (crossplane-system namespace)
                  -> Reconcile Loop (Crossplane Provider-Mimir)
                  -> Mimir Ruler HTTP API (SetRuleGroup API)
                  -> Writes to filesystem backend (/rules-storage)
                  -> Mimir Ruler evaluates rules
 ```
 
-Dabei werden die bestehenden Rohdateien unter `apps/crossplane/noctua/files/` importiert und automatisch als Crossplane `Rules` Manifeste gerendert.
+Dabei werden die bestehenden Rohdateien unter `apps/crossplane/obs/files/` importiert und automatisch als Crossplane `Rules` Manifeste gerendert.
 
 ### B.2 Aufgetretene Probleme und Lösungen
 
@@ -909,7 +909,7 @@ Während der Implementierung des PoC traten zwei wesentliche Probleme auf:
 
 #### 1. Mimir Ruler Schreibfehler (`read-only file system`)
 - **Problem:** Das Standard-Deployment des Mimir Rulers lief mit `readOnlyRootFilesystem: true`. Da Mimir Ruler bei Nutzung des `filesystem`-Speicherbackends unter dem Pfad `/rules-storage` versuchen muss, Regeldateien zu schreiben, stürzte der Pod mit der Fehlermeldung `mkdir /rules-storage: read-only file system` ab.
-- **Lösung:** In `apps/mimir/noctua/values.yaml` wurde das nicht vom Upstream-Chart unterstützte Feld `persistentVolume` entfernt. Stattdessen wurde über `extraVolumes` und `extraVolumeMounts` ein schreibbares `emptyDir`-Volume mit dem Namen `rules-storage` gemountet:
+- **Lösung:** In `apps/mimir/obs/values.yaml` wurde das nicht vom Upstream-Chart unterstützte Feld `persistentVolume` entfernt. Stattdessen wurde über `extraVolumes` und `extraVolumeMounts` ein schreibbares `emptyDir`-Volume mit dem Namen `rules-storage` gemountet:
   ```yaml
   extraVolumes:
     - name: rules-storage
@@ -922,7 +922,7 @@ Während der Implementierung des PoC traten zwei wesentliche Probleme auf:
 
 #### 2. Ungültiges Dateiformat bei `PrometheusRule` CRs
 - **Problem:** Ein Teil der Regeldateien (z.B. für Kubernetes-Infrastruktur wie `grafana-prometheusRule.yaml`) lag im Kubernetes `PrometheusRule`-Custom-Resource-Format (von `monitoring.coreos.com/v1`) vor. Mimir's Ruler API erwartet jedoch rohes Prometheus Rule-Group-YAML (beginnend mit `groups:` auf Root-Ebene). Dies führte bei Crossplane zu Validierungsfehlern (`content validation failed: at least one rule group is required`).
-- **Lösung:** Im Helm-Template `apps/crossplane/noctua/templates/mimir-ruler-rules.yaml` wurde eine automatische Konvertierung eingebaut. Mithilfe der Helm-Funktion `fromYaml` wird geprüft, ob die Datei ein Kubernetes Custom Resource Format mit `.spec.groups` besitzt. Falls ja, wird dieses extrahiert und on-the-fly in das rohe Prometheus Rule-Format umgewandelt:
+- **Lösung:** Im Helm-Template `apps/crossplane/obs/templates/mimir-ruler-rules.yaml` wurde eine automatische Konvertierung eingebaut. Mithilfe der Helm-Funktion `fromYaml` wird geprüft, ob die Datei ein Kubernetes Custom Resource Format mit `.spec.groups` besitzt. Falls ja, wird dieses extrahiert und on-the-fly in das rohe Prometheus Rule-Format umgewandelt:
   ```yaml
   {{- $yaml := $fileContent | fromYaml }}
   {{- if and $yaml.spec $yaml.spec.groups }}

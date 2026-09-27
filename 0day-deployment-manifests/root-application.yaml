@@ -1,6 +1,6 @@
-# Root Application: managed alle ApplicationSets unter appsets/
-# Einmal anwenden: kubectl apply -f 0day-deployment-manifests/root-application.yaml
-# Danach synct die Root-App die appsets/ und erzeugt/aktualisiert alle ApplicationSets.
+# Root Application: manages all ApplicationSets under appsets/obs
+# Apply once: kubectl apply -f 0day-deployment-manifests/root-application.yaml
+# The root app then syncs appsets/obs and creates/updates every ApplicationSet.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://github.com/saadisfy/bwcloud-gitops.git
     targetRevision: main
-    path: appsets/noctua
+    path: appsets/obs
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
